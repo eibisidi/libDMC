@@ -1105,7 +1105,7 @@ void  LineRequest::fsm_state_start(LineRequest *req)
 
 	//起始终止位置赋初值
 	req->startpos = req->dmc->getDriverCmdPos(req->slave_idx);
-	printf("axis=%d startpos=%d.\n", req->slave_idx, req->startpos);
+	//printf("axis=%d startpos=%d.\n", req->slave_idx, req->startpos);
 	if (req->abs)
 		req->dstpos = req->dist;
 	else

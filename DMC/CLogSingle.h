@@ -88,6 +88,7 @@ public:
 	}
 
 	static void logPoint(int p);
+	static void logPoint(const std::string& line);
 
 	static void setLogLevel(int nLevel);
 	static void initLogger();

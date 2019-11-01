@@ -46,6 +46,7 @@ public:
 	int						 servo_pos_bias;	//伺服位置达到检测允许误差范围
 	std::set<int>			 slave_indexes;
 	std::vector<SlaveConfig> slave_configs;
+	std::set<int>			 logpoint_axis;		//记录规划点的轴
 
 	MasterConfig()					//默认等级4记录告警
 	{
@@ -60,6 +61,7 @@ public:
 		servo_pos_bias	= DEF_SERVO_POS_BIAS;
 		slave_indexes.clear();
 		slave_configs.clear();
+		logpoint_axis.clear();
 	}
 };
 

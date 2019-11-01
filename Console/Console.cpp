@@ -12,8 +12,8 @@
 //#define  	TEST_MOVE
 //#define 	TEST_HOME
 //#define TEST_IO
-//#define TEST_LINE
-#define TEST_DEC
+#define TEST_LINE
+//#define TEST_DEC
 //#define TEST_ISTOP
 //#define TEST_INC
 //#define TEST_PLAN
@@ -71,7 +71,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	HANDLE hThread;
     DWORD  threadId;
-	hThread = CreateThread(NULL, 0, ThreadFunc, 0, 0, &threadId); // 创建线程
+	//hThread = CreateThread(NULL, 0, ThreadFunc, 0, 0, &threadId); // 创建线程
 	
 	DWORD ms;
 #ifdef TEST_PLAN
@@ -315,7 +315,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		short axisArray[] = {1, 2};
 		long  distArray[] = {move, rate*move};
 
-		d1000_start_s_line(2, axisArray, distArray, 100000, 0.2);		//
+		d1000_start_s_line(2, axisArray, distArray, 0, 100000, 0.2);		//
 
 		while(1)
 		{
@@ -334,7 +334,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		
 		short r_axisArray[] = {1,2};
 		long  r_distArray[] = {-move, -rate*move};
-		d1000_start_s_line(2, r_axisArray, r_distArray, 100000, 0.2);	//
+		d1000_start_s_line(2, r_axisArray, r_distArray,0, 100000, 0.2);	//
 
 
 

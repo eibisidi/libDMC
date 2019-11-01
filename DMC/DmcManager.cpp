@@ -14,7 +14,6 @@
 #include "Poco/NumberParser.h"
 #include "Poco/DOM/NodeList.h"
 
-//#define CSP_DEBUG
 
 #define  MAXJ_RATIO (5)			//最大加加速度倍率
 
@@ -401,13 +400,23 @@ void DmcManager::beforeWriteCmd()
 		if (m_cmdData[slave_idx].CMD != GET_STATUS)
 		{
 			m_lastCmdData[slave_idx] = m_cmdData[slave_idx];
-#ifdef CSP_DEBUG
 
-			if (m_cmdData[slave_idx].CMD == CSP && slave_idx == 1)
-			{
-				CLogSingle::logPoint("%d    %d", (int)m_cmdData[1].Data1, (int)m_cmdData[slave_idx].Data1 );
+			if (!m_masterConfig.logpoint_axis.empty())
+			{//开启了规划记录
+				std::set<int>::reverse_iterator riter = m_masterConfig.logpoint_axis.rbegin();
+				if (slave_idx == *riter 					//序号最大的轴，开始一行
+					&& m_cmdData[slave_idx].CMD == CSP)
+				{
+					std::string line;
+					for (std::set<int>::iterator iter = m_masterConfig.logpoint_axis.begin();
+									iter != m_masterConfig.logpoint_axis.end();
+									++iter)
+					{
+						line += Poco::format("%d    ",  (int)m_cmdData[*iter].Data1);
+					}
+					CLogSingle::logPoint(line);
+				}
 			}
-#endif
 
 		}
 
@@ -502,6 +511,35 @@ bool DmcManager::loadXmlConfig()
 					if (Poco::XML::Node::TEXT_NODE != pChild->nodeType())
 						continue;
 					m_masterConfig.loglevel = Poco::NumberParser::parse(pChild->nodeValue());
+				}
+			}
+			else if ("LogPoint" == pNode->nodeName())
+			{//记录规划点
+				Poco::AutoPtr<Poco::XML::NamedNodeMap> pAttrs = pNode->attributes();
+				Poco::XML::Attr* pAttr = static_cast<Poco::XML::Attr*>(pAttrs->getNamedItem("enable"));
+
+				if (pAttr && "On" == pAttr->nodeValue())
+				{
+					//处理所有<Axis>子节点
+					Poco::AutoPtr<Poco::XML::NodeList > pChilds = pNode->childNodes();
+	
+					for (int i = 0; i < pChilds->length(); ++i)
+					{
+						Poco::XML::Node *pChild =  pChilds->item(i);
+						if (Poco::XML::Node::ELEMENT_NODE != pChild->nodeType())
+							continue;
+						if ("Axis" != pChild->nodeName())
+							continue;
+						
+						Poco::AutoPtr<Poco::XML::NamedNodeMap> pChildAttrs = pChild->attributes();
+						Poco::XML::Attr* pIndexAttr = static_cast<Poco::XML::Attr*>(pChildAttrs->getNamedItem("index"));
+
+						if (pIndexAttr)
+						{
+							int axis = Poco::NumberParser::parse(pIndexAttr->nodeValue());
+							m_masterConfig.logpoint_axis.insert(axis);
+						}
+					}
 				}
 			}
 			else if ("HomeMethod" == pNode->nodeName())

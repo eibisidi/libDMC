@@ -124,6 +124,18 @@ void CLogSingle::logDump(const std::string &msg, const void* buffer, std::size_t
 
 }
 
+void CLogSingle::logPoint(const std::string &line)
+{
+	Logger*	 pLogger = getPointsLogger();
+
+	if (pLogger->information())
+	{
+	 	pLogger->information(line);
+	}
+
+}
+
+
 void CLogSingle::setLogLevel(int nLevel)
 {
 	Logger* 	pLogger = getLogger();
