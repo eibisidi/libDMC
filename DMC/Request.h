@@ -126,23 +126,6 @@ public:
 	}
 };
 
-class IStopRequest: public BaseRequest
-{
-private:
-	static void fsm_state_start(IStopRequest *req);
-	static void fsm_state_svoff(IStopRequest *req);
-	static void fsm_state_done(IStopRequest *req);
-public:
-	void (* fsmstate)(IStopRequest *);	
-	
-	virtual ~IStopRequest() {}
-	virtual void exec();
-	IStopRequest()
-	{
-		fsmstate = fsm_state_start;
-	}
-};
-
 class MoveRequest: public BaseRequest
 {
 private:

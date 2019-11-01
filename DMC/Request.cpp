@@ -146,57 +146,6 @@ void DStopRequest::exec()
 	fsmstate(this);
 }
 
-void IStopRequest::fsm_state_start(IStopRequest *req)
-{
-	req->cmdData	= req->dmc->getCmdData(req->slave_idx);
-	req->respData	= req->dmc->getRespData(req->slave_idx);
-	req->fsmstate 		= IStopRequest::fsm_state_svoff;
-	req->cmdData->CMD 	= SV_OFF;
-}
-
-void IStopRequest::fsm_state_svoff(IStopRequest *req)
-{
-	if(SV_OFF != RESP_CMD_CODE(req->respData)
-		&& GET_STATUS != RESP_CMD_CODE(req->respData)
-			&& req->retries--)
-	{
-		return;
-	}
-
-	if (req->dmc->isDriverOn(req->slave_idx)
-			&& req->retries--)
-	{
-		return;
-	}
-	
-	if (req->retries <= 0)
-	{
-		CLogSingle::logError("IStopRequest::fsm_state_svoff timeouts. axis=%d, status=0x%?x.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx));
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-		req->reqState = REQUEST_STATE_FAIL;
-		return;
-	}
-
-	fprintf(stdout, "SVOFF StatusWord = 0x%x\n", req->respData->Parm);
-	//printf("current pos=%d.\n", req->dmc->getCurpos(req->slave_idx));
-
-	req->fsmstate	 	= IStopRequest::fsm_state_done;
-	req->dmc->setMoveState(req->slave_idx, MOVESTATE_CMD_STOP);
-	req->reqState		= REQUEST_STATE_SUCCESS;
-
-}
-
-void IStopRequest::fsm_state_done(IStopRequest *req)
-{
-	//shall not be called
-
-}
-
-void IStopRequest::exec()
-{
-	fsmstate(this);
-}
-
 void MoveRequest::fsm_state_done(MoveRequest *req)
 {
 	//shall not be called
