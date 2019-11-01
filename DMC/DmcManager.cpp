@@ -169,6 +169,8 @@ unsigned long DmcManager::init()
 	//初始化日志
 	CLogSingle::initLogger();
 
+	CLogSingle::logInformation("libDMC ver 1.0. buildtime : %s %s.", __FILE__, __LINE__, std::string(__DATE__), std::string(__TIME__));
+
 	if (m_init)
 	{	
 		CLogSingle::logError("init already called.", __FILE__, __LINE__);
@@ -347,7 +349,7 @@ unsigned long DmcManager::init()
 	}
 	
 	m_init = true;
-	CLogSingle::logError("-------------------------", __FILE__, __LINE__);
+
 	return ERR_NOERR;
 }
 
