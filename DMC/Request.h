@@ -83,7 +83,7 @@ enum MoveType{
 class BaseRequest
 {
 public:
-	int 			retries;
+	int 			rechecks;
 	RequestState	reqState;
 	DmcManager		*dmc;
 	int 			slave_idx;
