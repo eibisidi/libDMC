@@ -84,6 +84,7 @@ class BaseRequest
 {
 public:
 	int 			rechecks;
+	int				attempts;		//重发次数
 	RequestState	reqState;
 	DmcManager		*dmc;
 	int 			slave_idx;
@@ -190,6 +191,7 @@ private:
 	static void fsm_state_done(ClrAlarmRequest *req);
 	static void fsm_state_sdord_errcode(ClrAlarmRequest *req);
 	static void fsm_state_wait_sdord_errcode(ClrAlarmRequest *req);
+	static void fsm_state_alm_clr(ClrAlarmRequest *req);
 	static void fsm_state_start(ClrAlarmRequest *req);
 
 public:	

@@ -141,6 +141,7 @@ public:
 	transData *getRespData(short slaveidx);
 	bool	getSdoCmdResp(BaseRequest *req, transData **ppCmd, transData **ppResp);		//获取SDO命令，成功返回true
 	void 	freeSdoCmdResp(BaseRequest *req);											  //释放SDO命令
+	void restoreLastCmd(transData *cmdData);
 	
 	virtual ~DmcManager();
 private:

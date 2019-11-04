@@ -754,6 +754,13 @@ void DmcManager::freeSdoCmdResp(BaseRequest *req)
 		m_sdoOwner = NULL;
 }
 
+void DmcManager::restoreLastCmd(transData *cmdData)
+{
+	int slaveidx;
+	slaveidx = cmdData - m_cmdData;
+	*cmdData = m_lastCmdData[slaveidx];
+}
+
 bool DmcManager::isDriverOpCsp(short slaveidx)
 {
 	assert (m_driverState.count(slaveidx) > 0);
