@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Master  ver="1.0">
 	<LogLevel>4</LogLevel>  		<!--日志记录等级， 0关闭 3错误 4 告警 6信息, 缺省值4-->
-	<LogPoint>		<!--将指定电机驱动器规划结果写入文件， On打开 Off关闭， 缺省值Off-->
+	<LogPoint>						<!--将指定电机驱动器规划结果写入文件， On打开 Off关闭， 缺省值Off-->
 		<Axis index="1"/>
 		<Axis index="2"/>
 	</LogPoint>
