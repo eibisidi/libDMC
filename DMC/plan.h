@@ -4,6 +4,12 @@
 #define DC_CYCLE_us 	(2000)							//2000us
 #define CYCLES_PER_SEC 	(1000000 / DC_CYCLE_us)			//500 cycle/sec
 
+enum MoveType{
+	MOVETYPE_T = 0,
+	MOVETYPE_S,
+};
+
+
 //运动计划
 class MParam
 {

@@ -88,6 +88,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\NEXTW_USBSample_Cplusplus\NEXTWUSBLib_12B.h" />
+    <ClInclude Include="AxisPara.h" />
     <ClInclude Include="CLogSingle.h" />
     <ClInclude Include="DMC.h" />
     <ClInclude Include="DmcManager.h" />
@@ -97,6 +98,7 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AxisPara.cpp" />
     <ClCompile Include="CLogSingle.cpp" />
     <ClCompile Include="DMC.cpp" />
     <ClCompile Include="DmcManager.cpp" />
