@@ -331,7 +331,7 @@ unsigned long DmcManager::init()
 		{
 			if (ERR_NOERR != init_driver(i))
 			{
-				return ERR_CLR_SET_GEARRATIO;
+				return ERR_INIT_AXIS;
 			}
 		}
 	}
@@ -1083,8 +1083,9 @@ unsigned long DmcManager::servo_on(short axis)
 
 unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double Tacc, bool abs, MoveType movetype)
 {
-	assert(Tacc > 1E-6);
-	
+	if (Tacc < 1E-6)
+		return ERR_INVALID_ARG;
+
 	unsigned long retValue = ERR_NOERR;
 	MoveRequest *newReq = NULL;
 	
@@ -1138,7 +1139,8 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 
 unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,double Tacc)
 {
-	assert(Tacc > 1E-6);
+	if (Tacc < 1E-6)
+		return ERR_INVALID_ARG;
 
 	unsigned long retValue = ERR_NOERR;
 	HomeMoveRequest *newReq = NULL;
@@ -1243,7 +1245,8 @@ DONE:
 }
 #else
 {
-	assert(Tacc > 1E-6);
+	if (Tacc < 1E-6)
+		return ERR_INVALID_ARG;
 
 	unsigned long 	retValue = ERR_NOERR;
 	MultiAxisRequest *newReq = NULL;
@@ -1315,11 +1318,11 @@ unsigned long DmcManager::check_done(short axis)
 
 long DmcManager::get_command_pos(short axis)
 {
-	long retpos;
+	long retpos = 0;
 	m_mutex.lock();
-	assert(m_driverState.count(axis));
 
-	retpos = m_driverState[axis].cmdpos;
+	if (m_driverState.count(axis))
+		retpos = m_driverState[axis].cmdpos;
 
 	m_mutex.unlock();
 	return retpos;

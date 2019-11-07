@@ -46,28 +46,28 @@ enum MoveState
 	
 enum ErrorNum{
 	ERR_NOERR = 0,					//成功
-	ERR_OPENUSB,
-	ERR_SET_DRIVER_CURRENT,
-	ERR_DUP_INIT,
-	ERR_LOAD_XML,
-	ERR_ECM_WRITE,
-	ERR_ECM_READ,
-	ERR_ECM_PREOP,
-	ERR_ECM_SAFEOP,
-	ERR_ECM_OP,
-	ERR_ECM_SETAXIS,
-	ERR_MEM,
-	ERR_AXIS_BUSY,
-	ERR_AXIS_NOT_MOVING,
-	ERR_T_PLAN,
-	ERR_NO_AXIS,
-	ERR_IO_NO_SLAVE,
-	ERR_IO_BUSY,
-	ERR_IO_READ_TIMEOUT,
-	ERR_IO_WRITE_TIMEOUT,
-	ERR_CLR_ALARM,
-	ERR_CLR_SET_GEARRATIO,
-	ERR_SERVO_ON,
+	ERR_OPENUSB,					//ECM API OpenUsb失败
+	ERR_DUP_INIT,					//重复初始化
+	ERR_LOAD_XML,					//读取Master.xml配置文件失败
+	ERR_ECM_WRITE,					//ECM API Write失败
+	ERR_ECM_READ,					//ECM API Read失败
+	ERR_ECM_PREOP,					//切换至PreOp模式失败
+	ERR_ECM_SAFEOP,					//切换至SafeOp模式失败
+	ERR_ECM_OP,						//切换至OP模式失败
+	ERR_INVALID_ARG,				//无效的参数
+
+	ERR_MEM,						//内存错误						
+	ERR_AXIS_BUSY,					//电机正忙
+	ERR_AXIS_NOT_MOVING,			//电机未处于运动状态
+	
+	ERR_NO_AXIS,					//驱动器不存在
+	ERR_IO_NO_SLAVE,				//IO模块不存在
+	ERR_IO_BUSY,					//IO模块正忙
+	ERR_IO_READ_TIMEOUT,			//读取IO模块输入超时
+	ERR_IO_WRITE_TIMEOUT,			//设置IO模块输出超时
+	ERR_CLR_ALARM,					//清除告警失败
+	ERR_INIT_AXIS,					//初始化驱动器失败
+	ERR_SERVO_ON,					//驱动器使能失败
 };
 
 #define MAX_PULSE_PER_SEC(rpm, shaftrevo) ((rpm) * (shaftrevo) / 60)		//计算最大速度 (脉冲/s)
@@ -257,7 +257,6 @@ DMC1000_API DWORD WINAPI d1000_start_sa_line(short TotalAxis,short *AxisArray,lo
 返回值：指定轴当前指令位置计数器值，单位： pulse。
 */
 DMC1000_API long WINAPI d1000_get_command_pos(short axis);
-
 
 
 #ifdef __cplusplus
