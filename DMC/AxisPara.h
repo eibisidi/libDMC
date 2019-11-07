@@ -26,7 +26,7 @@ public:
 	int getPosReachedCount() const;
 	int getError() const;
 	void setError();
-	void reg_sv_on(int slaveidx);
+	void reg_sv_on();
 	bool sv_allon() const;
 	void reg_pos_reached();
 	bool pos_allreached() const;
@@ -68,8 +68,8 @@ public:
 	virtual ~BaseMultiAxisPara() ;
 	
 	virtual bool startPlan() = 0;
-	virtual int nextPosition() = 0;
-	virtual double getCurSpeed() = 0;	//返回当前速度，有符号
+	virtual int nextPosition(int slaveidx) = 0;
+	virtual double getCurSpeed()  const = 0;	//返回当前速度，有符号
 
 	bool moreCycles() const;
 	bool positionReached(int q , int bias) const;
@@ -78,7 +78,7 @@ public:
 	int getPosReachedCount() const;
 	int getError() const;
 	void setError();
-	void reg_sv_on(int slaveidx);
+	void reg_sv_on();
 	bool sv_allon() const;
 	void reg_pos_reached();
 	bool pos_allreached() const;
@@ -92,11 +92,7 @@ public:
 
 	virtual bool startPlan();
 	virtual int nextPosition(int slaveidx);
-	virtual double getCurSpeed();	//返回当前速度，有符号
-
-	int				dir;				//运动方向，1正向运动，-1反向运动
-	int				dist;				//运动距离
-	double  		distRatio;			//与参考对象的距离比值
+	virtual double getCurSpeed() const;	//返回当前速度，有符号
 };
 
 #endif

@@ -38,10 +38,8 @@ void BaseRef::setError()
 	error = -1;
 }
 
-void BaseRef::reg_sv_on(int slaveidx)
+void BaseRef::reg_sv_on()
 {
-	if (slaveidx > last_slaveidx)
-		last_slaveidx = slaveidx;
 	++svon_count;
 }
 
@@ -214,9 +212,9 @@ void BaseMultiAxisPara::setError()
 	this->ref->setError();
 }
 
-void BaseMultiAxisPara::reg_sv_on(int slaveidx)
+void BaseMultiAxisPara::reg_sv_on()
 {
-	this->ref->reg_sv_on(slaveidx);
+	this->ref->reg_sv_on();
 }
 
 bool BaseMultiAxisPara::sv_allon() const
@@ -247,7 +245,7 @@ LinearPara::~LinearPara()
 
 bool LinearPara::startPlan()
 {
-	bool success = (0 == this->ref->startPlan());
+	bool success = (1 == this->ref->startPlan());	//0尚未规划， -1规划失败 1规划成功
 	return success;
 }
 
@@ -267,7 +265,7 @@ int LinearPara::nextPosition(int slaveidx)
 	return nextpos;
 }
 
-double LinearPara::getCurSpeed()
+double LinearPara::getCurSpeed() const
 {
 	LinearRef 	*linearRef 	= dynamic_cast<LinearRef *> (this->ref);
 	double		velref 		= linearRef->getCurrentVel();			//基准参考速度

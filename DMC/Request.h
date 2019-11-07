@@ -4,6 +4,7 @@
 #include "stddef.h"
 #include "NEXTWUSBLib_12B.h"
 #include "plan.h"
+#include "AxisPara.h"
 #include <vector>
 #include <fstream>
 #include <set>
@@ -73,12 +74,6 @@ enum RequestState
 	REQUEST_STATE_SUCCESS,
 	REQUEST_STATE_FAIL,
 };
-
-enum MoveType{
-	MOVETYPE_T = 0,
-	MOVETYPE_S,
-};
-
 
 class BaseRequest
 {
@@ -414,6 +409,41 @@ public:
 		dstpos = 0;
 		
 	}
+};
+
+class MultiAxisRequest : public BaseRequest
+{
+private:
+	static void fsm_state_done(MultiAxisRequest *req);
+	static void  fsm_state_wait_all_pos_reached(MultiAxisRequest *req);
+	static void  fsm_state_csp(MultiAxisRequest *req);
+	static void  fsm_state_svon(MultiAxisRequest *req);
+	static void  fsm_state_wait_all_svon(MultiAxisRequest *req);
+	static void  fsm_state_sdowr_cspmode(MultiAxisRequest *req);
+	static void  fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req);
+	static void fsm_state_start(MultiAxisRequest *req);
+
+	bool	startPlan();
+	bool	positionReached(int curpos, int bias = 0) const;
+
+public:
+	BaseMultiAxisPara 	*axispara;
+	int				curpos;				//上一次规划的位置
+
+	double getCurSpeed() const;			//当前规划的速度
+	int    getCurPos()const;			//当前规划的位置
+
+	void (* fsmstate)(MultiAxisRequest *);	
+	
+	virtual ~MultiAxisRequest() 
+	{
+		if (axispara)
+			delete  axispara;
+	}
+	
+	virtual void exec();
+
+	MultiAxisRequest(int axis, LinearRef *newLinearRef, int dist, bool abs);
 };
 
 class HomeMoveRequest: public BaseRequest

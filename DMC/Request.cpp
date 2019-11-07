@@ -1377,6 +1377,383 @@ void LineRequest::exec()
 	fsmstate(this);
 }
 
+void MultiAxisRequest::fsm_state_done(MultiAxisRequest *req)
+{
+}
+
+void  MultiAxisRequest::fsm_state_wait_all_pos_reached(MultiAxisRequest *req)
+{
+	if(0 != req->axispara->getError())
+	{
+		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
+		req->reqState = REQUEST_STATE_FAIL;
+		return;
+	}
+
+	if ( !req->axispara->pos_allreached() 
+		&& req->rechecks--)
+	{
+		return;
+	}
+		
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			CLogSingle::logError("LineRequest::fsm_state_wait_all_pos_reached timeouts, axis=%d, %d != %d.", __FILE__, __LINE__,
+						req->slave_idx, req->axispara->getSvonCount(), req->axispara->getPosReachedCount());
+			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			req->axispara->setError();
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			CLogSingle::logWarning("LineRequest::fsm_state_wait_all_pos_reached retries, axis=%d, %d != %d.", __FILE__, __LINE__, 
+				req->slave_idx, req->axispara->getSvonCount(), req->axispara->getPosReachedCount());
+			req->rechecks = RETRIES;
+		}
+		return;
+	}
+
+	req->fsmstate		= MultiAxisRequest::fsm_state_done;
+	req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
+	req->reqState		= REQUEST_STATE_SUCCESS;
+}
+
+void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
+{
+	if(0 != req->axispara->getError())
+	{
+		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
+		req->reqState = REQUEST_STATE_FAIL;
+		return;
+	}
+
+	if (req->axispara->moreCycles())
+	{
+		req->cmdData->CMD	= CSP;
+		req->cmdData->Data1 = req->curpos = req->axispara->nextPosition(req->slave_idx);
+		return;
+	}
+
+	if(CSP != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData )
+		&& req->rechecks--)
+	{
+		return;
+	}
+
+	if ( !req->positionReached(req->respData->Data1) 
+		&& req->rechecks--)
+	{
+		return;
+	}
+	
+	if (req->rechecks <= 0						//等待位置到达超时
+		&& (!req->dmc->isServo(req->slave_idx)) || (!req->positionReached(req->respData->Data1, req->dmc->getServoPosBias())))
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			CLogSingle::logError("LineRequest::fsm_state_csp, axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
+			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			req->axispara->setError();
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			CLogSingle::logWarning("LineRequest::fsm_state_csp retries, axis=%d nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
+			req->dmc->restoreLastCmd(req->cmdData);
+			req->rechecks = RETRIES;
+		}
+		return;
+	}
+
+	//目标位置已到达,更新新的绝对位置
+	req->dmc->setDriverCmdPos(req->slave_idx, req->axispara->dstpos);
+
+	req->axispara->reg_pos_reached();									//位置已经到达
+	req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_pos_reached;
+	req->rechecks	 	= RETRIES;										//!!!重置，检测目标是否到达时，已经可能消耗过多
+}
+
+void  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
+{
+	if(0 != req->axispara->getError())
+	{
+		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
+		req->reqState = REQUEST_STATE_FAIL;
+		return;
+	}
+
+	if (!req->axispara->sv_allon()
+		&& req->rechecks --)
+	{
+		return;
+	}
+
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			CLogSingle::logError("MultiAxisRequest::fsm_state_wait_all_svon timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
+			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			req->axispara->setError();
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			CLogSingle::logWarning("MultiAxisRequest::fsm_state_wait_all_svon timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
+			req->rechecks = RETRIES;
+		}
+		return;
+	}
+
+	//所有电机均已经励磁
+	if (!req->startPlan())
+	{//规划失败
+		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
+		req->axispara->setError();
+		req->reqState = REQUEST_STATE_FAIL;
+		return;
+	}
+
+	req->fsmstate	 	= MultiAxisRequest::fsm_state_csp;
+	req->cmdData->CMD 	= CSP;
+	req->cmdData->Data1 = req->curpos = req->axispara->nextPosition(req->slave_idx);
+	req->rechecks		= RETRIES;
+}
+
+void  MultiAxisRequest::fsm_state_svon(MultiAxisRequest *req)
+{
+	if(0 != req->axispara->getError())
+	{//其它电机已经出现错误
+		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
+		req->reqState = REQUEST_STATE_FAIL;
+		return;
+	}
+
+	//fprintf(stdout, "addr = %p, retry = %d, Cmd = 0x%x \n", req->respData, req->rechecks, req->respData->CMD);
+	if(SV_ON != RESP_CMD_CODE(req->respData)
+			&& GET_STATUS != RESP_CMD_CODE(req->respData)
+			&& req->rechecks--)
+	{
+		return;
+	}
+	//fprintf(stdout, "SVON StatusWord = 0x%x, CurrentPos=%d.\n", req->respData->Parm,req->respData->Data1);
+
+	if (!req->dmc->isDriverOn(req->slave_idx)
+		&& req->rechecks--)
+	{
+		return;
+	}
+			
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			CLogSingle::logError("MultiAxisRequest::fsm_state_svon timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
+			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			req->axispara->setError();
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			CLogSingle::logWarning("MultiAxisRequest::fsm_state_svon timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
+			req->dmc->restoreLastCmd(req->cmdData);
+			req->rechecks = RETRIES;
+		}
+		return;
+	}
+
+	//fprintf(stdout, "SVON StatusWord = 0x%x, CurrentPos=%d.\n", req->respData->Parm,req->respData->Data1);
+
+	req->axispara->reg_sv_on();
+	req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_svon;
+	req->rechecks		= RETRIES;
+}
+
+void  MultiAxisRequest::fsm_state_sdowr_cspmode(MultiAxisRequest *req)
+{
+	if(0 != req->axispara->getError())
+	{//其它电机已经出现错误
+		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
+		req->reqState = REQUEST_STATE_FAIL;
+		return;
+	}
+
+	if(SDO_WR != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData)
+		&& req->rechecks--)
+	{
+		return;
+	}
+
+	if ((req->slave_idx != req->respData->Parm ||  0x60600000 != req->respData->Data1 || CSP_MODE != req->respData->Data2)
+		&& req->rechecks--)
+	{
+		return;
+	}
+	
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			CLogSingle::logError("MultiAxisRequest::fsm_state_sdowr_cspmode timeout, axis=%d\n", __FILE__, __LINE__, req->slave_idx);
+			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			req->axispara->setError();		
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			CLogSingle::logWarning("MultiAxisRequest::fsm_state_sdowr_cspmode timeout, axis=%d\n", __FILE__, __LINE__, req->slave_idx);
+			req->dmc->restoreLastCmd(req->cmdData);
+			req->rechecks = RETRIES;
+		}
+		return;
+	}
+
+	//fprintf(stdout, "cspmode = %d.\n",req->respData->Data2);
+
+	//free sdo
+	req->dmc->freeSdoCmdResp(req);
+
+	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
+	req->respData		= req->dmc->getRespData(req->slave_idx);
+	req->fsmstate		= MultiAxisRequest::fsm_state_svon;
+	req->cmdData->CMD	= SV_ON;
+	req->rechecks		= RETRIES;
+}
+
+void  MultiAxisRequest::fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req)
+{
+	if(0 != req->axispara->getError())
+	{//其它电机已经出现错误
+		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
+		req->reqState = REQUEST_STATE_FAIL;
+		return;
+	}
+
+	if (!req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData)
+		&& req->rechecks --)
+	{
+		return;
+	}
+
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			CLogSingle::logError("MultiAxisRequest::fsm_state_wait_sdowr_cspmode timeouts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
+			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			req->axispara->setError();					
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			CLogSingle::logWarning("MultiAxisRequest::fsm_state_wait_sdowr_cspmode retries, axis=%d.", __FILE__, __LINE__, req->slave_idx);
+			req->rechecks = RETRIES;
+		}
+		return;
+	}
+
+	req->fsmstate		= MultiAxisRequest::fsm_state_sdowr_cspmode;
+	req->cmdData->CMD	= SDO_WR;
+	req->cmdData->Parm	= 0x0100 | (req->slave_idx & 0xFF); 			//size | slaveidx
+	req->cmdData->Data1 = 0x60600000;									//index 0x6060 subindex 0x0000
+	req->cmdData->Data2 = CSP_MODE; 
+	req->rechecks		= RETRIES;
+}
+
+void  MultiAxisRequest::fsm_state_start(MultiAxisRequest *req)
+{	
+	if(0 != req->axispara->getError())
+	{//其它电机已经出现错误
+		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
+		req->reqState = REQUEST_STATE_FAIL;
+		return;
+	}
+
+	//起始终止位置赋初值
+	//todo!!!!!!
+	if(req->dmc->isDriverOpCsp(req->slave_idx))
+	{//已经处于CSP模式
+		req->cmdData	= req->dmc->getCmdData(req->slave_idx);
+		req->respData	= req->dmc->getRespData(req->slave_idx);
+		if (req->dmc->isDriverOn(req->slave_idx))
+		{//电机已经励磁
+			req->axispara->reg_sv_on();
+			req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_svon;
+		}
+		else
+		{//电机尚未励磁
+			req->fsmstate		= MultiAxisRequest::fsm_state_svon;
+			req->cmdData->CMD		= SV_ON;
+		}
+	}
+	else 
+	{//处于非CSP模式，先切换到CSP模式		
+		if (req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData))
+		{
+			req->fsmstate		= MultiAxisRequest::fsm_state_sdowr_cspmode;
+			req->cmdData->CMD	= SDO_WR;
+			req->cmdData->Parm	= 0x0100 | (req->slave_idx & 0xFF); 			//size | slaveidx
+			req->cmdData->Data1 = 0x60600000;									//index 0x6060 subindex 0x0000
+			req->cmdData->Data2 = CSP_MODE; 					
+		}
+		else
+			req->fsmstate		= MultiAxisRequest::fsm_state_wait_sdowr_cspmode;		
+	}
+}
+
+bool MultiAxisRequest::startPlan()
+{
+	return this->axispara->startPlan();
+}
+
+bool  MultiAxisRequest::positionReached(int q , int bias) const
+{
+	bool reached = this->axispara->positionReached(q, bias);
+	return reached;
+}
+
+double MultiAxisRequest::getCurSpeed() const 		//当前规划的速度
+{
+	double v = this->axispara->getCurSpeed();
+	return v;
+}
+
+int MultiAxisRequest::getCurPos()const			//当前规划的位置
+{
+	return this->curpos;
+}
+
+void MultiAxisRequest::exec()
+{
+	fsmstate(this);
+}
+
+MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, bool abs)
+{
+	int startpos, dstpos;
+	this->slave_idx = axis;
+	this->fsmstate = fsm_state_start;
+
+	startpos = DmcManager::instance().getDriverCmdPos(axis);
+	if (abs)
+		dstpos = pos;
+	else
+		dstpos = startpos + pos;
+
+	double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);
+
+	this->axispara = new LinearPara(newLinearRef, startpos, dstpos);
+	
+	if (dist > newLinearRef->max_dist)
+		newLinearRef->max_dist = dist;
+	if (axis > newLinearRef->last_slaveidx)
+		newLinearRef->last_slaveidx = axis;
+}
+
 void HomeMoveRequest::fsm_state_done(HomeMoveRequest *req)
 {
 }

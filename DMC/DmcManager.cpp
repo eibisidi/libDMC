@@ -1182,6 +1182,7 @@ unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,double T
 }
 
 unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *distArray, double maxvel, double Tacc, bool abs, MoveType movetype)
+#if 0
 {
 	assert(Tacc > 1E-6);
 
@@ -1240,6 +1241,65 @@ DONE:
 	return retValue;
 		
 }
+#else
+{
+	assert(Tacc > 1E-6);
+
+	unsigned long 	retValue = ERR_NOERR;
+	MultiAxisRequest *newReq = NULL;
+	LinearRef		 *newLinearRef = NULL;
+	
+	m_mutex.lock();
+	
+	//先进行容错检查
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short axis = axisArray[i];
+		long dist = distArray[i];
+		if ( 0 == m_driverState.count(axis))
+		{
+			retValue = ERR_NO_AXIS;
+			goto DONE;
+		}
+
+		if (m_requests.count(axis))
+		{
+			retValue = ERR_AXIS_BUSY;
+			goto DONE;
+		}
+	}
+
+	newLinearRef = new LinearRef;
+	if(NULL == newLinearRef)
+	{
+		retValue = ERR_MEM;
+		goto DONE;
+	}
+
+	newLinearRef->maxvel = maxvel;
+	newLinearRef->maxa	  = maxvel / Tacc;
+	newLinearRef->maxj	  = MAXJ_RATIO * newLinearRef->maxa;
+	newLinearRef->movetype  = movetype;
+
+//新建请求
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short axis = axisArray[i];
+		long dist = distArray[i];
+		newReq = new MultiAxisRequest(axis, newLinearRef, distArray[i], abs);
+		setMoveState(axis, MOVESTATE_BUSY);
+		m_requests[axis] = newReq;
+	}
+DONE:
+	m_condition.signal();
+
+	m_mutex.unlock();
+
+	return retValue;
+		
+}
+
+#endif
 
 unsigned long DmcManager::check_done(short axis)
 {
@@ -1297,7 +1357,7 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 		}
 		else
 		{
-			LineRequest *lineReq = dynamic_cast<LineRequest * >(m_requests[axis]);
+			MultiAxisRequest *lineReq = dynamic_cast<MultiAxisRequest * >(m_requests[axis]);
 			if (NULL != lineReq)
 			{
 				curspeed = lineReq->getCurSpeed();
