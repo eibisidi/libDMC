@@ -29,11 +29,17 @@ int TParam::position(int ts) const
 	return q_i;
 }
 
-double TParam::getSpeed() const
+double TParam::speed() const
 {
 	double v;
-	double t = elapsed * 1.0 / CYCLES_PER_SEC;
-	v = ::Speed_T(t, this);
+	v = speed(this->elapsed);
+	return v;
+}
+
+double TParam::speed(int ts) const
+{
+	double t = ts * 1.0 / CYCLES_PER_SEC;
+	double v=::Speed_T(t, this);
 	return v;
 }
 
@@ -62,11 +68,17 @@ int SParam::position(int ts)  const
 	return q_i;
 }
 
-double SParam::getSpeed() const
+double SParam::speed() const
 {
 	double v;
-	double t = elapsed * 1.0 / CYCLES_PER_SEC;
-	v = ::Speed_S(t, this);
+	v = speed(this->elapsed);
+	return v;
+}
+
+double SParam::speed(int ts) const
+{
+	double t = ts * 1.0 / CYCLES_PER_SEC;
+	double v=::Speed_S(t, this);
 	return v;
 }
 
@@ -98,10 +110,18 @@ int DParam::position(int ts) const
 	return q_i;
 }
 
-double DParam::getSpeed() const
+double DParam::speed() const
 {
-	//todo 
-	return 0;
+	double v;
+	v = speed(this->elapsed);
+	return v;
+}
+
+double DParam::speed(int ts) const
+{//todo
+	double t = ts * 1.0 / CYCLES_PER_SEC;
+	double v=0;
+	return v;
 }
 
 double Speed_S(double t, const SParam *param)

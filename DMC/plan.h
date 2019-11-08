@@ -23,9 +23,10 @@ public:
 	int	   elapsed;					//[0~cycles)
 
 	virtual ~MParam() {}
-	virtual int position() = 0;
-	virtual int position(int ts)  const= 0;
-	virtual double getSpeed() const = 0;
+	virtual int position() = 0;						//获得下一个规划位置
+	virtual int position(int ts)  const= 0;			//获得指定时间规划位置
+	virtual double speed() const = 0;				//获得当前速度
+	virtual double speed(int ts) const = 0;			//获得指定时间速度
 
 	MParam()
 	{
@@ -50,7 +51,8 @@ public:
 	double Tv;				//匀速时间
 	virtual int position();
 	virtual int position(int ts)  const;
-	virtual double getSpeed() const;
+	virtual double speed() const;
+	virtual double speed(int ts) const;
 	virtual ~SParam() {}
 	SParam()
 	{
@@ -72,9 +74,11 @@ public:
 	double Tv;				//匀速时间
 	virtual int position();
 	virtual int position(int ts)  const;
+	virtual double speed() const;
+	virtual double speed(int ts) const;
+	
 	virtual ~TParam() {};
 
-	virtual double getSpeed() const;
 	TParam()
 	{
 		vmax=amax=vlim=Ta=Tv = 0;
@@ -91,7 +95,8 @@ public:
 
 	virtual int position();
 	virtual int position(int ts)  const;
-	virtual double getSpeed() const;
+	virtual double speed() const;
+	virtual double speed(int ts) const;
 	virtual ~DParam() {};
 	DParam()
 	{
