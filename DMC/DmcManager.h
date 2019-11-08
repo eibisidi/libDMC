@@ -2,6 +2,7 @@
 #define DMC_MANAGER
 #include "DMC.h"
 #include <map>
+#include <fstream>
 
 #include "NEXTWUSBLib_12B.h"
 #include "Poco/Mutex.h"
@@ -111,6 +112,7 @@ public:
 	unsigned long start_move(short axis,long Dist,double MaxVel,double Tacc, bool abs, MoveType movetype);
 	unsigned long home_move(short axis,long highVel,long lowVel,double Tacc);
 	unsigned long start_line(short totalAxis, short *axisArray,long *distArray, double maxvel, double Tacc, bool abs,  MoveType movetype);
+	unsigned long start_archl(short totalAxis, short *axisArray,long *distArray, double maxvel, double Tacc, bool abs,  long hh, long hu, long hd);
 	unsigned long check_done(short axis);
 	long get_command_pos(short axis);
 
@@ -179,6 +181,8 @@ private:
 	MasterState			 m_masterState;			//Ö÷Õ¾×´Ì¬
 	map<int, DriverState>m_driverState;			//µç»ú×´Ì¬
 	map<int, IoState>	 m_ioState;				//IO×´Ì¬
+
+	std::fstream		ofs;
 };
 
 #endif

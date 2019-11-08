@@ -131,6 +131,7 @@ DmcManager & DmcManager::instance()
 
 DmcManager::DmcManager()
 {
+	ofs.open("points",std::fstream::out | std::fstream::trunc);
 	clear();
 }
 
@@ -414,9 +415,14 @@ void DmcManager::beforeWriteCmd()
 									iter != m_masterConfig.logpoint_axis.end();
 									++iter)
 					{
-						line += Poco::format("%d    ",  (int)m_cmdData[*iter].Data1);
+						//line += Poco::format("%d    ",  (int)m_cmdData[*iter].Data1);
+
+						//!!!!!!!!!!!!!!!!
+						m_cmdData[*iter].CMD = GET_STATUS;
+						ofs << (int)m_cmdData[*iter].Data1 << "    " ;
 					}
-					CLogSingle::logPoint(line);
+					//CLogSingle::logPoint(line);
+					ofs << "\n";
 				}
 			}
 
@@ -1083,7 +1089,8 @@ unsigned long DmcManager::servo_on(short axis)
 
 unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double Tacc, bool abs, MoveType movetype)
 {
-	if (Tacc < 1E-6)
+	if (Tacc < 1E-6
+		|| MaxVel < 1E-6)
 		return ERR_INVALID_ARG;
 
 	unsigned long retValue = ERR_NOERR;
@@ -1139,7 +1146,9 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 
 unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,double Tacc)
 {
-	if (Tacc < 1E-6)
+	if (Tacc < 1E-6
+		|| highVel <= 0
+		|| lowVel <= 0)
 		return ERR_INVALID_ARG;
 
 	unsigned long retValue = ERR_NOERR;
@@ -1245,7 +1254,9 @@ DONE:
 }
 #else
 {
-	if (Tacc < 1E-6)
+	if (totalAxis <= 0
+		|| Tacc < 1E-6
+		|| maxvel < 1E-6)
 		return ERR_INVALID_ARG;
 
 	unsigned long 	retValue = ERR_NOERR;
@@ -1303,6 +1314,67 @@ DONE:
 }
 
 #endif
+
+unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *distArray, double maxvel, double Tacc, bool abs,  long hh, long hu, long hd)
+{
+	if (totalAxis <= 0
+			|| Tacc < 1E-6
+			|| maxvel < 1E-6)
+			return ERR_INVALID_ARG;
+	
+	unsigned long	retValue = ERR_NOERR;
+	MultiAxisRequest *newReq = NULL;
+	ArchlRef		 *newArchlRef = NULL;
+	
+	m_mutex.lock();
+	
+	//先进行容错检查
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short axis = axisArray[i];
+		long dist = distArray[i];
+		if ( 0 == m_driverState.count(axis))
+		{
+			retValue = ERR_NO_AXIS;
+			goto DONE;
+		}
+
+		if (m_requests.count(axis))
+		{
+			retValue = ERR_AXIS_BUSY;
+			goto DONE;
+		}
+	}
+
+	newArchlRef = new ArchlRef;
+	if(NULL == newArchlRef)
+	{
+		retValue = ERR_MEM;
+		goto DONE;
+	}
+
+	newArchlRef->maxvel = maxvel;
+	newArchlRef->maxa	= maxvel / Tacc;
+	newArchlRef->hu		= hu;
+	newArchlRef->hh		= hh;
+	newArchlRef->hd		= hd;
+	
+	//新建请求
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short axis = axisArray[i];
+		long dist = distArray[i];
+		newReq = new MultiAxisRequest(axis, newArchlRef, distArray[i], abs, (i==0)/*是否为Z轴*/);
+		setMoveState(axis, MOVESTATE_BUSY);
+		m_requests[axis] = newReq;
+	}
+DONE:
+	m_condition.signal();
+
+	m_mutex.unlock();
+
+	return retValue;
+}
 
 unsigned long DmcManager::check_done(short axis)
 {

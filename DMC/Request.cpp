@@ -456,7 +456,7 @@ double  MoveRequest::getCurSpeed() const
 	if (NULL == this->moveparam)
 		return 0;
 
-	return this->moveparam->getSpeed();
+	return this->moveparam->speed();
 }
 
 int     MoveRequest::getCurPos()const
@@ -962,7 +962,7 @@ double  LineRef::getDistanceRatio(int slave_index)
 
 double LineRef::getCurrentVel() const
 {
-	return _moveparam->getSpeed();
+	return _moveparam->speed();
 }
 
 double LineRef::getRefDistance() const
@@ -1712,6 +1712,7 @@ bool MultiAxisRequest::startPlan()
 
 bool  MultiAxisRequest::positionReached(int q , int bias) const
 {
+	return true;
 	bool reached = this->axispara->positionReached(q, bias);
 	return reached;
 }
@@ -1743,15 +1744,45 @@ MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, b
 		dstpos = pos;
 	else
 		dstpos = startpos + pos;
-
-	double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);
-
-	this->axispara = new LinearPara(newLinearRef, startpos, dstpos);
 	
+	this->axispara = new LinearPara(newLinearRef, startpos, dstpos);
+
+	double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);	
 	if (dist > newLinearRef->max_dist)
-		newLinearRef->max_dist = dist;
+		newLinearRef->max_dist = dist;				//²Î¿¼ÖáÔË¶¯¾àÀë
+
 	if (axis > newLinearRef->last_slaveidx)
 		newLinearRef->last_slaveidx = axis;
+}
+
+MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, bool abs, bool z)			//ZÖá¹°ÃÅ²å²¹
+{
+	int startpos, dstpos;
+	this->slave_idx = axis;
+	this->fsmstate = fsm_state_start;
+
+	startpos = DmcManager::instance().getDriverCmdPos(axis);
+
+	if (abs)
+		dstpos = pos;
+	else
+		dstpos = startpos + pos;
+
+	this->axispara = new ArchlMultiAxisPara(newArchlRef, startpos, dstpos, z);
+
+	if (z)
+	{
+		newArchlRef->zstartpos = startpos;
+		newArchlRef->zdstpos   = dstpos;
+	}
+	else
+	{//Ö±Ïß²å²¹Öá
+		double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);
+		if (dist > newArchlRef->max_dist)
+			newArchlRef->max_dist = dist;				//²Î¿¼ÖáÔË¶¯¾àÀë
+	}
+	if (axis > newArchlRef->last_slaveidx)
+		newArchlRef->last_slaveidx = axis;
 }
 
 void HomeMoveRequest::fsm_state_done(HomeMoveRequest *req)
