@@ -13,6 +13,7 @@
 //#define 	TEST_HOME
 //#define TEST_IO
 #define TEST_LINE
+//#define TEST_LINE
 //#define TEST_DEC
 //#define TEST_ISTOP
 //#define TEST_INC

@@ -93,6 +93,16 @@ DWORD WINAPI d1000_start_sa_line(short TotalAxis,short *AxisArray,long *PosArray
 	return DmcManager::instance().start_line(TotalAxis, AxisArray, PosArray, MaxVel, Tacc, true, MOVETYPE_S);
 }
 
+DWORD WINAPI d1000_start_t_archl(short TotalAxis,short *AxisArray,long *DistArray,long MaxVel, double Tacc, long hh, long hu, long hd)
+{
+	return DmcManager::instance().start_archl(TotalAxis, AxisArray, DistArray, MaxVel, Tacc, false, hh, hu, hd);
+}
+
+DWORD WINAPI d1000_start_ta_archl(short TotalAxis,short *AxisArray,long *PosArray,long MaxVel, double Tacc, long hh, long hu, long hd)
+{
+	return DmcManager::instance().start_archl(TotalAxis, AxisArray, PosArray, MaxVel, Tacc, true,  hh, hu, hd);
+}
+
 long WINAPI d1000_get_command_pos(short axis)
 {
 	return DmcManager::instance().get_command_pos(axis);

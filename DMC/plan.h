@@ -69,6 +69,7 @@ public:
 
 	//轨迹参数
 	double vlim;			//实际达到最大速度
+	double alima;			//实际到达最大加速度
 
 	double Ta;				//加速时间
 	double Tv;				//匀速时间
@@ -76,12 +77,14 @@ public:
 	virtual int position(int ts)  const;
 	virtual double speed() const;
 	virtual double speed(int ts) const;
+
+	double tofdist(double dist) const;			//运动距离消耗时间 
 	
 	virtual ~TParam() {};
 
 	TParam()
 	{
-		vmax=amax=vlim=Ta=Tv = 0;
+		vmax=amax=vlim=alima=Ta=Tv = 0;
 	}
 };
  
@@ -113,6 +116,7 @@ int Plan_S( SParam *param);
 double Speed_T(double t, const TParam *tp);
 double Displace_T(double t, const TParam *tp);
 int Plan_T(TParam *tp);
+int Plan_T( TParam *tp, double tlim);
 
 //匀减速
 double Displace_D(double t, const DParam *dp);

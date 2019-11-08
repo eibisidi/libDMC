@@ -57,7 +57,7 @@ Logger* CLogSingle::getPointsLogger()
 		AutoPtr<AsyncChannel> pAC(new AsyncChannel(pChannel));
 		
 		Poco::Logger& logger = Logger::get(loggerName);
-		logger.setChannel(pAC);
+		logger.setChannel(pChannel);
 			
 		pPointsLogger = &logger;
 	}

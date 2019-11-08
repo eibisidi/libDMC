@@ -152,7 +152,7 @@ double	LinearRef::getDistanceRatio(int slave_index)
 
 double LinearRef::getCurrentVel() const 					//获得当前运动速率 
 {
-	double vel = this->moveparam->getSpeed();
+	double vel = this->moveparam->speed();
 	return vel;
 }
 
@@ -272,5 +272,237 @@ double LinearPara::getCurSpeed() const
 	double 		maxdist		= linearRef->getMaxDist();
 	
 	double v = (this->dstpos - this->startpos) * velref / maxdist;
+	return v;
+}
+
+ArchlRef::ArchlRef()
+{
+	maxvel = 0;
+	maxa   = 0;
+	max_dist = 0;
+
+	t0 = 0;
+	t1 = 0;
+	elapsed = 0;
+	ts0 = 0;
+	ts1 = 0;
+}
+
+ArchlRef::~ArchlRef()
+{
+}
+
+int ArchlRef::startPlan()
+{
+	if (0 == planned)
+	{
+		do{
+			//针对Z轴进行参数校验证
+			if (this->hh > this->zstartpos)
+			{
+				if (this->zstartpos + this->hu > this->hh
+					|| this->zdstpos + this->hd > this->hh)	//正向运动超限高
+				{
+					CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
+						this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
+					planned = -1;
+					break;
+				}
+			}
+			else
+			{
+				if (this->zstartpos - this->hu < this->hh
+					|| this->zdstpos - this->hd < this->hh) //负向运动超限高
+				{
+					CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
+						this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
+					planned = -1;
+					break;
+				}
+			}
+		
+			//规划Z轴上升
+			up_param.q0 = this->zstartpos;
+			up_param.q1 = this->hh;
+			up_param.amax = this->maxa;
+			up_param.vmax = this->maxvel;
+			if (-1 == ::Plan_T(&this->up_param))
+			{
+				CLogSingle::logError("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f.", __FILE__, __LINE__,
+						this->up_param.q0, this->up_param.q1, this->up_param.vmax, this->up_param.amax);
+				planned = -1;
+				break;
+			}
+
+			//规划Z轴下降
+			down_param.q0 = this->hh;
+			down_param.q1 = this->zdstpos;
+			down_param.amax = this->maxa;
+			down_param.vmax = this->maxvel;
+			if (-1 == ::Plan_T(&this->down_param))
+			{
+				CLogSingle::logError("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f.", __FILE__, __LINE__,
+						this->down_param.q0, this->down_param.q1, this->down_param.vmax, this->down_param.amax);
+				planned = -1;
+				break;
+			}
+
+			this->t0 = up_param.tofdist(this->hu);
+			this->t1 = down_param.tofdist(abs(this->hh - this->zdstpos) - hd);
+
+			
+			//规划直线插补
+			double limt = (up_param.T - this->t0) + this->t1;
+			this->line_param.q0   = 0; 	
+			this->line_param.q1   = this->max_dist;
+			this->line_param.vmax = this->maxvel;
+			this->line_param.amax = this->maxa;
+			
+			if(-1 == ::Plan_T(&this->line_param, limt))
+			{
+				CLogSingle::logError("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f, limt=%f.", __FILE__, __LINE__,
+						this->line_param.q0, this->line_param.q1, this->line_param.vmax, this->line_param.amax, limt);
+				planned = -1;
+				break;
+			}
+
+			this->ts0 = (int)(CYCLES_PER_SEC * this->t0 + 1);
+			this->ts1 = (int)(CYCLES_PER_SEC * (this->t0 + line_param.T - this->t1) + 1);
+
+			CLogSingle::logInformation("Archl Result For zstartpos=%d, zdstpos=%d, hh=%d, hu=%d, hd=%d, max_dist=%f, maxa=%f, maxvel=%f.", __FILE__, __LINE__, 
+						this->zstartpos, this->zdstpos, this->hh, this->hu, this->hd, this->max_dist, this->maxa, this->maxvel);
+			CLogSingle::logInformation("up-cycles=%d, down-cycles=%d, line-cycles=%d, ts=%d, total-cycles=%d, total-time=%fs.", __FILE__, __LINE__, 
+									this->up_param.cycles, this->down_param.cycles, this->line_param.cycles, this->ts1, this->ts1 + this->down_param.cycles,  (this->ts1 + this->down_param.cycles) * 1.0 / CYCLES_PER_SEC);
+			
+			planned = 1;
+		}while(0);
+		
+	}
+	return planned;
+}
+
+bool ArchlRef::moreCycles() const
+{
+	return (this->elapsed < (this->ts1 + this->down_param.cycles));
+}
+
+double	ArchlRef::getLineDistanceRatio(int slave_index)
+{
+	double			cur_ratio;
+
+	if (this->elapsed < this->ts0)
+		cur_ratio = 0.0;												//还未开始
+	else if (this->elapsed >= (this->ts0 + this->line_param.cycles ))
+		cur_ratio = 1.0;
+	else
+		cur_ratio = this->line_param.position(this->elapsed-this->ts0) / this->max_dist;
+
+	//最后一个轴，增加当前时刻
+	if (slave_index == this->last_slaveidx)
+		++this->elapsed;
+
+	return cur_ratio;
+}
+
+double ArchlRef::getLineCurrentVel() const							//获得当前运动速率
+{
+	double vel;
+	if (this->elapsed < this->ts0)										//垂直上升
+		vel = 0;
+	else if (this->elapsed >= (this->ts0 + this->line_param.cycles ))	//垂直下降
+		vel = 0;
+	else
+		vel = this->line_param.speed(this->elapsed - this->ts0);
+	
+	return vel;
+}
+
+double ArchlRef::getLineMaxDist() const
+{
+	return this->max_dist;
+}
+
+double ArchlRef::getZCurrentSpeed() const								//获取Z轴速度
+{
+	double speed;
+	if (this->elapsed < this->up_param.cycles)			//上升阶段
+		speed = this->up_param.speed(this->elapsed);
+	else if (this->elapsed >= this->up_param.cycles && this->elapsed < this->ts1)
+		speed = 0;
+	else	//下降阶段
+		speed = this->down_param.speed(this->elapsed - this->ts1);
+
+	return speed;
+}
+
+int   ArchlRef::getZPosition(int slave_index)
+{
+	int pos;
+	if (this->elapsed < this->up_param.cycles)			//上升阶段
+		pos = this->up_param.position(this->elapsed);
+	else if (this->elapsed >= this->up_param.cycles && this->elapsed < this->ts1)
+		pos = this->hh;
+	else	//下降阶段
+		pos = this->down_param.position(this->elapsed - this->ts1);
+	
+	//最后一个轴，增加当前时刻
+	if (slave_index == this->last_slaveidx)
+		++this->elapsed;
+
+	return pos;
+}
+
+ArchlMultiAxisPara::ArchlMultiAxisPara(ArchlRef *newArchlRef, int sp, int dp, bool z)
+	:BaseMultiAxisPara(newArchlRef, sp, dp)
+{
+	is_zaxis = z;
+}
+	
+ArchlMultiAxisPara::~ArchlMultiAxisPara()
+{
+	
+}
+
+bool ArchlMultiAxisPara::startPlan()
+{
+	bool success = (1 == this->ref->startPlan());	//0尚未规划， -1规划失败 1规划成功
+	return success;
+}
+
+int ArchlMultiAxisPara::nextPosition(int slaveidx) 	//获得下一个规划位置
+{
+	int 	nextpos;
+	ArchlRef *archlRef = dynamic_cast<ArchlRef *> (this->ref);
+
+	if (!archlRef->moreCycles())//避免浮点数计算误差
+		nextpos = this->dstpos;
+	else
+	{
+		if (this->is_zaxis)
+		{//Z轴
+			nextpos = archlRef->getZPosition(slaveidx);
+		}
+		else
+		{//直线插补
+			double distRatio = archlRef->getLineDistanceRatio(slaveidx); // >= 0
+			nextpos = (int)(this->startpos +  distRatio * (this->dstpos - this->startpos) );
+		}
+	}
+	return nextpos;
+}
+
+double ArchlMultiAxisPara::getCurSpeed() const 		//返回当前速度，有符号
+{
+	double v;
+	ArchlRef *archlRef = dynamic_cast<ArchlRef *> (this->ref);
+	if (this->is_zaxis)//Z轴
+		v = archlRef->getZCurrentSpeed();
+	else
+	{
+		double		velref		= archlRef->getLineCurrentVel();			//基准参考速度
+		double		maxdist 	= archlRef->getLineMaxDist();
+		v = (this->dstpos - this->startpos) * velref / maxdist;
+	}
+	
 	return v;
 }

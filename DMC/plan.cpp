@@ -43,6 +43,31 @@ double TParam::speed(int ts) const
 	return v;
 }
 
+double TParam::tofdist(double dist) const
+{
+	double t;
+	double Smin = (this->vmax * this->vmax) / this->amax;
+	double S   = (this->q1 - this->q0);
+	if ( S > Smin)
+	{
+		if (dist <= Smin/2)
+			t = sqrt(2 * dist / this->amax);
+		else if (dist > Smin/2 && dist <= (S - Smin/2))
+			t = this->Ta + (dist - Smin/2) / (this->vmax);
+		else
+			t = this->Ta + this->Tv + this->Ta - sqrt(2*(S - dist) / this->amax);
+	}
+	else
+	{
+		if (dist <= (S / 2))
+			t = sqrt(2 * dist) / this->amax;
+		else
+			t = this->Ta + this->Ta - sqrt(2 *(S - dist) / this->amax );
+	}
+
+	return t;
+}
+
 int SParam::position()
 {
 	int q_i;
@@ -336,7 +361,7 @@ double Displace_T(double t, const TParam *tp)
 	double q0   = tp->q0;
 	double q1	= tp->q1;
 	double vlim = tp->vlim;
-	double amax = tp->amax;
+	double amax = tp->alima;
 	double Ta = tp->Ta;
 	double Tv   = tp->Tv;
 	double T	= tp->T;
@@ -379,6 +404,7 @@ int Plan_T( TParam *tp)
 	if ( Sv > 0)
 	{//朢??大????度可达???
 		tp->vlim = tp->vmax;
+		tp->alima = tp->amax;
 		tp->Ta   = tp->vmax / tp->amax;
 		tp->Tv	 = Sv / tp->vmax;
 		tp->T	 = tp->Ta + tp->Tv + tp->Ta;
@@ -386,10 +412,90 @@ int Plan_T( TParam *tp)
 	else
 	{//朢??大????度不可达到
 		tp->vlim = sqrt((tp->q1 - tp->q0) * tp->amax);
+		tp->alima = tp->amax;
 		tp->Ta	= sqrt((tp->q1 - tp->q0) / tp->amax);
 		tp->Tv	= 0;
 		tp->T	= tp->Ta + 0 + tp->Ta;
 
+	}
+
+	tp->cycles = (int)(tp->T * CYCLES_PER_SEC + 1);
+
+	return 0;
+}
+
+
+int Plan_T( TParam *tp, double tlim)
+{
+	if(fabs(tp->vmax) < 1e-6)
+		return -1;
+	if (fabs(tp->amax) < 1e-6)
+		return -1;
+	if (fabs(tp->q1 - tp->q0) < 1e-6)
+		return -1;
+
+	tp->sign = (tp->q1 > tp->q0) ? (1) : (-1);
+	if (tp->sign < 0)
+	{
+		tp->q0 = -(tp->q0);
+		tp->q1 = -(tp->q1);
+	}
+
+
+	double a, al,ah;
+	double s;
+	al = 0;
+	ah = tp->amax;
+	s = tp->q1 - tp->q0;
+	while(true)
+	{
+		a = (al + ah)/2;
+		if (s <= tp->vmax * tp->vmax / a)
+		{
+			tp->Ta = sqrt(s / a);
+			tp->T  = tp->Ta + tp->Ta;
+
+			if (ah - al > 0.001)
+			{
+				if (tp->T - tlim> sigma) //时间过长
+					al = a;
+				else if (tp->T < tlim )
+					ah = a;
+				else
+				{
+					tp->vlim = tp->Ta * a;
+					tp->alima = a;
+					tp->Ta  = tp->Ta;
+					tp->Tv  = 0;
+					tp->T	= tp->Ta + tp->Ta;
+					break;
+				}
+			}
+			else
+			{
+				tp->vlim = tp->Ta * a;
+				tp->alima = a;
+				tp->Ta  = tp->Ta;
+				tp->Tv  = 0;
+				tp->T	= tp->T;
+				break;
+			}
+		}
+		else
+		{
+			tp->T = tp->vmax / a + s / tp->vmax;
+			if (tp->T > tlim)
+			{
+				tp->vlim = tp->vmax;
+				tp->alima= a;
+				tp->Ta	 = tp->vmax / a;
+				tp->Tv = (s - tp->vmax * tp->vmax / a) / tp->vmax;
+				tp->T	= tp->T;
+				break;
+			}
+			else
+				ah = a;
+		}
 	}
 
 	tp->cycles = (int)(tp->T * CYCLES_PER_SEC + 1);

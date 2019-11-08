@@ -443,7 +443,8 @@ public:
 	
 	virtual void exec();
 
-	MultiAxisRequest(int axis, LinearRef *newLinearRef, int dist, bool abs);
+	MultiAxisRequest(int axis, LinearRef *newLinearRef, int dist, bool abs);				//ֱ�߲岹
+	MultiAxisRequest(int axis, ArchlRef *newArchlRef, int dist, bool abs, bool z);			//Z�Ṱ�Ų岹
 };
 
 class HomeMoveRequest: public BaseRequest
