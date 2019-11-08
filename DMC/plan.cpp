@@ -7,22 +7,22 @@ double sigma = 0.1;
 
 int TParam::position()
 {
-	int q_i = getPos();
+	int q_i = position(this->elapsed);
 
 	//printf("S[%d] = %d, q_i = %d, q1=%f.\n", elapsed, q_i, q1);
 	++elapsed;
 	return q_i;
 }
 
-int TParam::getPos() const
+int TParam::position(int ts) const
 {
 	int q_i;
-	if (elapsed == cycles - 1)
+	if (ts == this->cycles - 1)
 		q_i = (int)((sign == 1)? q1 : -q1);
 	else
 	{
 		double q_f;
-		double t = elapsed * 1.0 / CYCLES_PER_SEC;
+		double t = ts * 1.0 / CYCLES_PER_SEC;
 		q_f = ::Displace_T(t, this);
 		q_i = (int)(q_f);				// don't round up
 	}
@@ -40,20 +40,20 @@ double TParam::getSpeed() const
 int SParam::position()
 {
 	int q_i;
-	q_i = getPos();
+	q_i = position(this->elapsed);
 	++elapsed;
 	return q_i;
 }
 
-int SParam::getPos() const
+int SParam::position(int ts)  const
 {
 	int q_i;
-	if (elapsed == cycles - 1)
+	if (ts == this->cycles - 1)
 		q_i = (int)((sign == 1)? q1 : -q1);
 	else
 	{
 		double q_f;
-		double t = elapsed * 1.0 / CYCLES_PER_SEC;
+		double t = ts * 1.0 / CYCLES_PER_SEC;
 
 		q_f = ::Displace_S(t, this);
 		q_i = (int)(q_f);				// don't round up
@@ -73,7 +73,7 @@ double SParam::getSpeed() const
 int DParam::position()
 {
 	int q_i;
-	q_i = getPos();
+	q_i = position(this->elapsed);
 
 
 	//printf("D [%d], q_i=%d, q1=%f.\n", elapsed, q_i, q1);
@@ -81,16 +81,16 @@ int DParam::position()
 	return q_i;
 }
 
-int DParam::getPos() const
+int DParam::position(int ts) const
 {
 	int q_i;
-	if (elapsed == cycles - 1)
+	if (ts == this->cycles - 1)
 		q_i = (int)((sign == 1)? q1 : -q1);
 
 	else
 	{
 		double q_f;
-		double t = (elapsed + 1)* 1.0 / CYCLES_PER_SEC;						//为避免两个下一个周期位置与本次相同，(elapsed+1)
+		double t = (ts + 1)* 1.0 / CYCLES_PER_SEC;						//为避免两个下一个周期位置与本次相同，(elapsed+1)
 		q_f = ::Displace_D(t, this);
 		q_i = (int)(q_f);				// don't round up
 	}

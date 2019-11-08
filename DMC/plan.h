@@ -20,13 +20,12 @@ public:
 	int	   sign;					// (q1-q0)符号
 	int    cycles;					//T对应的周期数
 	double T;						//总时间
-	int	   elapsed;
+	int	   elapsed;					//[0~cycles)
 
 	virtual ~MParam() {}
 	virtual int position() = 0;
-	virtual int getPos()  const= 0;
+	virtual int position(int ts)  const= 0;
 	virtual double getSpeed() const = 0;
-	//bool positionReached(int q, bool bias = false) const;
 
 	MParam()
 	{
@@ -50,7 +49,7 @@ public:
 	double Ta;				//加速时间
 	double Tv;				//匀速时间
 	virtual int position();
-	virtual int getPos() const;
+	virtual int position(int ts)  const;
 	virtual double getSpeed() const;
 	virtual ~SParam() {}
 	SParam()
@@ -72,8 +71,9 @@ public:
 	double Ta;				//加速时间
 	double Tv;				//匀速时间
 	virtual int position();
+	virtual int position(int ts)  const;
 	virtual ~TParam() {};
-	virtual int getPos() const;
+
 	virtual double getSpeed() const;
 	TParam()
 	{
@@ -90,7 +90,7 @@ public:
 	double v0;				//初始速度
 
 	virtual int position();
-	virtual int getPos() const;
+	virtual int position(int ts)  const;
 	virtual double getSpeed() const;
 	virtual ~DParam() {};
 	DParam()
