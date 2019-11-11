@@ -239,8 +239,8 @@ int Plan_S( SParam *param)
 		return -1;
 	if (fabs(param->jmax) < 1e-6)
 		return -1;
-	if (fabs(param->q1 - param->q0) < 1e-6)
-		return -1;
+	//if (fabs(param->q1 - param->q0) < 1e-6)
+	//	return -1;									//允许位移为0
 	
 	param->sign = (param->q1 > param->q0) ? (1) : (-1);
 	if (param->sign < 0)
@@ -389,8 +389,8 @@ int Plan_T( TParam *tp)
 		return -1;
 	if (fabs(tp->amax) < 1e-6)
 		return -1;
-	if (fabs(tp->q1 - tp->q0) < 1e-6)
-		return -1;
+	//if (fabs(tp->q1 - tp->q0) < 1e-6)		//允许位移为0
+	//	return -1;
 	
 	tp->sign = (tp->q1 > tp->q0) ? (1) : (-1);
 	if (tp->sign < 0)
@@ -431,7 +431,7 @@ int Plan_T( TParam *tp, double tlim)
 		return -1;
 	if (fabs(tp->amax) < 1e-6)
 		return -1;
-	if (fabs(tp->q1 - tp->q0) < 1e-6)
+	if (fabs(tp->q1 - tp->q0) < 1e-6)				//不允许位移为0
 		return -1;
 
 	tp->sign = (tp->q1 > tp->q0) ? (1) : (-1);
