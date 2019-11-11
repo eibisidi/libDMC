@@ -348,7 +348,7 @@ int ArchlRef::startPlan()
 			}
 
 			if (this->max_dist > 1E-6)
-			{
+			{//水平位移最大值非0
 			
 				double t0 = up_param.tofdist(this->hu);
 				double t1 = down_param.tofdist(abs(this->hh - this->zdstpos) - hd);
@@ -373,7 +373,7 @@ int ArchlRef::startPlan()
 				this->ts1 = (int)(CYCLES_PER_SEC * (t0 + line_param.T - t1) + 1);
 			}
 			else
-			{
+			{//水平位移最大值为0
 				this->ts0 = 0;
 				this->ts1 = up_param.cycles;
 			}

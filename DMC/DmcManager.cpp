@@ -862,7 +862,7 @@ void DmcManager::run()
 
 				updateState();
 
-				if (m_masterState.fifoEmptyCount >= 1)
+				if (m_masterState.fifoEmptyCount >= 10)
 				{
 					break;//避免出现死循环
 				}
@@ -1190,66 +1190,6 @@ unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,double T
 }
 
 unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *distArray, double maxvel, double Tacc, bool abs, MoveType movetype)
-#if 0
-{
-	assert(Tacc > 1E-6);
-
-	unsigned long retValue = ERR_NOERR;
-	LineRequest *newReq = NULL;
-	LineRef			*newLineRef = NULL;
-	
-	m_mutex.lock();
-
-	newLineRef = new LineRef;
-	if(NULL == newLineRef)
-	{
-		retValue = ERR_MEM;
-		goto DONE;
-	}
-
-	//先进行容错检查
-	for(int i = 0 ; i < totalAxis; ++i)
-	{
-		short axis = axisArray[i];
-		long dist = distArray[i];
-		if ( 0 == m_driverState.count(axis))
-		{
-			retValue = ERR_NO_AXIS;
-			goto DONE;
-		}
-
-		if (m_requests.count(axis))
-		{
-			retValue = ERR_AXIS_BUSY;
-			goto DONE;
-		}
-	}
-
-//新建请求
-	for(int i = 0 ; i < totalAxis; ++i)
-	{
-		short axis = axisArray[i];
-		long dist = distArray[i];
-		newReq = new LineRequest(newLineRef);
-		newReq->slave_idx = axis;
-		newReq->abs		  = abs;
-		newReq->dist	  = dist;
-		newReq->maxvel	  = maxvel;
-		newReq->maxa	  = maxvel / Tacc;
-		newReq->maxj	  = MAXJ_RATIO * newReq->maxa;
-		newReq->movetype  = movetype;
-		setMoveState(axis, MOVESTATE_BUSY);
-		m_requests[axis] = newReq;
-		m_condition.signal();
-	}
-DONE:
-
-	m_mutex.unlock();
-
-	return retValue;
-		
-}
-#else
 {
 	if (totalAxis <= 0
 		|| Tacc < 1E-6
@@ -1275,6 +1215,7 @@ DONE:
 
 		if (m_requests.count(axis))
 		{
+			CLogSingle::logError("Axis %?d is busy.", __FILE__, __LINE__, axis);
 			retValue = ERR_AXIS_BUSY;
 			goto DONE;
 		}
@@ -1309,8 +1250,6 @@ DONE:
 	return retValue;
 		
 }
-
-#endif
 
 unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *distArray, double maxvel, double Tacc, bool abs,  long hh, long hu, long hd)
 {

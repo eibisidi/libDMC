@@ -102,6 +102,9 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 		return;
 	}
 
+	CLogSingle::logWarning("axis = %d Dec Reached.", __FILE__, __LINE__, req->slave_idx);
+
+	
 	//fprintf(stdout, "dec Reached. CurrentPos=%d, q1 = %f.\n", req->respData->Data1, req->dParam.q1);
 
 	//目标位置已到达,更新新的绝对位置
@@ -1400,7 +1403,7 @@ void  MultiAxisRequest::fsm_state_wait_all_pos_reached(MultiAxisRequest *req)
 	{
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
-			CLogSingle::logError("LineRequest::fsm_state_wait_all_pos_reached timeouts, axis=%d, %d != %d.", __FILE__, __LINE__,
+			CLogSingle::logError("LineRequest::fsm_state_wait_all_pos_reached timeouts, axis=%d, svoncount(%d) != posreach(%d).", __FILE__, __LINE__,
 						req->slave_idx, req->axispara->getSvonCount(), req->axispara->getPosReachedCount());
 			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
 			req->axispara->setError();
@@ -1408,7 +1411,7 @@ void  MultiAxisRequest::fsm_state_wait_all_pos_reached(MultiAxisRequest *req)
 		}
 		else
 		{
-			CLogSingle::logWarning("LineRequest::fsm_state_wait_all_pos_reached retries, axis=%d, %d != %d.", __FILE__, __LINE__, 
+			CLogSingle::logWarning("LineRequest::fsm_state_wait_all_pos_reached retries, axis=%d, svoncount(%d) != posreach(%d).", __FILE__, __LINE__, 
 				req->slave_idx, req->axispara->getSvonCount(), req->axispara->getPosReachedCount());
 			req->rechecks = RETRIES;
 		}
