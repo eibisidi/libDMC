@@ -12,8 +12,8 @@
 //#define  	TEST_MOVE
 //#define 	TEST_HOME
 //#define TEST_IO
-#define TEST_LINE
 //#define TEST_LINE
+#define TEST_ARCHL
 //#define TEST_DEC
 //#define TEST_ISTOP
 //#define TEST_INC
@@ -76,17 +76,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	
 	DWORD ms;
 #ifdef TEST_PLAN
-	SParam tparam;
-	tparam.q0 = 1152;
-	tparam.q1 = 51152;
-	tparam.vmax = 400000;
-	tparam.amax = 400000 / 0.2;
-	tparam.jmax = 3 *  tparam.amax;
-
-
-	::Plan_S(&tparam);
-	while (tparam.elapsed < tparam.cycles)
-		CLogSingle::logPoint(tparam.position());
+	ArchlRef archRef;
 	
 #endif
 
@@ -149,13 +139,13 @@ int _tmain(int argc, _TCHAR* argv[])
 	
 	while (true)
 	{
-		d1000_start_t_move(1, 150000, 0, 200000, 0.2);
+		d1000_start_t_move(1, 150000, 0, 400000, 0.1);
 
 
-		Sleep(50 + rand() % 2000);
+		Sleep(50 + rand() % 100);
 
-		//d1000_decel_stop(1, 0.5);
-		d1000_immediate_stop(1);
+		d1000_decel_stop(1, 0.1);
+		//d1000_immediate_stop(1);
 
 		while(1)
 		{
@@ -362,7 +352,64 @@ int _tmain(int argc, _TCHAR* argv[])
 			rate = -1.5;
 	}
 #endif
+#ifdef TEST_ARCHL
 
+	int zmove = -10000;
+	int xmove = 100000;
+
+	int hh = 100000;
+	int hu = 10000;
+	int hd = 20000;
+	short r_axisArray[2] = {2,1};
+	long  r_distArray[2];
+
+	int zstartpos = d1000_get_command_pos(r_axisArray[0]);
+	int	xstartpos = d1000_get_command_pos(r_axisArray[1]);
+
+	int i = 10000;
+	while(i--)
+	{
+		r_distArray[0] = rand() % 50000;
+		r_distArray[1] = rand() % 50000;
+		printf("zmove = %d, xmove=%d\n", r_distArray[0], r_distArray[1]);
+		
+		d1000_start_t_archl(2, r_axisArray, r_distArray,100000, 0.2, hh, hu, hd);	//
+
+		while(1)
+		{
+			ms = d1000_check_done(1);
+			
+			if (MOVESTATE_BUSY != ms)
+				break;
+		}
+
+		if (ms != MOVESTATE_STOP)
+		{
+			printf("move error.\n");
+			throw;
+		}
+
+		r_distArray[0] = zstartpos;
+		r_distArray[1] = xstartpos;
+
+		d1000_start_ta_archl(2, r_axisArray, r_distArray,100000, 0.2, hh, hd, hu); //
+		
+		while(1)
+		{
+			ms = d1000_check_done(1);
+			
+			if (MOVESTATE_BUSY != ms)
+				break;
+		}
+
+		if (ms != MOVESTATE_STOP)
+		{
+			printf("move error.\n");
+			throw;
+		}
+	}
+	
+#endif
 
 #ifdef TEST_IO
 	unsigned int bits;
