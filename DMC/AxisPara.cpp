@@ -281,8 +281,8 @@ ArchlRef::ArchlRef()
 	maxa   = 0;
 	max_dist = 0;
 
-	t0 = 0;
-	t1 = 0;
+	//t0 = 0;
+	//t1 = 0;
 	elapsed = 0;
 	ts0 = 0;
 	ts1 = 0;
@@ -347,28 +347,37 @@ int ArchlRef::startPlan()
 				break;
 			}
 
-			this->t0 = up_param.tofdist(this->hu);
-			this->t1 = down_param.tofdist(abs(this->hh - this->zdstpos) - hd);
-
-			
-			//规划直线插补
-			double limt = (up_param.T - this->t0) + this->t1;
-			this->line_param.q0   = 0; 	
-			this->line_param.q1   = this->max_dist;
-			this->line_param.vmax = this->maxvel;
-			this->line_param.amax = this->maxa;
-			
-			if(-1 == ::Plan_T(&this->line_param, limt))
+			if (this->max_dist > 1E-6)
 			{
-				CLogSingle::logError("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f, limt=%f.", __FILE__, __LINE__,
-						this->line_param.q0, this->line_param.q1, this->line_param.vmax, this->line_param.amax, limt);
-				planned = -1;
-				break;
+			
+				double t0 = up_param.tofdist(this->hu);
+				double t1 = down_param.tofdist(abs(this->hh - this->zdstpos) - hd);
+
+				
+				//规划直线插补
+				double limt = (up_param.T - t0) + t1;
+				this->line_param.q0   = 0; 	
+				this->line_param.q1   = this->max_dist;
+				this->line_param.vmax = this->maxvel;
+				this->line_param.amax = this->maxa;
+				
+				if(-1 == ::Plan_T(&this->line_param, limt))
+				{
+					CLogSingle::logError("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f, limt=%f.", __FILE__, __LINE__,
+							this->line_param.q0, this->line_param.q1, this->line_param.vmax, this->line_param.amax, limt);
+					planned = -1;
+					break;
+				}
+
+				this->ts0 = (int)(CYCLES_PER_SEC * t0 + 1);
+				this->ts1 = (int)(CYCLES_PER_SEC * (t0 + line_param.T - t1) + 1);
 			}
-
-			this->ts0 = (int)(CYCLES_PER_SEC * this->t0 + 1);
-			this->ts1 = (int)(CYCLES_PER_SEC * (this->t0 + line_param.T - this->t1) + 1);
-
+			else
+			{
+				this->ts0 = 0;
+				this->ts1 = up_param.cycles;
+			}
+			
 			CLogSingle::logInformation("Archl Result For zstartpos=%d, zdstpos=%d, hh=%d, hu=%d, hd=%d, max_dist=%f, maxa=%f, maxvel=%f.", __FILE__, __LINE__, 
 						this->zstartpos, this->zdstpos, this->hh, this->hu, this->hd, this->max_dist, this->maxa, this->maxvel);
 			CLogSingle::logInformation("up-cycles=%d, down-cycles=%d, line-cycles=%d, ts=%d, total-cycles=%d, total-time=%fs.", __FILE__, __LINE__, 

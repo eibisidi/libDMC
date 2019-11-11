@@ -126,8 +126,8 @@ private:
 	TParam			up_param;					//Z轴上升阶段规划结果
 	TParam			down_param;					//Z轴下降阶段规划结果
 
-	double 			t0;							//加速上升时间，此段时间内无水平位移
-	double 			t1;							//加速下降时间，此段时间后无水平位移
+	//double 			t0;							//加速上升时间，此段时间内无水平位移
+	//double 			t1;							//加速下降时间，此段时间后无水平位移
 	
 	int				elapsed;					//当前时刻
 	int				ts0;						//水平直线插补运动开始时刻
