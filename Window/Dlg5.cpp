@@ -62,6 +62,8 @@ BEGIN_MESSAGE_MAP(CDlg5, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON6, &CDlg5::OnBnClickedButton6)
 	ON_BN_CLICKED(IDC_BUTTON1, &CDlg5::OnBnClickedButton1)
 	ON_BN_CLICKED(IDC_BUTTON4, &CDlg5::OnBnClickedButton4)
+	ON_BN_CLICKED(IDC_BUTTON2, &CDlg5::OnBnClickedButton2)
+	ON_BN_CLICKED(IDC_BUTTON3, &CDlg5::OnBnClickedButton3)
 END_MESSAGE_MAP()
 
 
@@ -209,5 +211,43 @@ void CDlg5::OnBnClickedButton4()
 	long cmdpos = d1000_get_command_pos(axis);
 	str.Format(_T("%d"), cmdpos);
 	m_cmdPosEdit.SetWindowText(str);
+}
+
+
+
+void CDlg5::OnBnClickedButton2()
+{
+	//ºıÀŸÕ£÷π
+	UpdateData(TRUE);
+	int axis = m_slaveAddrCombo.GetCurSel() + 1;
+
+	DWORD ret;
+	ret = d1000_decel_stop(axis, m_tDec);
+	CString str;
+
+	if (ERR_NOERR != ret)
+	{
+		str.Format(_T("ºıÀŸÕ£÷π∑µªÿ ß∞‹£¨%d"), ret);
+		MessageBox(str, _T(" ß∞‹"));
+	}
+}
+
+
+
+void CDlg5::OnBnClickedButton3()
+{
+	//º±Õ£
+	UpdateData(TRUE);
+	int axis = m_slaveAddrCombo.GetCurSel() + 1;
+
+	DWORD ret;
+	ret = d1000_immediate_stop(axis);
+	CString str;
+
+	if (ERR_NOERR != ret)
+	{
+		str.Format(_T("º±Õ£Õ£÷π∑µªÿ ß∞‹£¨%d"), ret);
+		MessageBox(str, _T(" ß∞‹"));
+	}
 }
 
