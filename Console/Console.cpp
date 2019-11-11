@@ -180,11 +180,12 @@ int _tmain(int argc, _TCHAR* argv[])
 #endif
 
 #ifdef TEST_MOVE
-	int move = 50000;
+	int move = 100000;
 	int delta = 100;
 
 	int i = 0;
-	long startpos = d1000_get_command_pos(1);
+	int axis = 2;
+	long startpos = d1000_get_command_pos(axis);
 	
 	while (move < 150000)
 	{
@@ -193,22 +194,22 @@ int _tmain(int argc, _TCHAR* argv[])
 		switch (i% 4)
 		{
 		case 0:
-			d1000_start_t_move(1, move, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_t_move(axis, move, 0, 100000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		case 1:
-			d1000_start_ta_move(1, startpos + move, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_ta_move(axis, startpos + move,0, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		case 2:
-			d1000_start_s_move(1, move, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_s_move(axis, move, 0,400000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		case 3:
-			d1000_start_sa_move(1, startpos + move, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_sa_move(axis, startpos + move,0, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		}
 		
 		while(1)
 		{
-			ms = d1000_check_done(1);	
+			ms = d1000_check_done(axis);	
 
 			if (MOVESTATE_BUSY != ms)
 				break;
@@ -223,22 +224,22 @@ int _tmain(int argc, _TCHAR* argv[])
 		switch (i% 4)
 		{
 		case 0:
-			d1000_start_t_move(1, -move, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_t_move(axis, -move, 0,100000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		case 1:
-			d1000_start_ta_move(1, startpos, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_ta_move(axis, startpos,0, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		case 2:
-			d1000_start_s_move(1, -move,  400000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_s_move(axis, -move,  0,400000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		case 3:
-			d1000_start_sa_move(1, startpos,  400000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_sa_move(axis, startpos, 0, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		}
 
 		while(1)
 		{
-			ms = d1000_check_done(1);
+			ms = d1000_check_done(axis);
 			
 			if (MOVESTATE_BUSY != ms)
 				break;
@@ -250,8 +251,8 @@ int _tmain(int argc, _TCHAR* argv[])
 			throw;
 		}
 
-		move += delta;
-		++i;
+		//move += delta;
+		//++i;
 		Sleep(10);
 	}
 #endif
@@ -375,7 +376,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		r_distArray[1] = 64604;
 		printf("zmove = %d, xmove=%d\n", r_distArray[0], r_distArray[1]);
 		
-		d1000_start_t_archl(2, r_axisArray, r_distArray,100000, 0.2, hh, hu, hd);	//
+		d1000_start_t_archl(2, r_axisArray, r_distArray,30000, 0.2, hh, hu, hd);	//
 
 		while(1)
 		{
@@ -394,7 +395,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		r_distArray[0] = zstartpos;
 		r_distArray[1] = xstartpos;
 
-		d1000_start_ta_archl(2, r_axisArray, r_distArray,100000, 0.2, hh, hd, hu); //
+		d1000_start_ta_archl(2, r_axisArray, r_distArray,30000, 0.2, hh, hd, hu); //
 		
 		while(1)
 		{

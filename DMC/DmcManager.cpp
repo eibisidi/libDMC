@@ -623,25 +623,22 @@ void DmcManager::updateState()
 	//检查FIFO是否被覆盖
 	if(m_masterState.fifoFull != FIFO_FULL(m_respData))
 	{
-		//printf("FIFO overwritten.\n");
 		CLogSingle::logFatal("FIFO overwritten. lastfifofull = %?d, fifofull=%?d.", __FILE__, __LINE__, m_masterState.fifoFull, FIFO_FULL(m_respData));
-		throw;
-		assert(0);
+		//throw;
+		//assert(0);
 	}
+	
 	if (FIFO_REMAIN(m_respData) == ECM_FIFO_SIZE)
-	{
-		//printf("FIFO empty.\n");
-	}
+		m_masterState.fifoEmptyCount++;
+	else
+		m_masterState.fifoEmptyCount = 0;
 
 	if (FIFO_REMAIN(m_respData) > m_masterState.fifoRemain)
 		m_masterState.fifoIncre = true;		//FIFO剩余空间开始增加，开始净消耗
 	else
 		m_masterState.fifoIncre = false;
 
-	if (FIFO_REMAIN(m_respData) == ECM_FIFO_SIZE)
-		m_masterState.fifoEmptyCount++;
-	else
-		m_masterState.fifoEmptyCount = 0;
+
 	
 	//printf("fiforemain=%d, incre = %d, empty=%d.\n", FIFO_REMAIN(m_respData), (int)m_masterState.fifoIncre, m_masterState.fifoEmptyCount);
 	
@@ -865,9 +862,8 @@ void DmcManager::run()
 
 				updateState();
 
-				if (m_masterState.fifoEmptyCount >= 2)
+				if (m_masterState.fifoEmptyCount >= 1)
 				{
-					printf("towrite = %d, remain=%d, full=%d, emptyCount=%d.\n", towrite, m_masterState.fifoRemain, m_masterState.fifoFull, m_masterState.fifoEmptyCount);
 					break;//避免出现死循环
 				}
 			}while(!m_masterState.fifoIncre || m_masterState.fifoRemain <= FIFO_LOWATER);	//FIFO剩余空间增加，且剩余空间>FIFO_LOWATER
