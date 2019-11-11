@@ -369,8 +369,10 @@ int _tmain(int argc, _TCHAR* argv[])
 	int i = 10000;
 	while(i--)
 	{
-		r_distArray[0] = rand() % 50000;
-		r_distArray[1] = rand() % 50000;
+		//r_distArray[0] = rand() % 50000;
+		//r_distArray[1] = 50000 + rand() % 100000;
+		r_distArray[0] = 32391;
+		r_distArray[1] = 64604;
 		printf("zmove = %d, xmove=%d\n", r_distArray[0], r_distArray[1]);
 		
 		d1000_start_t_archl(2, r_axisArray, r_distArray,100000, 0.2, hh, hu, hd);	//

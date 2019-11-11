@@ -90,7 +90,7 @@ public:
 	static void logPoint(int p);
 	static void logPoint(const std::string& line);
 
-	static void setLogLevel(int nLevel);
+	static void setLogLevel(int nLevel, bool logpoints = false);
 	static void initLogger();
 	static void closeLogger();
 private:

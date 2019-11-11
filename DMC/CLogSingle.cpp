@@ -1,7 +1,10 @@
 #include "CLogSingle.h"
+#include <fstream>
 
 Logger* pLogger = NULL;
-Logger* pPointsLogger = NULL;
+//Logger* pPointsLogger = NULL;
+std::fstream		ofs;
+
 
 Logger* CLogSingle::getLogger()
 {
@@ -35,6 +38,7 @@ Logger* CLogSingle::getLogger()
 	return pLogger;
 }
 
+#if 0
 Logger* CLogSingle::getPointsLogger()
 {
 	if (!pPointsLogger)
@@ -64,6 +68,7 @@ Logger* CLogSingle::getPointsLogger()
 
 	return pPointsLogger;
 }
+#endif
 
 void CLogSingle::logFatal(const std::string &msg ,const char* file, int line)
 {
@@ -113,30 +118,38 @@ void CLogSingle::logDump(const std::string &msg, const void* buffer, std::size_t
 	pLogger->dump(msg, buffer, length, Message::PRIO_FATAL);
 }
 
+
  void CLogSingle::logPoint(int p)
 {
+#if 0
 	Logger* 	pLogger = getPointsLogger();
 	
 	if (pLogger->information())
 	{
 		pLogger->information(format("%d", p));
 	}
-
+#endif
+	if (ofs.is_open())
+		ofs << p << "    ";
 }
+
 
 void CLogSingle::logPoint(const std::string &line)
 {
+#if 0
 	Logger*	 pLogger = getPointsLogger();
 
 	if (pLogger->information())
 	{
 	 	pLogger->information(line);
 	}
-
+#endif
+	if (ofs.is_open())
+		ofs << line;
 }
 
 
-void CLogSingle::setLogLevel(int nLevel)
+void CLogSingle::setLogLevel(int nLevel, bool logpoints)
 {
 	Logger* 	pLogger = getLogger();
 
@@ -149,14 +162,21 @@ void CLogSingle::setLogLevel(int nLevel)
 
 	pLogger->setLevel(nLevel);
 
-	Logger* 	pPointLogger = getPointsLogger();
-	pPointLogger->setLevel(Poco::Message::Priority::PRIO_TRACE);
+	//开启规划点记录
+	if (logpoints)
+		ofs.open("DMCPOINTS.log",std::fstream::out | std::fstream::trunc);
+
+	//Logger* 	pPointLogger = getPointsLogger();
+	//pPointLogger->setLevel(Poco::Message::Priority::PRIO_TRACE);
 }
 
 
 void CLogSingle::initLogger()
 {
 	setLogLevel(Poco::Message::Priority::PRIO_TRACE);	//初始化记录所有信息
+
+	if (ofs.is_open())
+		ofs.close();
 }
 
 void CLogSingle::closeLogger()
@@ -167,11 +187,15 @@ void CLogSingle::closeLogger()
 		pLogger = NULL;
 	}
 
+#if 0
 	if (pPointsLogger)
 	{
 		pPointsLogger->getChannel()->close();
 		pPointsLogger = NULL;
 	}
+#endif
+	if (ofs.is_open())
+		ofs.close();
 }
 
 

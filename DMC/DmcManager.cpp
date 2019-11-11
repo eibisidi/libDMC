@@ -131,7 +131,6 @@ DmcManager & DmcManager::instance()
 
 DmcManager::DmcManager()
 {
-	ofs.open("points",std::fstream::out | std::fstream::trunc);
 	clear();
 }
 
@@ -186,7 +185,7 @@ unsigned long DmcManager::init()
 	}
 
 	//设置日志记录等级
-	CLogSingle::setLogLevel(m_masterConfig.loglevel);
+	CLogSingle::setLogLevel(m_masterConfig.loglevel, !m_masterConfig.logpoint_axis.empty());
 
 	if (!::OpenECMUSB())
 	{
@@ -416,13 +415,12 @@ void DmcManager::beforeWriteCmd()
 									++iter)
 					{
 						//line += Poco::format("%d    ",  (int)m_cmdData[*iter].Data1);
-
+						CLogSingle::logPoint((int)m_cmdData[*iter].Data1);
 						//!!!!!!!!!!!!!!!!
-						m_cmdData[*iter].CMD = GET_STATUS;
-						ofs << (int)m_cmdData[*iter].Data1 << "    " ;
+						//m_cmdData[*iter].CMD = GET_STATUS;
+						//ofs << (int)m_cmdData[*iter].Data1 << "    " ;
 					}
-					//CLogSingle::logPoint(line);
-					ofs << "\n";
+					CLogSingle::logPoint("\n");
 				}
 			}
 
@@ -867,8 +865,11 @@ void DmcManager::run()
 
 				updateState();
 
-				if (m_masterState.fifoEmptyCount >= 10)
+				if (m_masterState.fifoEmptyCount >= 2)
+				{
+					printf("towrite = %d, remain=%d, full=%d, emptyCount=%d.\n", towrite, m_masterState.fifoRemain, m_masterState.fifoFull, m_masterState.fifoEmptyCount);
 					break;//避免出现死循环
+				}
 			}while(!m_masterState.fifoIncre || m_masterState.fifoRemain <= FIFO_LOWATER);	//FIFO剩余空间增加，且剩余空间>FIFO_LOWATER
 
 			towrite = BATCH_WRITE;

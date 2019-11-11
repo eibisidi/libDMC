@@ -2,7 +2,6 @@
 #define DMC_MANAGER
 #include "DMC.h"
 #include <map>
-#include <fstream>
 
 #include "NEXTWUSBLib_12B.h"
 #include "Poco/Mutex.h"
@@ -181,8 +180,6 @@ private:
 	MasterState			 m_masterState;			//Ö÷Õ¾×´Ì¬
 	map<int, DriverState>m_driverState;			//µç»ú×´Ì¬
 	map<int, IoState>	 m_ioState;				//IO×´Ì¬
-
-	std::fstream		ofs;
 };
 
 #endif

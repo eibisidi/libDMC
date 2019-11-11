@@ -447,6 +447,7 @@ int Plan_T( TParam *tp, double tlim)
 	al = 0;
 	ah = tp->amax;
 	s = tp->q1 - tp->q0;
+	
 	while(true)
 	{
 		a = (al + ah)/2;
