@@ -1712,7 +1712,7 @@ bool MultiAxisRequest::startPlan()
 
 bool  MultiAxisRequest::positionReached(int q , int bias) const
 {
-	return true;
+	//return true;
 	bool reached = this->axispara->positionReached(q, bias);
 	return reached;
 }
