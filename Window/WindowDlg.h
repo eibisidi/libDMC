@@ -8,6 +8,7 @@
 #include "Dlg2.h"
 #include "Dlg3.h"
 #include "Dlg4.h"
+#include "Dlg5.h"
 
 
 // CWindowDlg ¶Ô»°¿ò
@@ -42,4 +43,5 @@ public:
 	afx_msg void OnDestroy();
 	CDlg3 m_Dlg3;
 	CDlg4 m_Dlg4;
+	CDlg5 m_Dlg5;
 };

@@ -105,11 +105,13 @@ BOOL CWindowDlg::OnInitDialog()
 	m_tabCtrl.InsertItem(1, _T("直线插补"));
 	m_tabCtrl.InsertItem(2, _T("回原点"));
 	m_tabCtrl.InsertItem(3, _T("IO模块"));
+	m_tabCtrl.InsertItem(4, _T("Z轴拱门"));
 
 	m_Dlg1.Create(IDD_DIALOG1, &m_tabCtrl);
 	m_Dlg2.Create(IDD_DIALOG2, &m_tabCtrl);
 	m_Dlg3.Create(IDD_DIALOG3, &m_tabCtrl);
 	m_Dlg4.Create(IDD_DIALOG4, &m_tabCtrl);
+	m_Dlg5.Create(IDD_DIALOG5, &m_tabCtrl);
 
 	// 调整子对话框大小及位置
 	CRect rc;
@@ -124,6 +126,7 @@ BOOL CWindowDlg::OnInitDialog()
 	m_Dlg2.MoveWindow(&rc);
 	m_Dlg3.MoveWindow(&rc);
 	m_Dlg4.MoveWindow(&rc);
+	m_Dlg5.MoveWindow(&rc);
 
 	// 默认标签选中
 	m_Dlg1.ShowWindow(SW_SHOW);
@@ -199,6 +202,7 @@ void CWindowDlg::OnTcnSelchangeTab3(NMHDR *pNMHDR, LRESULT *pResult)
 		m_Dlg2.ShowWindow(SW_HIDE);
 		m_Dlg3.ShowWindow(SW_HIDE);
 		m_Dlg4.ShowWindow(SW_HIDE);
+		m_Dlg5.ShowWindow(SW_HIDE);
 		m_Dlg1.SetFocus();
 		break;
 	case 1:
@@ -206,6 +210,7 @@ void CWindowDlg::OnTcnSelchangeTab3(NMHDR *pNMHDR, LRESULT *pResult)
 		m_Dlg1.ShowWindow(SW_HIDE);
 		m_Dlg3.ShowWindow(SW_HIDE);
 		m_Dlg4.ShowWindow(SW_HIDE);
+		m_Dlg5.ShowWindow(SW_HIDE);
 		m_Dlg2.SetFocus();
 		break;
 	case 2:
@@ -213,6 +218,7 @@ void CWindowDlg::OnTcnSelchangeTab3(NMHDR *pNMHDR, LRESULT *pResult)
 		m_Dlg4.ShowWindow(SW_HIDE);
 		m_Dlg2.ShowWindow(SW_HIDE);
 		m_Dlg1.ShowWindow(SW_HIDE);
+		m_Dlg5.ShowWindow(SW_HIDE);
 		m_Dlg3.SetFocus();
 		break;
 	case 3:
@@ -220,7 +226,16 @@ void CWindowDlg::OnTcnSelchangeTab3(NMHDR *pNMHDR, LRESULT *pResult)
 		m_Dlg1.ShowWindow(SW_HIDE);
 		m_Dlg2.ShowWindow(SW_HIDE);
 		m_Dlg3.ShowWindow(SW_HIDE);
+		m_Dlg5.ShowWindow(SW_HIDE);
 		m_Dlg4.SetFocus();
+		break;
+	case 4:
+		m_Dlg5.ShowWindow(SW_SHOW);
+		m_Dlg1.ShowWindow(SW_HIDE);
+		m_Dlg2.ShowWindow(SW_HIDE);
+		m_Dlg3.ShowWindow(SW_HIDE);
+		m_Dlg4.ShowWindow(SW_HIDE);
+		m_Dlg5.SetFocus();
 		break;
 	default:
 		break;
