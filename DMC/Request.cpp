@@ -1570,7 +1570,7 @@ void  MultiAxisRequest::fsm_state_svon(MultiAxisRequest *req)
 
 	//fprintf(stdout, "SVON StatusWord = 0x%x, CurrentPos=%d.\n", req->respData->Parm,req->respData->Data1);
 
-	req->axispara->reg_sv_on();
+	req->axispara->reg_sv_on(req->slave_idx);
 	req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_svon;
 	req->rechecks		= RETRIES;
 }
@@ -1677,14 +1677,13 @@ void  MultiAxisRequest::fsm_state_start(MultiAxisRequest *req)
 	}
 
 	//起始终止位置赋初值
-	//todo!!!!!!
 	if(req->dmc->isDriverOpCsp(req->slave_idx))
 	{//已经处于CSP模式
 		req->cmdData	= req->dmc->getCmdData(req->slave_idx);
 		req->respData	= req->dmc->getRespData(req->slave_idx);
 		if (req->dmc->isDriverOn(req->slave_idx))
 		{//电机已经励磁
-			req->axispara->reg_sv_on();
+			req->axispara->reg_sv_on(req->slave_idx);
 			req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_svon;
 		}
 		else
@@ -1739,8 +1738,6 @@ void MultiAxisRequest::exec()
 MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, bool abs)
 {
 	int startpos, dstpos;
-	this->slave_idx = axis;
-	this->fsmstate = fsm_state_start;
 
 	startpos = DmcManager::instance().getDriverCmdPos(axis);
 	if (abs)
@@ -1748,30 +1745,30 @@ MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, b
 	else
 		dstpos = startpos + pos;
 	
-	this->axispara = new LinearPara(newLinearRef, startpos, dstpos);
+	this->slave_idx = axis;
+	this->fsmstate = fsm_state_start;
+	this->axispara = new LinearPara(newLinearRef, this, startpos, dstpos);
+	this->curpos   = startpos;
 
 	double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);	
 	if (dist > newLinearRef->max_dist)
 		newLinearRef->max_dist = dist;				//参考轴运动距离
-
-	if (axis > newLinearRef->last_slaveidx)
-		newLinearRef->last_slaveidx = axis;
 }
 
 MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, bool abs, bool z)			//Z轴拱门插补
 {
 	int startpos, dstpos;
-	this->slave_idx = axis;
-	this->fsmstate = fsm_state_start;
-
 	startpos = DmcManager::instance().getDriverCmdPos(axis);
 
 	if (abs)
 		dstpos = pos;
 	else
 		dstpos = startpos + pos;
-
-	this->axispara = new ArchlMultiAxisPara(newArchlRef, startpos, dstpos, z);
+	
+	this->slave_idx = axis;
+	this->fsmstate = fsm_state_start;
+	this->axispara = new ArchlMultiAxisPara(newArchlRef, this, startpos, dstpos, z);
+	this->curpos   = startpos;
 
 	if (z)
 	{
@@ -1784,8 +1781,6 @@ MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, boo
 		if (dist > newArchlRef->max_dist)
 			newArchlRef->max_dist = dist;				//参考轴运动距离
 	}
-	if (axis > newArchlRef->last_slaveidx)
-		newArchlRef->last_slaveidx = axis;
 }
 
 void HomeMoveRequest::fsm_state_done(HomeMoveRequest *req)

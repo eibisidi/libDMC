@@ -1361,28 +1361,59 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 
 		MoveRequest *moveReq = dynamic_cast<MoveRequest * >(m_requests[axis]);
 		if (NULL != moveReq)
-		{
+		{//单轴运动
 			curspeed = moveReq->getCurSpeed();
 			curpos 	 = moveReq->getCurPos();
-			moving   = true;
+
+			newReq = new DStopRequest;
+				
+			newReq->slave_idx	= axis;
+			newReq->maxa		= fabs(curspeed / tDec);
+			newReq->serveOff	= bServOff;
+			newReq->startSpeed	= curspeed;
+			newReq->startpos	= curpos;
+
+			setMoveState(axis, MOVESTATE_BUSY);
+			addRequest(axis, newReq);
 		}
 		else
 		{
 			MultiAxisRequest *lineReq = dynamic_cast<MultiAxisRequest * >(m_requests[axis]);
 			if (NULL != lineReq)
-			{
-				curspeed = lineReq->getCurSpeed();
-				curpos 	 = lineReq->getCurPos();
-				moving   = true;
+			{//多轴运动
+				const std::set<BaseMultiAxisPara *> paras = lineReq->axispara->ref->paras;	//makes a copy
+				for (std::set<BaseMultiAxisPara *>::const_iterator iter = paras.begin();
+							iter != paras.end();
+							++iter)
+				{
+					BaseMultiAxisPara *para = *iter;
+
+					curspeed = para->req->getCurSpeed();
+					curpos 	 = para->req->getCurPos();
+					
+					newReq = new DStopRequest;
+						
+					newReq->slave_idx 	= para->req->slave_idx;
+					newReq->maxa		= fabs(curspeed / tDec);
+					newReq->serveOff	= bServOff;
+					newReq->startSpeed	= curspeed;
+					newReq->startpos	= curpos;
+					//printf("------curspeed = %f, curpos=%d.\n", curspeed, curpos);
+					
+					setMoveState(para->req->slave_idx, MOVESTATE_BUSY);
+					addRequest(para->req->slave_idx, newReq);
+					lineReq = NULL;				//no longer valid
+				}
+				
+			}
+			else
+			{//当前未在运动
+				retValue = ERR_AXIS_NOT_MOVING;
+				break;
 			}
 		}
-		
-		if (false == moving)
-		{//当前未在运动
-			retValue = ERR_AXIS_NOT_MOVING;
-			break;
-		}
-		
+
+#if 0		
 		if(fabs(curspeed) < 1e-6)
 		{
 			retValue = ERR_AXIS_NOT_MOVING;
@@ -1405,7 +1436,7 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 		
 		setMoveState(axis, MOVESTATE_BUSY);
 		addRequest(axis, newReq);
-
+#endif
 	}while(0);
 	m_mutex.unlock();
 	return retValue;

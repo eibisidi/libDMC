@@ -38,9 +38,11 @@ void BaseRef::setError()
 	error = -1;
 }
 
-void BaseRef::reg_sv_on()
+void BaseRef::reg_sv_on(int slaveidx)
 {
 	++svon_count;
+	if (slaveidx > this->last_slaveidx)
+		this->last_slaveidx = slaveidx;
 }
 
 bool BaseRef::sv_allon() const
@@ -58,9 +60,10 @@ bool  BaseRef::pos_allreached() const
 	return pos_reached_count == svon_count;
 }
 
-void  BaseRef::duplicate()
+void  BaseRef::duplicate(BaseMultiAxisPara *para)
 {
 	++rc;
+	paras.insert(para);
 }
 
 void  BaseRef::release()
@@ -161,10 +164,11 @@ double  LinearRef::getMaxDist() const
 	return this->max_dist;
 }
 
-BaseMultiAxisPara::BaseMultiAxisPara(BaseRef *baseref, int sp, int dp)
+BaseMultiAxisPara::BaseMultiAxisPara(BaseRef *baseref, MultiAxisRequest * mar, int sp, int dp)
 {
 	ref = baseref;
-	ref->duplicate();
+	ref->duplicate(this);
+	req		= mar;
 	startpos = sp;
 	dstpos	 = dp;
 }
@@ -212,9 +216,9 @@ void BaseMultiAxisPara::setError()
 	this->ref->setError();
 }
 
-void BaseMultiAxisPara::reg_sv_on()
+void BaseMultiAxisPara::reg_sv_on(int slaveidx)
 {
-	this->ref->reg_sv_on();
+	this->ref->reg_sv_on(slaveidx);
 }
 
 bool BaseMultiAxisPara::sv_allon() const
@@ -234,8 +238,8 @@ bool BaseMultiAxisPara::pos_allreached() const
 	return allreached;
 }
 
-LinearPara::LinearPara(LinearRef *newLineRef, int sp, int dp)
-	:BaseMultiAxisPara(newLineRef, sp, dp)
+LinearPara::LinearPara(LinearRef *newLineRef, MultiAxisRequest *mar, int sp, int dp)
+	:BaseMultiAxisPara(newLineRef,mar, sp, dp)
 {
 }
 
@@ -461,8 +465,8 @@ int   ArchlRef::getZPosition(int slave_index)
 	return pos;
 }
 
-ArchlMultiAxisPara::ArchlMultiAxisPara(ArchlRef *newArchlRef, int sp, int dp, bool z)
-	:BaseMultiAxisPara(newArchlRef, sp, dp)
+ArchlMultiAxisPara::ArchlMultiAxisPara(ArchlRef *newArchlRef, MultiAxisRequest *mar, int sp, int dp, bool z)
+	:BaseMultiAxisPara(newArchlRef, mar, sp, dp)
 {
 	is_zaxis = z;
 }

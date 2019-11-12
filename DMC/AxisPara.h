@@ -2,6 +2,9 @@
 #define AXISPARA_H
 
 #include "plan.h"
+#include <set>
+
+class BaseMultiAxisPara;
 
 class BaseRef
 {
@@ -14,6 +17,8 @@ public:
 
 	int				error;						//错误标记, -1代表某个相关轴运动出现错误
 	int				planned;					//0尚未规划  -1规划失败 1规划成功
+
+	std::set<BaseMultiAxisPara *> paras;		//所有引用该Ref的运动对象
 	
 	BaseRef();
 	virtual ~BaseRef();
@@ -26,12 +31,13 @@ public:
 	int getPosReachedCount() const;
 	int getError() const;
 	void setError();
-	void reg_sv_on();
+	void reg_sv_on(int slaveidx);
 	bool sv_allon() const;
 	void reg_pos_reached();
 	bool pos_allreached() const;
-	void duplicate();
+	void duplicate(BaseMultiAxisPara *);
 	void release();
+	void insert_para(BaseMultiAxisPara *);
 };
 
 class LinearRef: public BaseRef
@@ -57,14 +63,19 @@ public:
 	double getMaxDist() const;
 };
 
+class MultiAxisRequest;
+
 class BaseMultiAxisPara
 {
 public:
 	BaseRef			*ref;
+	MultiAxisRequest *req;
+
 	int				startpos;			//起始位置
 	int				dstpos;				//终止位置
+	
 
-	BaseMultiAxisPara(BaseRef *baseref, int sp, int dp);
+	BaseMultiAxisPara(BaseRef *baseref, MultiAxisRequest *req, int sp, int dp);
 	virtual ~BaseMultiAxisPara() ;
 	
 	virtual bool startPlan() = 0;
@@ -78,7 +89,7 @@ public:
 	int getPosReachedCount() const;
 	int getError() const;
 	void setError();
-	void reg_sv_on();
+	void reg_sv_on(int slaveidx);
 	bool sv_allon() const;
 	void reg_pos_reached();
 	bool pos_allreached() const;
@@ -88,7 +99,7 @@ public:
 class LinearPara : public BaseMultiAxisPara
 {
 public:
-	LinearPara(LinearRef *newLineRef, int sp, int dp);
+	LinearPara(LinearRef *newLineRef, MultiAxisRequest *mar, int sp, int dp);
 	virtual ~LinearPara();
 
 	virtual bool startPlan();
@@ -139,7 +150,7 @@ private:
 class ArchlMultiAxisPara : public BaseMultiAxisPara
 {
 public:
-	ArchlMultiAxisPara(ArchlRef *newArchlRef, int sp, int dp, bool z);
+	ArchlMultiAxisPara(ArchlRef *newArchlRef, MultiAxisRequest *mar, int sp, int dp, bool z);
 	virtual ~ArchlMultiAxisPara();
 
 	virtual bool startPlan();
