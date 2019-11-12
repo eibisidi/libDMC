@@ -23,7 +23,7 @@ CDlg5::CDlg5(CWnd* pParent /*=NULL*/)
 	, m_tDec(0)
 	, m_dist(0)
 {
-	m_maxv = 100000;
+	m_maxv = 10000;
 	m_tAcc = 0.2;
 	m_tDec = 0.2;
 	m_hu   = 10000;

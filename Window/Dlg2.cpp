@@ -20,7 +20,7 @@ CDlg2::CDlg2(CWnd* pParent /*=NULL*/)
 	, m_coordinate(0)
 	, m_tDec(0)
 {
-	m_maxv = 400000;
+	m_maxv = 10000;
 	m_tAcc = 0.2;
 	m_tDec = 0.2;
 
