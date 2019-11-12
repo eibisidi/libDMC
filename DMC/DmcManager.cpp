@@ -1394,7 +1394,10 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 					newReq = new DStopRequest;
 						
 					newReq->slave_idx 	= para->req->slave_idx;
-					newReq->maxa		= fabs(curspeed / tDec);
+					if (fabs(curspeed) < 1E-6)	//当前速度为0
+						newReq->maxa		= 500;		
+					else
+						newReq->maxa		= fabs(curspeed / tDec);
 					newReq->serveOff	= bServOff;
 					newReq->startSpeed	= curspeed;
 					newReq->startpos	= curpos;

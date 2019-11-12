@@ -506,15 +506,18 @@ int ArchlMultiAxisPara::nextPosition(int slaveidx) 	//获得下一个规划位置
 
 double ArchlMultiAxisPara::getCurSpeed() const 		//返回当前速度，有符号
 {
-	double v;
+	double v = 0;
 	ArchlRef *archlRef = dynamic_cast<ArchlRef *> (this->ref);
 	if (this->is_zaxis)//Z轴
 		v = archlRef->getZCurrentSpeed();
 	else
-	{
-		double		velref		= archlRef->getLineCurrentVel();			//基准参考速度
+	{	
 		double		maxdist 	= archlRef->getLineMaxDist();
-		v = (this->dstpos - this->startpos) * velref / maxdist;
+		if (maxdist > 1E-6)	//速度非零
+		{
+			double		velref		= archlRef->getLineCurrentVel();			//基准参考速度
+			v = (this->dstpos - this->startpos) * velref / maxdist;
+		}
 	}
 	
 	return v;
