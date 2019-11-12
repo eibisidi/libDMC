@@ -116,7 +116,7 @@ public:
 		startpos = 0;
 		dstpos   = 0;
 		startSpeed = 0;
-		maxa 	 = 0;
+		maxa 	 = 500;					//dummy value±‹√‚πÊªÆ ß∞‹
 		serveOff = false;
 		fsmstate = fsm_state_start;
 	}

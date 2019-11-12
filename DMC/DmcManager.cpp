@@ -1368,7 +1368,8 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 			newReq = new DStopRequest;
 				
 			newReq->slave_idx	= axis;
-			newReq->maxa		= fabs(curspeed / tDec);
+			if (fabs(curspeed) > 1E-6)			//当前速度大于0，否则为500
+				newReq->maxa		= fabs(curspeed / tDec);
 			newReq->serveOff	= bServOff;
 			newReq->startSpeed	= curspeed;
 			newReq->startpos	= curpos;
@@ -1394,14 +1395,11 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 					newReq = new DStopRequest;
 						
 					newReq->slave_idx 	= para->req->slave_idx;
-					if (fabs(curspeed) < 1E-6)	//当前速度为0
-						newReq->maxa		= 500;		
-					else
+					if (fabs(curspeed) > 1E-6)			//当前速度大于0，否则为500
 						newReq->maxa		= fabs(curspeed / tDec);
 					newReq->serveOff	= bServOff;
 					newReq->startSpeed	= curspeed;
 					newReq->startpos	= curpos;
-					//printf("------curspeed = %f, curpos=%d.\n", curspeed, curpos);
 					
 					setMoveState(para->req->slave_idx, MOVESTATE_BUSY);
 					addRequest(para->req->slave_idx, newReq);
@@ -1415,31 +1413,6 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 				break;
 			}
 		}
-
-#if 0		
-		if(fabs(curspeed) < 1e-6)
-		{
-			retValue = ERR_AXIS_NOT_MOVING;
-			break; 
-		}
-
-		newReq = new DStopRequest;
-		if (NULL == newReq)
-		{
-			retValue = ERR_MEM;
-			break;
-		}
-			
-		newReq->slave_idx 	= axis;
-		newReq->maxa		= fabs(curspeed / tDec);
-		newReq->serveOff	= bServOff;
-		newReq->startSpeed	= curspeed;
-		newReq->startpos	= curpos;
-		//printf("------curspeed = %f, curpos=%d.\n", curspeed, curpos);
-		
-		setMoveState(axis, MOVESTATE_BUSY);
-		addRequest(axis, newReq);
-#endif
 	}while(0);
 	m_mutex.unlock();
 	return retValue;

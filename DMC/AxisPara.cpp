@@ -271,11 +271,14 @@ int LinearPara::nextPosition(int slaveidx)
 
 double LinearPara::getCurSpeed() const
 {
+	double v = 0;
 	LinearRef 	*linearRef 	= dynamic_cast<LinearRef *> (this->ref);
-	double		velref 		= linearRef->getCurrentVel();			//基准参考速度
 	double 		maxdist		= linearRef->getMaxDist();
-	
-	double v = (this->dstpos - this->startpos) * velref / maxdist;
+	if (maxdist > 1E-6)
+	{
+		double		velref 		= linearRef->getCurrentVel();			//基准参考速度
+	 	v= (this->dstpos - this->startpos) * velref / maxdist;
+	}
 	return v;
 }
 
