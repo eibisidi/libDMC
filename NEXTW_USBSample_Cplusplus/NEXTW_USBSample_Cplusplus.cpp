@@ -6,6 +6,11 @@
 // STEP 1 - include library (NEXTWUSBLib_12B.h or NEXTWUSBLib_16B.h)
 #include "NEXTWUSBLib_12B.h"
 
+#define FIFO_REMAIN(respData) 	((respData)[0].Data2 & 0xFFFF)	//FIFO剩余空间
+#define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
+#define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
+
+
 void ClearCmdData(transData* data)
 {
 	for (int i = 0; i < DEF_MA_MAX; i++)
@@ -87,7 +92,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 #pragma region STEP 4 - SET_AXIS
 	ClearCmdData(cmdData);
-	byte slaveType[] = { DRIVE, IO, HSP, DRIVE, DRIVE, None, None, None,
+	byte slaveType[] = { STEP, None, None, None, None, None, None, None,
 		None, None, None, None, None, None, None, None,
 		None, None, None, None, None, None, None, None,
 		None, None, None, None, None, None, None, None,
@@ -114,7 +119,7 @@ int _tmain(int argc, _TCHAR* argv[])
 #pragma region STEP 5 - SET_DC
 	cmdData[0].CMD = SET_DC;
 	cmdData[0].Parm = 0;
-	cmdData[0].Data1 = 2000; // set cycle time to 2000 us
+	cmdData[0].Data1 = 8000; // set cycle time to 2000 us
 	cmdData[0].Data2 = 0xFFFF; // Auto offet adjustment
 
 	if (!isOpen || !ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
@@ -126,7 +131,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	ClearCmdData(cmdData);
 	for (int i = 1; i < DEF_MA_MAX-1; i++)
 	{
-		if (slaveType[i-1] == DRIVE || slaveType[i-1] == HSP )
+		if (slaveType[i-1] == DRIVE || slaveType[i-1] == STEP )
 		{
 			cmdData[i].CMD = DRIVE_MODE;
 			cmdData[i].Data1 = CSP_MODE; // set to CSP mode
@@ -160,7 +165,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	ClearCmdData(cmdData);
 	for (int i = 1; i < DEF_MA_MAX-1; i++)
 	{
-		if (slaveType[i-1] == DRIVE || slaveType[i-1] == HSP)  //set drive or HSP slave servo on
+		if (slaveType[i-1] == DRIVE || slaveType[i-1] == STEP)  //set drive or HSP slave servo on
 			cmdData[i].CMD = SV_ON;
 	}
 	if (!isOpen || !ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
@@ -182,13 +187,132 @@ int _tmain(int argc, _TCHAR* argv[])
 	ClearCmdData(cmdData);
 	ECMUSBRead((unsigned char*)respData,sizeof(respData));
 	printf("Current Position: Slave 1 = %d, Slave 2 = %d, Slave 3 = %d.\n",respData[1].Data1,respData[2].Data1,respData[3].Data1);
+
+#if 0
+	unsigned int curpos = respData[1].Data1;		//当前位置
+	int towrite = 160;
+
+	unsigned int last_remain = 160;
+	unsigned int last_fifofull = FIFO_FULL(respData);
+	int	flag1 = 0;
+	bool checkempty = false;
+	
+	while(true)
+	{
+
+		while(towrite--)
+		{
+			cmdData[1].CMD 	= CSP;
+			cmdData[1].Data1= curpos;
+			curpos += 0x100;					//每个周期固定增加0x100
+
+
+			if (!isOpen || !ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
+				printf("Write Error \n");
+		}
+
+		do{
+			if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
+				printf("Read Error \n");
+
+			if (FIFO_FULL(respData) != last_fifofull)
+			{
+				printf("FIFO FULL Error \n");
+				throw;
+			}
+
+			switch(flag1)
+			{
+				case 0:
+					if (FIFO_REMAIN(respData) < last_remain)
+					{
+						flag1 = 1;
+						checkempty = true;
+					}
+					break;
+				case 1:
+					if (FIFO_REMAIN(respData) > last_remain)
+					{
+						flag1 = 2;
+					}
+					break;
+				case 2:
+					if (FIFO_REMAIN(respData) == 160)
+					{
+						Sleep(2000);
+						flag1 = 0;
+						checkempty = false;
+						last_remain = FIFO_REMAIN(respData);
+						towrite = 80;
+						goto LABEL;
+					}
+					break;
+				default:
+					throw;
+
+			}
+			
+			last_remain = FIFO_REMAIN(respData);
+
+			if (checkempty && FIFO_REMAIN(respData) == 160)
+			{
+				printf("FIFO EMPTY Error \n");
+				throw;
+			}
+		}while(true);
+
+LABEL:
+		//printf("to write = %d, last_remain=%d, fifo_remain=%d.\n", towrite, last_remain, FIFO_REMAIN(respData));
+		//printf("min = %f, max=%f, average=%f, curpos=0x%x.\n", min, max, (total/160), curpos);
+		printf("curpos=0x%x.\n", curpos);
+		;
+	};
+#endif
+
+	unsigned int curpos = respData[1].Data1;		//当前位置
+	int towrite = 160;
+
+	while(true)
+	{
+
+		while(towrite--)
+		{
+			cmdData[1].CMD	= CSP;
+			cmdData[1].Data1= curpos;
+			curpos += 0x100;						//每个周期固定增加0x100
+
+
+			if (!isOpen || !ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
+				printf("Write Error \n");
+		}
+
+		do{
+			Sleep(2000);	
+			if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
+				printf("Read Error \n");
+			
+		}while(FIFO_REMAIN(respData) < 160);
+
+		towrite = 160;
+		printf("curpos=0x%x.\n", curpos);
+	};
+
+
+
+
+
+
+
+
+
+	
 	for (int i = 0; i < 1000; i++) // send 1000 times, let motor move 1000 * 100 pulse
 	{		
 		for (int j = 1; j < DEF_MA_MAX-1; j++)
 		{
-			if (slaveType[j - 1] == DRIVE || slaveType[j-1] == HSP) //Set drive or HSP slave Cycle Synchronized Position
+			if (slaveType[j - 1] == DRIVE || slaveType[j-1] == STEP) //Set drive or HSP slave Cycle Synchronized Position
 			{
-				TargerPosition[j] += 100;
+				TargerPosition[j] += 60;
 				cmdData[j].CMD = CSP;
 				cmdData[j].Data1 = TargerPosition[j]; // set to move 100 pulse in one cycle time
 			}

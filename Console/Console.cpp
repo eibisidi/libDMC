@@ -9,11 +9,11 @@
 #include <math.h>
 #include <stdlib.h>
 
-//#define  	TEST_MOVE
+#define  	TEST_MOVE
 //#define 	TEST_HOME
 //#define TEST_IO
 //#define TEST_LINE
-#define TEST_ARCHL
+//#define TEST_ARCHL
 //#define TEST_DEC
 //#define TEST_ISTOP
 //#define TEST_INC
@@ -139,13 +139,13 @@ int _tmain(int argc, _TCHAR* argv[])
 	
 	while (true)
 	{
-		d1000_start_t_move(1, 150000, 0, 400000, 0.1);
+		d1000_start_t_move(1, 150000, 0, 400000, 0.2);
 
 
 		Sleep(50 + rand() % 100);
 
-		d1000_decel_stop(1, 0.1);
-		//d1000_immediate_stop(1);
+		//d1000_decel_stop(1, 0.1);
+		d1000_immediate_stop(1);
 
 		while(1)
 		{
@@ -184,7 +184,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	int delta = 100;
 
 	int i = 0;
-	int axis = 2;
+	int axis = 3;
 	long startpos = d1000_get_command_pos(axis);
 	
 	while (move < 150000)
@@ -194,7 +194,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		switch (i% 4)
 		{
 		case 0:
-			d1000_start_t_move(axis, move, 0, 100000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_t_move(axis, move, 0, 30000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		case 1:
 			d1000_start_ta_move(axis, startpos + move,0, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
@@ -224,7 +224,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		switch (i% 4)
 		{
 		case 0:
-			d1000_start_t_move(axis, -move, 0,100000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_t_move(axis, -move, 0,30000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		case 1:
 			d1000_start_ta_move(axis, startpos,0, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
@@ -361,20 +361,21 @@ int _tmain(int argc, _TCHAR* argv[])
 	int hh = 100000;
 	int hu = 10000;
 	int hd = 20000;
-	short r_axisArray[2] = {2,1};
-	long  r_distArray[2];
+	short r_axisArray[] = {3,1,2};
+	long  r_distArray[] = {0,0,0};
 
-	int zstartpos = d1000_get_command_pos(r_axisArray[0]);
+	int zstartpos = d1000_get_command_pos(r_axisArray[0]);	//Z
 	int	xstartpos = d1000_get_command_pos(r_axisArray[1]);
+	int ystartpos = d1000_get_command_pos(r_axisArray[2]);
 
 	int i = 10000;
 	while(i--)
 	{
-		//r_distArray[0] = rand() % 50000;
-		//r_distArray[1] = 50000 + rand() % 100000;
-		r_distArray[0] = 32391;
-		r_distArray[1] = 64604;
-		printf("zmove = %d, xmove=%d\n", r_distArray[0], r_distArray[1]);
+		r_distArray[0] = rand() % 50000;
+		r_distArray[1] = 50000 + rand() % 100000;
+		r_distArray[2] = 50000 + rand() % 100000;
+
+		printf("zmove = %d, xmove=%d, ymove = %d.\n", r_distArray[0], r_distArray[1], r_distArray[2]);
 		
 		d1000_start_t_archl(2, r_axisArray, r_distArray,30000, 0.2, hh, hu, hd);	//
 
@@ -394,6 +395,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		r_distArray[0] = zstartpos;
 		r_distArray[1] = xstartpos;
+		r_distArray[2] = ystartpos;
 
 		d1000_start_ta_archl(2, r_axisArray, r_distArray,30000, 0.2, hh, hd, hu); //
 		

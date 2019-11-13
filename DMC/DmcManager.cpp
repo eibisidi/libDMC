@@ -68,6 +68,7 @@ bool checkResponse(char slaves, char column, unsigned int expectValue, unsigned 
 			ClearCmdData(respData);
 			ECMUSBWrite((unsigned char*)respData, sizeof(respData));
 		}
+		Sleep(1);
 	}
 	return (realValue == expectValue);
 }
@@ -207,7 +208,7 @@ unsigned long DmcManager::init()
 		return ERR_ECM_WRITE;
 	}
 
-	if (!::checkResponse(0, 1, STATE_PRE_OP, 100))
+	if (!::checkResponse(0, 1, STATE_PRE_OP, 1000))
 	{
 		CLogSingle::logError("checkResponse failed.", __FILE__, __LINE__);
 		return ERR_ECM_PREOP;
@@ -318,6 +319,7 @@ unsigned long DmcManager::init()
 		{
 			if (ERR_NOERR != clr_alarm(i))
 			{
+				CLogSingle::logFatal("clr_alarm for axis %d failed.", __FILE__, __LINE__, i);
 				return ERR_CLR_ALARM;
 			}
 		}
@@ -331,6 +333,7 @@ unsigned long DmcManager::init()
 		{
 			if (ERR_NOERR != init_driver(i))
 			{
+				CLogSingle::logFatal("init_driver for axis %d failed.", __FILE__, __LINE__, i);
 				return ERR_INIT_AXIS;
 			}
 		}
@@ -343,6 +346,7 @@ unsigned long DmcManager::init()
 		{
 			if (ERR_NOERR != servo_on(i))
 			{
+				CLogSingle::logFatal("servo_on for axis %d failed.", __FILE__, __LINE__, i);
 				return ERR_SERVO_ON;
 			}
 		}
@@ -629,7 +633,10 @@ void DmcManager::updateState()
 	}
 	
 	if (FIFO_REMAIN(m_respData) == ECM_FIFO_SIZE)
+	{
+		printf("FIFO is empty."); 
 		m_masterState.fifoEmptyCount++;
+	}
 	else
 		m_masterState.fifoEmptyCount = 0;
 
@@ -862,7 +869,7 @@ void DmcManager::run()
 
 				updateState();
 
-				if (m_masterState.fifoEmptyCount >= 10)
+				if (m_masterState.fifoEmptyCount >= 1)
 				{
 					break;//±‹√‚≥ˆœ÷À¿—≠ª∑
 				}
@@ -871,7 +878,7 @@ void DmcManager::run()
 			towrite = BATCH_WRITE;
 			written = 0;
 			m_masterState.fifoEmptyCount = 0;
-			//printf("towrite = %d, remain=%d, full=%d, emptyCount=%d.\n", towrite, m_masterState.fifoRemain, m_masterState.fifoFull, m_masterState.fifoEmptyCount);
+			printf("towrite = %d, remain=%d, full=%d, emptyCount=%d.\n", towrite, m_masterState.fifoRemain, m_masterState.fifoFull, m_masterState.fifoEmptyCount);
 		}
 		else
 		{
@@ -1072,7 +1079,7 @@ unsigned long DmcManager::servo_on(short axis)
 	if (MOVESTATE_STOP == ms)
 	{
 		retValue = ERR_NOERR;
-		CLogSingle::logInformation("servo_on axis(%?d) succeed, abspos = %?d.", __FILE__, __LINE__, axis, getDriverCmdPos(axis));
+		CLogSingle::logInformation("servo_on axis(%?d) succeed, cmdpos = %?d.", __FILE__, __LINE__, axis, getDriverCmdPos(axis));
 	}
 	else
 	{

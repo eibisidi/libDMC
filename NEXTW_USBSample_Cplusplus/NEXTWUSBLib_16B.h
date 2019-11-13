@@ -43,6 +43,7 @@ __declspec(dllimport) bool __stdcall ECMUSBRead(unsigned char * data, unsigned l
 #define DRIVE 0x0
 #define IO 0x1
 #define HSP 0x2
+#define STEP 0x3
 #define None 0xF
 #pragma endregion
 

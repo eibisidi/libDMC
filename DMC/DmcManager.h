@@ -17,7 +17,7 @@ using std::map;
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
 #define BATCH_WRITE		(10)
-#define FIFO_LOWATER	(150)			
+#define FIFO_LOWATER	(100)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
 

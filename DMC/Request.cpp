@@ -102,7 +102,7 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 		return;
 	}
 
-	CLogSingle::logWarning("axis = %d Dec Reached.", __FILE__, __LINE__, req->slave_idx);
+	//CLogSingle::logWarning("axis = %d Dec Reached.", __FILE__, __LINE__, req->slave_idx);
 
 	
 	//fprintf(stdout, "dec Reached. CurrentPos=%d, q1 = %f.\n", req->respData->Data1, req->dParam.q1);

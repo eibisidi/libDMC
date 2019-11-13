@@ -254,7 +254,7 @@ DMC1000_API DWORD WINAPI d1000_start_sa_line(short TotalAxis,short *AxisArray,lo
 参 数： TotalAxis： 插补轴数 >=1 其中[0]轴代表Z轴，其它轴做直线插补
 		*AxisArray， AxisArray：电机从站索引列表；
 		*DistArray， DistArray：对应轴号列表各轴的相对坐标的距离列表
-		MaxVel： 运行速度，单位： pps；
+		MaxVel： 最大行速度，单位： pps；
 		Tacc： 加速时间，单位： s。
 		hh:最高绝对高度
 		hu:相对上升高度，相对于终止点
@@ -262,7 +262,8 @@ DMC1000_API DWORD WINAPI d1000_start_sa_line(short TotalAxis,short *AxisArray,lo
 返回值：正确：返回 ERR_NoError；
 错误：返回相关错误码。
 */
-DMC1000_API DWORD WINAPI d1000_start_t_archl(short TotalAxis,short *AxisArray,long *DistArray,long MaxVel, double Tacc, long hh, long hu, long hd);
+DMC1000_API DWORD WINAPI d1000_start_t_archl(short TotalAxis,short *AxisArray,long *DistArray,long MaxVel, double Tacc,
+			long hh, long hu, long hd);
 
 /*
 功 能：启动多轴绝对坐标的Z轴拱门运动。
