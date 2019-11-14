@@ -9,10 +9,10 @@
 #include <math.h>
 #include <stdlib.h>
 
-//#define  	TEST_MOVE
+#define  	TEST_MOVE
 //#define 	TEST_HOME
 //#define TEST_IO
-#define TEST_LINE
+//#define TEST_LINE
 //#define TEST_ARCHL
 //#define TEST_DEC
 //#define TEST_ISTOP
@@ -25,6 +25,7 @@ DWORD WINAPI ThreadFunc(LPVOID p)
 
 	while(true)
     {
+    #if 0
 		d1000_home_move(2, 50000, 5000, 0.2);
 		while(true)
 		{
@@ -39,8 +40,26 @@ DWORD WINAPI ThreadFunc(LPVOID p)
 			printf("home error.\n");
 			throw;
 		}
+	#endif
 
-		d1000_start_t_move(2, 50000, 0, 100000, 0.2);			//伺服最大速度3000rpm， 80%上限
+		d1000_start_t_move(2, 50000, 0, 30000, 0.2);			//伺服最大速度3000rpm， 80%上限
+	
+		while(true)
+		{
+			ms = d1000_check_done(2);	
+
+			if (MOVESTATE_BUSY != ms)
+				break;
+		}
+
+		if (ms != MOVESTATE_STOP)
+		{
+			printf("move error.\n");
+			throw;
+		}
+
+
+		d1000_start_t_move(2, -50000, 0, 30000, 0.2);			//伺服最大速度3000rpm， 80%上限
 
 		while(true)
 		{
@@ -56,7 +75,7 @@ DWORD WINAPI ThreadFunc(LPVOID p)
 			throw;
 		}
 
-		Sleep(1000);
+		//Sleep(1000);
 	}
 	
     return 0;
@@ -72,7 +91,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	HANDLE hThread;
     DWORD  threadId;
-	//hThread = CreateThread(NULL, 0, ThreadFunc, 0, 0, &threadId); // 创建线程
+	hThread = CreateThread(NULL, 0, ThreadFunc, 0, 0, &threadId); // 创建线程
 	
 	DWORD ms;
 #ifdef TEST_PLAN
@@ -194,7 +213,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		switch (i% 4)
 		{
 		case 0:
-			d1000_start_t_move(axis, move, 0, 30000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_t_move(axis, move, 0, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		case 1:
 			d1000_start_ta_move(axis, startpos + move,0, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
@@ -221,12 +240,12 @@ int _tmain(int argc, _TCHAR* argv[])
 			throw;
 		}
 
-		Sleep(2000);
+		//Sleep(2000);
 
 		switch (i% 4)
 		{
 		case 0:
-			d1000_start_t_move(axis, -move, 0,30000, 0.2);			//伺服最大速度3000rpm， 80%上限
+			d1000_start_t_move(axis, -move, 0,400000, 0.2);			//伺服最大速度3000rpm， 80%上限
 			break;
 		case 1:
 			d1000_start_ta_move(axis, startpos,0, 400000, 0.2);			//伺服最大速度3000rpm， 80%上限
@@ -253,8 +272,8 @@ int _tmain(int argc, _TCHAR* argv[])
 			throw;
 		}
 
-		//move += delta;
-		//++i;
+		move += delta;
+		++i;
 		Sleep(10);
 	}
 #endif
@@ -363,7 +382,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	int hh = 100000;
 	int hu = 10000;
 	int hd = 20000;
-	short r_axisArray[] = {3,1,2};
+	short r_axisArray[] = {2,1,3};
 	long  r_distArray[] = {0,0,0};
 
 	int zstartpos = d1000_get_command_pos(r_axisArray[0]);	//Z
@@ -379,7 +398,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		printf("zmove = %d, xmove=%d, ymove = %d.\n", r_distArray[0], r_distArray[1], r_distArray[2]);
 		
-		d1000_start_t_archl(2, r_axisArray, r_distArray,30000, 0.2, hh, hu, hd);	//
+		d1000_start_t_archl(2, r_axisArray, r_distArray,100000, 0.2, hh, hu, hd);	//
 
 		while(1)
 		{
@@ -399,7 +418,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		r_distArray[1] = xstartpos;
 		r_distArray[2] = ystartpos;
 
-		d1000_start_ta_archl(2, r_axisArray, r_distArray,30000, 0.2, hh, hd, hu); //
+		d1000_start_ta_archl(2, r_axisArray, r_distArray,100000, 0.2, hh, hd, hu); //
 		
 		while(1)
 		{

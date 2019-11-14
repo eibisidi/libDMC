@@ -7,8 +7,8 @@
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
-#define BATCH_WRITE		(10)
-#define FIFO_LOWATER	(140)			
+#define BATCH_WRITE		(20)
+#define FIFO_LOWATER	(32)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
 RdWrManager::RdWrManager()
