@@ -27,10 +27,11 @@ public:
 	void start();
 	~RdWrManager();
 	void setIdle();
-		void pushItems(const std::vector<Item> &items);
+	void pushItems(Item *items, int rows, int cols);
+	int peekQueue(int slaveidx);
 private:
 	RdWrManager();
-	void popItems(transData *cmdData);
+	int popItems(transData *cmdData);
 
 	void setBusy();
 
@@ -49,7 +50,7 @@ private:
 		QUEUE_BUSY,
 	};
 
-	QueueState					queueState[42];
+	QueueState					queueState[DEF_MA_MAX];
 	std::map<int, ItemQueue*> 	tosend;		//´ý·¢ËÍ	
 };
 

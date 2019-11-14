@@ -7,8 +7,8 @@
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
-#define BATCH_WRITE		(24)
-#define FIFO_LOWATER	(32)			
+#define BATCH_WRITE		(10)
+#define FIFO_LOWATER	(140)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
 RdWrManager::RdWrManager()
@@ -32,7 +32,7 @@ void RdWrManager::start()
 	m_thread.start(*this);
 }
 
-void RdWrManager::popItems(transData *cmdData)
+int RdWrManager::popItems(transData *cmdData)
 {	
 
 #if 0
@@ -44,7 +44,7 @@ void RdWrManager::popItems(transData *cmdData)
 	double elapsed;
 	QueryPerformanceCounter(&timeStart); 
 #endif
-
+	int activeItems = 0;
 	m_mutex.lock();	
 	
 	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
@@ -59,6 +59,7 @@ void RdWrManager::popItems(transData *cmdData)
 			{
 				cmdData[iter->first] =  (iter->second)->front().cmdData;
 				(iter->second)->pop();
+				++activeItems;			//活动命令计数+1
 			}
 
 			queueState[iter->first] = QUEUE_IDLE;
@@ -66,6 +67,8 @@ void RdWrManager::popItems(transData *cmdData)
 	}
 
 	m_mutex.unlock();
+
+	return activeItems;
 #if 0
 	QueryPerformanceCounter(&timeEnd); 
 	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
@@ -73,42 +76,78 @@ void RdWrManager::popItems(transData *cmdData)
 #endif
 }
 
-void RdWrManager::pushItems(const std::vector<Item> &items)
+//每行代表一个周期，每列代表一个从站
+void RdWrManager::pushItems(Item *items, int rows, int cols)
 {
-	int index = items[0].index;
-
+	//一行为一个周期，一列为一个轴
+	int c;
+	int slaveidx;
 	while(true)
 	{
 		m_mutex.lock();	
-		if (QUEUE_BUSY == queueState[index])
+
+		for(c = 0; c < cols; ++c)
 		{
-			m_mutex.unlock();
-			Poco::Thread::sleep(1);
+			slaveidx = items[c].index;
+			if (QUEUE_BUSY == queueState[slaveidx])
+			{
+				break;
+			}
 		}
-		else
+
+		if (c == cols)
 		{
-			queueState[index] = QUEUE_BUSY;
+			for(c = 0; c < cols; ++c)
+			{
+				slaveidx = items[c].index;
+				queueState[slaveidx] = QUEUE_BUSY;
+			}
 			m_mutex.unlock();
 			break;
 		}
+		
+		m_mutex.unlock();
+		Poco::Thread::sleep(1);
 	}
 
-
-	//printf("pushItems lock aquired.\n");
-	for (size_t i = 0; i < items.size(); ++i)
+	for (size_t i = 0; i < rows * cols; ++i)
 	{
-		int index = items[i].index;
-		if (0 == tosend.count(index))
-			tosend[index] = new ItemQueue;
-		tosend[index]->push(items[i]);
+		slaveidx = items[i].index;
+		if (0 == tosend.count(slaveidx))
+			tosend[slaveidx] = new ItemQueue;
+		tosend[slaveidx]->push(items[i]);
 	}
 
+	//每个队列置为空闲
 	m_mutex.lock();	
-	queueState[index] = QUEUE_IDLE;
+	for(c = 0; c < cols; ++c)
+	{
+		slaveidx = items[c].index;
+		queueState[slaveidx] = QUEUE_IDLE;
+	}
 	m_idle = false;
 	m_condition.signal();
 	m_mutex.unlock();
+}
 
+int RdWrManager::peekQueue(int slaveidx)
+{
+	int queuecount;
+	while(true)
+	{
+		m_mutex.lock(); 
+		if (QUEUE_IDLE == queueState[slaveidx])
+		{
+			break;
+		}
+		m_mutex.unlock();
+		Poco::Thread::sleep(1);
+	}
+
+	queuecount = tosend[slaveidx]->size();
+	m_mutex.unlock();
+
+	return queuecount;
 }
 
 void RdWrManager::setBusy()
@@ -130,10 +169,10 @@ void RdWrManager::setIdle()
 
 void RdWrManager::run()
 {
-	int 					towrite = BATCH_WRITE;
+	int 		towrite = BATCH_WRITE;
 	transData	cmdData[DEF_MA_MAX];
 	transData	respData[DEF_MA_MAX];
-
+		
 	//初始化FIFO状态
 	if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
 	{
@@ -141,7 +180,7 @@ void RdWrManager::run()
 		return;
 	}
 
-	unsigned int last_remain = 160;
+	unsigned int last_remain = ECM_FIFO_SIZE;
 	unsigned int last_fifofull = FIFO_FULL(respData);
 	
 	int	flag1 = 0;
@@ -152,13 +191,12 @@ void RdWrManager::run()
 		while(m_idle)
 			m_condition.wait(m_mutex);
 		m_mutex.unlock();
-		//printf("RdWrManager signaled.\n");
 
-		
 		while(towrite--)
 		{
 			memset(cmdData, 0, sizeof(cmdData));
 			popItems(cmdData);
+
 			if (!ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
 				printf("Write Error \n");
 		}
@@ -218,6 +256,8 @@ LABEL:
 		//printf("min = %f, max=%f, average=%f, curpos=0x%x.\n", min, max, (total/160), curpos);
 		//printf("curpos=0x%x.\n", curpos);
 		;
+		//if (noneActiveCount > 5)
+		//	m_idle = true;
 	};
 }
 

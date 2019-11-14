@@ -9,6 +9,8 @@
 #define MAX_ATTEMPTS (5)				
 #define MAKE_DWORD(h,l) ((h << 16) | (l))
 
+#define CSP_DATA2_DUMMY (0xFF)
+
 BaseRequest::BaseRequest()
 {
 	rechecks 	= RETRIES;
@@ -178,14 +180,10 @@ void MoveRequest::fsm_state_done(MoveRequest *req)
 
 void MoveRequest::fsm_state_csp(MoveRequest *req)
 {
-	#if 0
-	if (req->moveparam->cycles > req->moveparam->elapsed)
-	{
-		req->cmdData->CMD 	= CSP;
-		req->cmdData->Data1 = req->curpos = req->moveparam->position();
+	if(RdWrManager::instance().peekQueue(req->slave_idx))
+	{//尚未发送完毕
 		return;
 	}
-	#endif
 
 	if(CSP != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData )
@@ -193,15 +191,16 @@ void MoveRequest::fsm_state_csp(MoveRequest *req)
 	{
 		return;
 	}
+		
+	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
 
-	if ( !req->positionReached(req->respData->Data1) 
+	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)
 	{
 		return;
 	}
 		
-	if (req->rechecks <= 0						//等待位置到达超时
-		&& (!req->dmc->isServo(req->slave_idx)) || (!req->positionReached(req->respData->Data1, req->dmc->getServoPosBias())))
+	if (req->rechecks <= 0)						//等待位置到达超时
 	{
 		if (++req->attempts > MAX_ATTEMPTS)
 		{	
@@ -213,6 +212,7 @@ void MoveRequest::fsm_state_csp(MoveRequest *req)
 		{
 			CLogSingle::logWarning("MoveRequest::fsm_state_csp retries. axis=%d, nowpos=%d, lastsentpos=%d, dstpos=%d.", __FILE__, __LINE__,req->slave_idx, (int)req->respData->Data1, req->curpos, req->dstpos);
 			req->dmc->restoreLastCmd(req->cmdData);
+			req->cmdData->Data2 = CSP_DATA2_DUMMY;	//特殊处理让充发位置可以进入待发送队列
 			req->rechecks = RETRIES;
 		}
 		return;
@@ -472,16 +472,25 @@ int     MoveRequest::getCurPos()const
 
 void MoveRequest::pushCspPoints(MoveRequest *req)
 {
-	std::vector<Item> items;
-	while(req->moveparam->cycles > req->moveparam->elapsed)
+	int cycles = req->moveparam->cycles;
+
+	Item *items = new Item[cycles];
+	for (int row = 0; row < cycles; ++row)
 	{
-		Item item;
-		item.index = req->slave_idx;
-		item.cmdData.CMD = CSP;
-		item.cmdData.Data1 = req->moveparam->position();
-		items.push_back(item);
+		items[row].index 		= req->slave_idx;
+		items[row].cmdData.CMD 	= CSP;
+		items[row].cmdData.Data1=req->moveparam->position();
 	}
-	RdWrManager::instance().pushItems(items);
+
+	//将最后一个位置点进行存储
+	req->cmdData->CMD 	= CSP;
+	req->cmdData->Data1 	= items[cycles-1].cmdData.Data1; 
+
+
+	RdWrManager::instance().pushItems(items, cycles, 1);
+
+	delete [] items;
+	
 }
 
 void MoveRequest::exec()
@@ -1449,10 +1458,8 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		return;
 	}
 
-	if (req->axispara->moreCycles())
-	{
-		req->cmdData->CMD	= CSP;
-		req->cmdData->Data1 = req->curpos = req->axispara->nextPosition(req->slave_idx);
+	if(RdWrManager::instance().peekQueue(req->slave_idx))
+	{//尚未发送完毕
 		return;
 	}
 
@@ -1463,14 +1470,15 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		return;
 	}
 
-	if ( !req->positionReached(req->respData->Data1) 
+	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+
+	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)
 	{
 		return;
 	}
 	
-	if (req->rechecks <= 0						//等待位置到达超时
-		&& (!req->dmc->isServo(req->slave_idx)) || (!req->positionReached(req->respData->Data1, req->dmc->getServoPosBias())))
+	if (req->rechecks <= 0)						//等待位置到达超时
 	{
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
@@ -1483,6 +1491,7 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		{
 			CLogSingle::logWarning("LineRequest::fsm_state_csp retries, axis=%d nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
 			req->dmc->restoreLastCmd(req->cmdData);
+			req->cmdData->Data2 = CSP_DATA2_DUMMY;	//特殊处理让充发位置可以进入待发送队列
 			req->rechecks = RETRIES;
 		}
 		return;
@@ -1539,8 +1548,10 @@ void  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 
 	req->fsmstate	 	= MultiAxisRequest::fsm_state_csp;
 	req->cmdData->CMD 	= CSP;
-	req->cmdData->Data1 = req->curpos = req->axispara->nextPosition(req->slave_idx);
 	req->rechecks		= RETRIES;
+
+	//多轴插入CSP规划点
+	pushCspPoints(req);
 }
 
 void  MultiAxisRequest::fsm_state_svon(MultiAxisRequest *req)
@@ -1724,6 +1735,45 @@ void  MultiAxisRequest::fsm_state_start(MultiAxisRequest *req)
 	}
 }
 
+void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
+{
+	if (req->slave_idx != req->axispara->ref->last_slaveidx)
+		return;
+
+	//最后一个从站将所有的规划点假如发送队列
+	const std::set<BaseMultiAxisPara *> &paras = req->axispara->ref->paras;
+
+	int cycles = req->axispara->totalCycles();
+	int axises = paras.size();
+
+	Item *items = new Item[cycles * axises];
+	for (int row = 0; row < cycles; ++row)
+	{
+		int col = 0;
+		for (std::set<BaseMultiAxisPara *>::const_iterator iter = paras.begin();
+				iter != paras.end();
+				++iter, ++col)
+		{
+			BaseMultiAxisPara *para = *iter;
+			items[row * axises + col].index    		= para->req->slave_idx;							//从站地址
+			items[row * axises + col].cmdData.CMD  	= CSP;
+			items[row * axises + col].cmdData.Data1  = para->nextPosition(para->req->slave_idx);	//CSP目的位置
+
+			if (row == cycles - 1)	//存储最后一个位置用于重发
+			{
+				para->req->cmdData->CMD 	= CSP;
+				para->req->cmdData->Data1   = items[row * axises + col].cmdData.Data1;
+			}
+		}
+	}
+
+	RdWrManager::instance().pushItems(items, cycles, axises);
+
+	delete [] items;
+	
+				
+}
+
 bool MultiAxisRequest::startPlan()
 {
 	return this->axispara->startPlan();
@@ -1732,6 +1782,7 @@ bool MultiAxisRequest::startPlan()
 bool  MultiAxisRequest::positionReached(int q , int bias) const
 {
 	//return true;
+	printf("current pos=%d , dstpos = %d\n", q, this->axispara->dstpos);
 	bool reached = this->axispara->positionReached(q, bias);
 	return reached;
 }

@@ -10,7 +10,6 @@
 	<HomeTimeout>30</HomeTimeout>	<!--回零超时时间,单位s, 缺省值30-->
 	<ServoPosBias>10</ServoPosBias>	<!--伺服位置达到检测允许误差范围，单位脉冲, 缺省值10-->
 	
-	<!--
 	<Slave desc="X轴" index="1" type="Drive">
 		<Sdo desc="电机分辨率" index="0x6091" subindex="0x0001" size="4" value="838" />
 		<Sdo desc="负载分辨率" index="0x6091" subindex="0x0002" size="4" value="1" />
@@ -21,17 +20,17 @@
 		<Sdo desc="驱动器峰值电流" index="0x2000" subindex="0x0000" size="2" value="3000" />
 		<Sdo desc="电机每转脉冲数" index="0x2001" subindex="0x0000" size="2" value="10000" />
 	</Slave>
-
+<!--
 	<Slave desc="Y轴" index="3" type="Step">
 		<Sdo desc="驱动器峰值电流" index="0x2000" subindex="0x0000" size="2" value="5000" />
 		<Sdo desc="电机每转脉冲数" index="0x2001" subindex="0x0000" size="2" value="10000" />
 	</Slave>
 
 	<Slave desc="IO模块" index="4" type="IO"/>
--->
+
 <Slave desc="Y轴" index="1" type="Step">
 		<Sdo desc="驱动器峰值电流" index="0x2000" subindex="0x0000" size="2" value="5000" />
 		<Sdo desc="电机每转脉冲数" index="0x2001" subindex="0x0000" size="2" value="10000" />
 	</Slave>
-
+-->
 </Master>

@@ -425,6 +425,7 @@ private:
 	static void  fsm_state_sdowr_cspmode(MultiAxisRequest *req);
 	static void  fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req);
 	static void fsm_state_start(MultiAxisRequest *req);
+	static void pushCspPoints(MultiAxisRequest *req);
 
 	bool	startPlan();
 	bool	positionReached(int curpos, int bias = 0) const;

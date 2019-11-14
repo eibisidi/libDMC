@@ -2,8 +2,6 @@
 #include "DMC.h"
 #include <assert.h>
 #include "CLogSingle.h"
-#include "RdWrManager.h"
-
 
 #include "Poco/DOM/DOMParser.h"
 #include "Poco/DOM/Document.h"
@@ -316,7 +314,7 @@ unsigned long DmcManager::init()
 	//启动线程
 	RdWrManager::instance().start();
 	
-	m_thread.setPriority(Poco::Thread::PRIO_HIGHEST);
+	m_thread.setPriority(Poco::Thread::PRIO_NORMAL);
 	m_thread.start(*this);
 
 	//所有驱动器清除告警
@@ -822,16 +820,41 @@ void DmcManager::setRespData(transData *respData)
 
 void DmcManager::copyRespData()
 {
+
+#if 0
+		LARGE_INTEGER frequency;								//计时器频率 
+		QueryPerformanceFrequency(&frequency);	 
+		double quadpart = (double)frequency.QuadPart / 1000000;    //计时器频率   
+	
+		LARGE_INTEGER timeStart, timeEnd;
+		double elapsed;
+		QueryPerformanceCounter(&timeStart); 
+#endif
+
+
+	bool wakedup = false;
 	m_mutexRespData.lock();
 	//printf("copyRespData\n");
 	
 	while(!newRespData)
+		//wakedup = m_conditionRespData.tryWait(m_mutexRespData, 10);
 		m_conditionRespData.wait(m_mutexRespData);
-	//printf("copyRespData waked up.\n");
 
-	memcpy(m_respData, m_realRespData, sizeof(m_realRespData));
-	newRespData = false;
+	//if(wakedup)
+	{
+		memcpy(m_respData, m_realRespData, sizeof(m_realRespData));
+		newRespData = false;
+	}
 	m_mutexRespData.unlock();
+
+	//if (wakedup)
+		updateState();
+
+#if 0
+			QueryPerformanceCounter(&timeEnd); 
+			elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
+			printf("time elapsed = %f\n", elapsed);
+#endif
 
 }
 
@@ -898,41 +921,44 @@ void DmcManager::setIoRS(short slavidx, IoRequestState iors)
 
 void DmcManager::run()
 {	
+	int i, cols;
 	while(!m_canceled)
-	{
-		m_mutex.lock();
-		
+	{		
 		while(!m_requests.empty())
 		{
+			m_mutex.lock();
 			beforeWriteCmd();
 
-			std :: vector < Item > items;
-			for(int i = 0; i < DEF_MA_MAX; ++i)
+			for(i = 0, cols = 0; i < DEF_MA_MAX; ++i)
 			{
-				if (m_cmdData[i].CMD != GET_STATUS
-					&& m_cmdData[i].CMD != CSP)			//CSP单独批量增加
-				{
-					Item item;
-					item.index = i;
-					item.cmdData = m_cmdData[i];
-					items.push_back(item);
-				}
+				if (m_cmdData[i].CMD == GET_STATUS
+					|| (m_cmdData[i].CMD == CSP && m_cmdData[i].Data2 == 0))
+					continue;
 
+				if (m_cmdData[i].CMD == CSP)
+					m_cmdData[i].Data2 = 0;			//CSP最后位置重发
+			
+				m_items[cols].index = i;
+				m_items[cols].cmdData = m_cmdData[i];
+				++cols;
 			}
 
-			if (!items.empty())
-				RdWrManager::instance().pushItems(items);
-			m_thread.sleep(1);
+			if (cols > 0)
+				RdWrManager::instance().pushItems(m_items, 1, cols);
 
 			copyRespData();
-			updateState();
+
+			m_mutex.unlock();
+
+			Poco::Thread::sleep(10);
 		}
 
 		RdWrManager::instance().setIdle();
+
+		m_mutex.lock();
 		m_condition.tryWait(m_mutex, 10);	//休眠10ms
-		
 		m_mutex.unlock();
-		Poco::Thread::yield();	//让出CPU避免连续获得锁//m_thread.wakeUp();	
+		//Poco::Thread::yield();	//让出CPU避免连续获得锁//m_thread.wakeUp();	
 	}
 
 	CLogSingle::logInformation("Thread canceled.", __FILE__, __LINE__);

@@ -138,6 +138,11 @@ int LinearRef::startPlan()
 	return planned;
 }
 
+int LinearRef::totalCycles() const
+{
+	return (moveparam->cycles);
+}
+
 bool LinearRef::moreCycles() const
 {
 	return (moveparam->cycles > moveparam->elapsed);
@@ -177,6 +182,12 @@ BaseMultiAxisPara::~BaseMultiAxisPara()
 {
 	if (ref)
 		ref->release();
+}
+
+int  BaseMultiAxisPara::totalCycles() const
+{
+	int cycles = this->ref->totalCycles();
+	return cycles;
 }
 
 bool BaseMultiAxisPara::moreCycles() const
@@ -396,6 +407,12 @@ int ArchlRef::startPlan()
 	}
 	return planned;
 }
+
+int ArchlRef::totalCycles() const
+{
+	return (this->ts1 + this->down_param.cycles);
+}
+
 
 bool ArchlRef::moreCycles() const
 {

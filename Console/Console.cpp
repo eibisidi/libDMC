@@ -9,10 +9,10 @@
 #include <math.h>
 #include <stdlib.h>
 
-#define  	TEST_MOVE
+//#define  	TEST_MOVE
 //#define 	TEST_HOME
 //#define TEST_IO
-//#define TEST_LINE
+#define TEST_LINE
 //#define TEST_ARCHL
 //#define TEST_DEC
 //#define TEST_ISTOP
@@ -309,7 +309,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		short axisArray[] = {1, 2};
 		long  distArray[] = {move, rate*move};
 
-		d1000_start_s_line(2, axisArray, distArray, 0, 100000, 0.2);		//
+		d1000_start_s_line(2, axisArray, distArray, 0, 30000, 0.2);		//
 
 		while(1)
 		{
@@ -328,7 +328,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		
 		short r_axisArray[] = {1,2};
 		long  r_distArray[] = {-move, -rate*move};
-		d1000_start_s_line(2, r_axisArray, r_distArray,0, 100000, 0.2);	//
+		d1000_start_s_line(2, r_axisArray, r_distArray,0, 30000, 0.2);	//
 
 
 

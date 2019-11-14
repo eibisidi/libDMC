@@ -25,6 +25,7 @@ public:
 
 	virtual int startPlan() = 0;
 
+	virtual int totalCycles() const = 0;
 	virtual bool moreCycles() const = 0;
 
 	int getSvonCount() const;
@@ -56,6 +57,7 @@ public:
 	virtual ~LinearRef();
 
 	virtual int startPlan();
+	virtual int totalCycles() const;
 	virtual bool moreCycles() const;
 	
 	double  getDistanceRatio(int slave_index);	//获得当前运动距离与全程的比例
@@ -82,6 +84,7 @@ public:
 	virtual int nextPosition(int slaveidx) = 0;
 	virtual double getCurSpeed()  const = 0;	//返回当前速度，有符号
 
+	int	 totalCycles() const;				//返回规划总周期数
 	bool moreCycles() const;
 	bool positionReached(int q , int bias) const;
 
@@ -124,6 +127,7 @@ public:
 	virtual ~ArchlRef();
 
 	virtual int startPlan();
+	virtual int totalCycles() const;
 	virtual bool moreCycles() const;
 	
 	double  getLineDistanceRatio(int slave_index);					//获得直线插补参考轴当前运动距离与全程的比例
