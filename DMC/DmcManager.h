@@ -12,13 +12,15 @@
 
 using std::map;
 
+#if 1
 #define FIFO_REMAIN(respData) 	((respData)[0].Data2 & 0xFFFF)	//FIFO剩余空间
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
+#endif
 
-#define BATCH_WRITE		(10)
-#define FIFO_LOWATER	(100)			
-#define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
+//#define BATCH_WRITE		(10)
+//#define FIFO_LOWATER	(100)			
+//#define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
 
 enum OpMode
@@ -143,6 +145,9 @@ public:
 	bool	getSdoCmdResp(BaseRequest *req, transData **ppCmd, transData **ppResp);		//获取SDO命令，成功返回true
 	void 	freeSdoCmdResp(BaseRequest *req);											  //释放SDO命令
 	void restoreLastCmd(transData *cmdData);
+
+	void setRespData(transData *respData);
+	void copyRespData();
 	
 	virtual ~DmcManager();
 private:
@@ -172,6 +177,11 @@ private:
 	
 	unsigned char		m_slaveType[DEF_MA_MAX - 2]; //从站类型, DRIVER/IO
 
+
+	Poco::Mutex  		m_mutexRespData;				//互斥量
+	Poco::Condition		m_conditionRespData;
+	bool				newRespData;
+	transData			m_realRespData[DEF_MA_MAX];
 
 	MasterConfig		m_masterConfig;			//主站配置信息
 

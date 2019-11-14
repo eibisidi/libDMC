@@ -184,7 +184,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	int delta = 100;
 
 	int i = 0;
-	int axis = 3;
+	int axis = 1;
 	long startpos = d1000_get_command_pos(axis);
 	
 	while (move < 150000)
@@ -220,6 +220,8 @@ int _tmain(int argc, _TCHAR* argv[])
 			printf("move error.\n");
 			throw;
 		}
+
+		Sleep(2000);
 
 		switch (i% 4)
 		{

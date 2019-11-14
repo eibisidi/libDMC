@@ -131,9 +131,11 @@ private:
 	static void fsm_state_sdowr_cspmode(MoveRequest *req);
 	static void fsm_state_wait_sdowr_cspmode(MoveRequest *req);
 	static void fsm_state_start(MoveRequest *req);
+	static void pushCspPoints(MoveRequest *req);
 
 	bool startPlan();
 	bool 	positionReached(int q , int bias = 0) const;
+
 
 public:
 
@@ -151,6 +153,7 @@ public:
 	
 	double getCurSpeed() const;			//当前规划的速度
 	int    getCurPos()const;			//当前规划的位置
+
 
 
 	

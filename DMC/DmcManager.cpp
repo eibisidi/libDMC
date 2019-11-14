@@ -2,6 +2,8 @@
 #include "DMC.h"
 #include <assert.h>
 #include "CLogSingle.h"
+#include "RdWrManager.h"
+
 
 #include "Poco/DOM/DOMParser.h"
 #include "Poco/DOM/Document.h"
@@ -145,9 +147,12 @@ void	DmcManager::clear()
 	m_init = false;
 	m_canceled = false;
 	m_sdoOwner = NULL;
+	newRespData = false;
 	memset(m_cmdData, 0, sizeof(m_cmdData));
 	memset(m_lastCmdData, 0, sizeof(m_lastCmdData));
 	memset(m_respData, 0, sizeof(m_respData));
+	memset(m_realRespData, 0, sizeof(m_respData));
+
 	memset(m_slaveType, None, sizeof(m_slaveType));
 
 	for(map<int, BaseRequest *>::const_iterator iter = m_requests.begin();
@@ -309,6 +314,8 @@ unsigned long DmcManager::init()
 	initSlaveState();
 
 	//启动线程
+	RdWrManager::instance().start();
+	
 	m_thread.setPriority(Poco::Thread::PRIO_HIGHEST);
 	m_thread.start(*this);
 
@@ -383,6 +390,16 @@ void DmcManager::close()
 
 void DmcManager::beforeWriteCmd()
 {
+#ifdef TIMING
+	LARGE_INTEGER frequency;								//计时器频率 
+	QueryPerformanceFrequency(&frequency);	 
+	double quadpart = (double)frequency.QuadPart / 1000000;    //计时器频率   
+
+	LARGE_INTEGER timeStart, timeEnd;
+	double elapsed;
+	QueryPerformanceCounter(&timeStart); 
+#endif
+
 	memset(m_cmdData, 0, sizeof(m_cmdData));
 	for (map<int,BaseRequest *>::const_iterator iter = m_requests.begin();
 			iter != m_requests.end();
@@ -401,7 +418,6 @@ void DmcManager::beforeWriteCmd()
 		}
 		else
 			iter++;
-
 
 		if (m_cmdData[slave_idx].CMD != GET_STATUS)
 		{
@@ -431,6 +447,12 @@ void DmcManager::beforeWriteCmd()
 		}
 
 	}
+
+#ifdef TIMING
+	QueryPerformanceCounter(&timeEnd); 
+	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
+	printf("time elapsed = %f\n", elapsed);
+#endif
 }
 
 void  DmcManager::initSlaveState()
@@ -624,6 +646,7 @@ int DmcManager::getServoPosBias() const
 
 void DmcManager::updateState()
 {
+	#if 0
 	//检查FIFO是否被覆盖
 	if(m_masterState.fifoFull != FIFO_FULL(m_respData))
 	{
@@ -654,7 +677,7 @@ void DmcManager::updateState()
 	m_masterState.fifoFull = FIFO_FULL(m_respData);
 	m_masterState.fifoRemain = FIFO_REMAIN(m_respData);
 
-
+#endif
 	//更新驱动器状态
 	unsigned CMD;
 	for (map<int, DriverState>::iterator iter = m_driverState.begin();
@@ -769,6 +792,51 @@ void DmcManager::restoreLastCmd(transData *cmdData)
 	*cmdData = m_lastCmdData[slaveidx];
 }
 
+void DmcManager::setRespData(transData *respData)
+{
+#if 0
+		LARGE_INTEGER frequency;								//计时器频率 
+		QueryPerformanceFrequency(&frequency);	 
+		double quadpart = (double)frequency.QuadPart / 1000000;    //计时器频率   
+	
+		LARGE_INTEGER timeStart, timeEnd;
+		double elapsed;
+		QueryPerformanceCounter(&timeStart); 
+#endif
+
+	m_mutexRespData.lock();
+	//printf("setRespData signaled\n");
+
+	memcpy(m_realRespData, respData, sizeof(m_realRespData));
+	newRespData = true;
+	m_conditionRespData.signal();
+	m_mutexRespData.unlock();
+
+#if 0
+		QueryPerformanceCounter(&timeEnd); 
+		elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
+		printf("time elapsed = %f\n", elapsed);
+#endif
+
+}
+
+void DmcManager::copyRespData()
+{
+	m_mutexRespData.lock();
+	//printf("copyRespData\n");
+	
+	while(!newRespData)
+		m_conditionRespData.wait(m_mutexRespData);
+	//printf("copyRespData waked up.\n");
+
+	memcpy(m_respData, m_realRespData, sizeof(m_realRespData));
+	newRespData = false;
+	m_mutexRespData.unlock();
+
+}
+
+
+
 bool DmcManager::isDriverOpCsp(short slaveidx)
 {
 	assert (m_driverState.count(slaveidx) > 0);
@@ -829,72 +897,42 @@ void DmcManager::setIoRS(short slavidx, IoRequestState iors)
 }
 
 void DmcManager::run()
-{
-	int towrite, written;
-
-	towrite = BATCH_WRITE;
-	written = 0;
-
-	//初始化FIFO状态
-	if (!ECMUSBRead((unsigned char*)m_respData, sizeof(m_respData)))
-	{
-		CLogSingle::logFatal("ECMUSBRead failed.", __FILE__, __LINE__);
-		return;
-	}
-	
-	m_masterState.fifoFull 		= FIFO_FULL(m_respData);
-	m_masterState.fifoRemain	= FIFO_REMAIN(m_respData);
-	
+{	
 	while(!m_canceled)
 	{
 		m_mutex.lock();
 		
-		if (!m_requests.empty())
+		while(!m_requests.empty())
 		{
-			while (written < towrite)
+			beforeWriteCmd();
+
+			std :: vector < Item > items;
+			for(int i = 0; i < DEF_MA_MAX; ++i)
 			{
-				beforeWriteCmd();
-				while (!ECMUSBWrite((unsigned char*)m_cmdData, sizeof(m_cmdData)))
+				if (m_cmdData[i].CMD != GET_STATUS
+					&& m_cmdData[i].CMD != CSP)			//CSP单独批量增加
 				{
-					CLogSingle::logFatal("ECMUSBWrite failed.", __FILE__, __LINE__);
+					Item item;
+					item.index = i;
+					item.cmdData = m_cmdData[i];
+					items.push_back(item);
 				}
-				++written;
+
 			}
 
-			do {
-				if (!ECMUSBRead((unsigned char*)m_respData, sizeof(m_respData)))
-				{
-					CLogSingle::logFatal("ECMUSBWrite failed.", __FILE__, __LINE__);
-				}
+			if (!items.empty())
+				RdWrManager::instance().pushItems(items);
+			m_thread.sleep(1);
 
-				updateState();
-
-				if (m_masterState.fifoEmptyCount >= 1)
-				{
-					break;//避免出现死循环
-				}
-			}while(!m_masterState.fifoIncre || m_masterState.fifoRemain <= FIFO_LOWATER);	//FIFO剩余空间增加，且剩余空间>FIFO_LOWATER
-
-			towrite = BATCH_WRITE;
-			written = 0;
-			m_masterState.fifoEmptyCount = 0;
-			printf("towrite = %d, remain=%d, full=%d, emptyCount=%d.\n", towrite, m_masterState.fifoRemain, m_masterState.fifoFull, m_masterState.fifoEmptyCount);
-		}
-		else
-		{
-			if (!ECMUSBRead((unsigned char*)m_respData, sizeof(m_respData)))
-			{
-				CLogSingle::logFatal("ECMUSBRead failed.", __FILE__, __LINE__);
-			}
+			copyRespData();
 			updateState();
-			
-			m_condition.tryWait(m_mutex, 10);	//休眠10ms
 		}
+
+		RdWrManager::instance().setIdle();
+		m_condition.tryWait(m_mutex, 10);	//休眠10ms
 		
 		m_mutex.unlock();
 		Poco::Thread::yield();	//让出CPU避免连续获得锁//m_thread.wakeUp();	
-
-
 	}
 
 	CLogSingle::logInformation("Thread canceled.", __FILE__, __LINE__);

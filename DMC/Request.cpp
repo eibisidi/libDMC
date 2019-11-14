@@ -3,8 +3,9 @@
 #include "CLogSingle.h"
 #include <assert.h>
 #include <ctime>
+#include "RdWrManager.h"
 
-#define RETRIES (BATCH_WRITE * 50)
+#define RETRIES (10 * 50)
 #define MAX_ATTEMPTS (5)				
 #define MAKE_DWORD(h,l) ((h << 16) | (l))
 
@@ -177,12 +178,14 @@ void MoveRequest::fsm_state_done(MoveRequest *req)
 
 void MoveRequest::fsm_state_csp(MoveRequest *req)
 {
+	#if 0
 	if (req->moveparam->cycles > req->moveparam->elapsed)
 	{
 		req->cmdData->CMD 	= CSP;
 		req->cmdData->Data1 = req->curpos = req->moveparam->position();
 		return;
 	}
+	#endif
 
 	if(CSP != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData )
@@ -268,9 +271,9 @@ void MoveRequest::fsm_state_svon(MoveRequest *req)
 
 	req->fsmstate	 	= fsm_state_csp;
 	req->cmdData->CMD 	= CSP;
-	
-	req->cmdData->Data1 = req->curpos = req->moveparam->position();
 	req->rechecks		= RETRIES;
+
+	pushCspPoints(req);
 }
 
 void MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
@@ -321,7 +324,7 @@ void MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
 		}
 		req->fsmstate	 	= MoveRequest::fsm_state_csp;
 		req->cmdData->CMD 	= CSP;	
-		req->cmdData->Data1 = req->curpos = req->moveparam->position();
+		pushCspPoints(req);
 	}
 	else
 	{
@@ -386,7 +389,7 @@ void MoveRequest::fsm_state_start(MoveRequest *req)
 		
 			req->fsmstate	 	= MoveRequest::fsm_state_csp;
 			req->cmdData->CMD 	= CSP;
-			req->cmdData->Data1 = req->curpos = req->moveparam->position();
+			pushCspPoints(req);
 		}
 		else
 		{
@@ -465,6 +468,20 @@ double  MoveRequest::getCurSpeed() const
 int     MoveRequest::getCurPos()const
 {
 	return this->curpos;
+}
+
+void MoveRequest::pushCspPoints(MoveRequest *req)
+{
+	std::vector<Item> items;
+	while(req->moveparam->cycles > req->moveparam->elapsed)
+	{
+		Item item;
+		item.index = req->slave_idx;
+		item.cmdData.CMD = CSP;
+		item.cmdData.Data1 = req->moveparam->position();
+		items.push_back(item);
+	}
+	RdWrManager::instance().pushItems(items);
 }
 
 void MoveRequest::exec()
