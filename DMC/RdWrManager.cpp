@@ -291,8 +291,9 @@ void RdWrManager::run()
 	unsigned int last_remain = ECM_FIFO_SIZE;
 	unsigned int last_fifofull = FIFO_FULL(respData);
 	
-	int		flag1 = 0;
+	int		flag1 = 0;		//1 空闲数正在下降  2:空闲数正在上升
 	bool	bRet;
+	int		readcount = 0;	//连续读取次数
 	
 	while(!m_canceled)
 	{	
@@ -312,13 +313,15 @@ void RdWrManager::run()
 			}while(!bRet);
 		}
 
+		readcount = 0;
 		do{
 			do {
 				bRet = ECMUSBRead((unsigned char*)respData, sizeof(respData));
 				if (!bRet)
 					printf("Read Error \n");
 			}while(!bRet);
-			
+
+			++readcount;
 			if (FIFO_FULL(respData) != last_fifofull)
 			{
 				printf("FIFO FULL Error \n");
@@ -345,9 +348,7 @@ void RdWrManager::run()
 				case 2:
 					if (FIFO_REMAIN(respData) > FIFO_LOWATER)
 					{
-						flag1 = 0;
 						last_remain = FIFO_REMAIN(respData);
-						towrite = BATCH_WRITE;
 						goto LABEL;
 					}
 					break;
@@ -363,15 +364,12 @@ void RdWrManager::run()
 				printf("FIFO EMPTY Error \n");
 				throw;
 			}
-		}while(true);
+		}while(readcount < BATCH_WRITE);	//防止出现死循环，连续读取之后跳出
 
 LABEL:
 		//printf("to write = %d, last_remain=%d, fifo_remain=%d.\n", towrite, last_remain, FIFO_REMAIN(respData));
-		//printf("min = %f, max=%f, average=%f, curpos=0x%x.\n", min, max, (total/160), curpos);
-		//printf("curpos=0x%x.\n", curpos);
-		;
-		//if (noneActiveCount > 5)
-		//	m_idle = true;
+		flag1 = 0;
+		towrite = BATCH_WRITE;
 	};
 }
 
