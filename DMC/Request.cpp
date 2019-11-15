@@ -183,13 +183,13 @@ void MoveRequest::fsm_state_csp(MoveRequest *req)
 	{
 		if (++req->attempts > MAX_ATTEMPTS)
 		{	
-			CLogSingle::logError("MoveRequest::fsm_state_csp timeout. axis=%d, nowpos=%d, lastsentpos=%d, dstpos=%d.", __FILE__, __LINE__,req->slave_idx, (int)req->respData->Data1, req->curpos, req->dstpos);
+			CLogSingle::logError("MoveRequest::fsm_state_csp timeout. axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__,req->slave_idx, (int)req->respData->Data1, req->dstpos);
 			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
 		{
-			CLogSingle::logWarning("MoveRequest::fsm_state_csp retries. axis=%d, nowpos=%d, lastsentpos=%d, dstpos=%d.", __FILE__, __LINE__,req->slave_idx, (int)req->respData->Data1, req->curpos, req->dstpos);
+			CLogSingle::logWarning("MoveRequest::fsm_state_csp attempts=%d. axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->attempts, req->slave_idx, (int)req->respData->Data1, req->dstpos);
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->cmdData->Data2 = CSP_DATA2_DUMMY;	//特殊处理让充发位置可以进入待发送队列
 			req->rechecks = RETRIES;
@@ -436,19 +436,6 @@ bool  MoveRequest::positionReached(int q , int bias) const
 		return (::abs(q - this->dstpos) < bias);
 	else
 		return q == this->dstpos;
-}
-
-double  MoveRequest::getCurSpeed() const
-{
-	if (NULL == this->moveparam)
-		return 0;
-
-	return this->moveparam->speed();
-}
-
-int     MoveRequest::getCurPos()const
-{
-	return this->curpos;
 }
 
 void MoveRequest::pushCspPoints(MoveRequest *req)

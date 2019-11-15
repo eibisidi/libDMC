@@ -141,19 +141,13 @@ public:
 	long			dist;				//相对=位移， 绝对=目标位置
 	MoveType		movetype;			//规划类型S/T
 	MParam			*moveparam;			//规划参数
-	int				curpos;				//上一次规划的位置,用于减速停止,此位置已经发送到FIFO中
+	
 	double 			maxvel;				//最大速度，单位（脉冲/s)
 	double 			maxa;				//最大加速度，单位(脉冲/s^2)
 	double 			maxj;				//最大加加速度，单位(脉冲/s^3),仅对S型曲线有效
 
 	int 			startpos;
 	int 			dstpos;
-	
-	double getCurSpeed() const;			//当前规划的速度
-	int    getCurPos()const;			//当前规划的位置
-
-
-
 	
 	void (* fsmstate)(MoveRequest *);	
 	
@@ -172,7 +166,7 @@ public:
 		fsmstate = fsm_state_start;
 		movetype = MOVETYPE_T;
 		moveparam = NULL;
-		curpos	 = 0;
+
 		maxvel 	 = 0;
 		maxa	 = 0;
 		maxj	 = 0;
