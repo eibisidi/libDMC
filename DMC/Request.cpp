@@ -1283,7 +1283,6 @@ bool MultiAxisRequest::startPlan()
 bool  MultiAxisRequest::positionReached(int q , int bias) const
 {
 	//return true;
-	printf("current pos=%d , dstpos = %d\n", q, this->axispara->dstpos);
 	bool reached = this->axispara->positionReached(q, bias);
 	return reached;
 }
