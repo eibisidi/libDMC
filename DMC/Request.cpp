@@ -101,6 +101,11 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 			{
 				CLogSingle::logWarning("DStopRequest::fsm_state_csp timeout attempts=%d. nowpos=%d, endpos=%d.", __FILE__, __LINE__, req->attempts, (int)req->respData->Data1, req->stopInfo.endpos);
 				req->rechecks = RETRIES;
+
+				req->cmdData->CMD 	= CSP;
+				req->cmdData->Data1 = req->stopInfo.endpos;	//重发最终位置
+				req->cmdData->Data2 = CSP_DATA2_DUMMY;		//特殊处理让充发位置可以进入待发送队列				
+
 			}
 			return;
 		}
