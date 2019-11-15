@@ -47,7 +47,7 @@ public:
 class RdWrManager : public Poco::Runnable
 {
 public:
-	static RdWrManager & instance();
+	RdWrManager();
 	virtual void run();
 	void start();
 	void cancel();				//Í£Ö¹Ïß³Ì
@@ -59,7 +59,6 @@ public:
 	void declStop(int slaveidx, DeclStopInfo *stopInfo);
 
 private:
-	RdWrManager();
 	void clear();
 	int popItems(transData *cmdData);
 

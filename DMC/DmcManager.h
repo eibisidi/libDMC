@@ -151,6 +151,8 @@ public:
 	void copyRespData();
 	
 	virtual ~DmcManager();
+
+	RdWrManager m_rdWrManager;			//发送接收管理线程
 private:
 	DmcManager();
 	void 	clear();

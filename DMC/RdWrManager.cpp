@@ -20,12 +20,6 @@ RdWrManager::~RdWrManager()
 {
 }
 
-RdWrManager & RdWrManager::instance()
-{
-	static RdWrManager _inst;
-	return _inst;
-}
-
 void RdWrManager::start()
 {
 	m_thread.setPriority(Poco::Thread::PRIO_HIGHEST);

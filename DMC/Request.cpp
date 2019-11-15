@@ -66,7 +66,7 @@ void DStopRequest::fsm_state_svoff(DStopRequest *req)
 
 void DStopRequest::fsm_state_csp(DStopRequest *req)
 {
-	if(RdWrManager::instance().peekQueue(req->slave_idx))
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
 	{//尚未发送完毕
 		return;
 	}
@@ -141,7 +141,7 @@ void DStopRequest::fsm_state_start(DStopRequest *req)
 	req->cmdData->CMD 	= CSP;
 	
 	//将减速命令加入到队列中
-	RdWrManager::instance().declStop(req->slave_idx, &req->stopInfo);
+	req->dmc->m_rdWrManager.declStop(req->slave_idx, &req->stopInfo);
 }
 
 bool  DStopRequest::positionReached(int q , int bias) const
@@ -164,7 +164,7 @@ void MoveRequest::fsm_state_done(MoveRequest *req)
 
 void MoveRequest::fsm_state_csp(MoveRequest *req)
 {
-	if(RdWrManager::instance().peekQueue(req->slave_idx))
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
 	{//尚未发送完毕
 		return;
 	}
@@ -459,9 +459,7 @@ void MoveRequest::pushCspPoints(MoveRequest *req)
 	req->cmdData->CMD 	= CSP;
 	req->cmdData->Data1 	= items[cycles-1].cmdData.Data1; 
 
-
-	RdWrManager::instance().pushItems(items, cycles, 1);
-
+	req->dmc->m_rdWrManager.pushItems(items, cycles, 1);
 	delete [] items;
 	
 }
@@ -959,7 +957,7 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		return;
 	}
 
-	if(RdWrManager::instance().peekQueue(req->slave_idx))
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
 	{//尚未发送完毕
 		return;
 	}
@@ -1268,7 +1266,7 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 		}
 	}
 
-	RdWrManager::instance().pushItems(items, cycles, axises);
+	req->dmc->m_rdWrManager.pushItems(items, cycles, axises);
 
 	delete [] items;
 	

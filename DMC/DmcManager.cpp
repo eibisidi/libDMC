@@ -312,7 +312,7 @@ unsigned long DmcManager::init()
 	initSlaveState();
 
 	//启动线程
-	RdWrManager::instance().start();
+	m_rdWrManager.start();
 	
 	m_thread.setPriority(Poco::Thread::PRIO_NORMAL);
 	m_thread.start(*this);
@@ -371,7 +371,7 @@ void DmcManager::close()
 
 	m_thread.join();
 
-	RdWrManager::instance().cancel();		//停止线程
+	m_rdWrManager.cancel();		//停止线程
 
 	::ClearCmdData(m_cmdData);
 	m_cmdData[0].CMD = SET_STATE;
@@ -937,13 +937,13 @@ void DmcManager::run()
 			}
 
 			if (cols > 0)
-				RdWrManager::instance().pushItems(m_items, 1, cols);	//加入发送队列
+				m_rdWrManager.pushItems(m_items, 1, cols);	//加入发送队列
 
 			copyRespData();//接收队列处理，刷新
 		}
 		else
 		{
-			RdWrManager::instance().setIdle();
+			m_rdWrManager.setIdle();
 			m_condition.tryWait(m_mutex, 10);	//休眠10ms，等待用户命令
 		}
 		m_mutex.unlock();
