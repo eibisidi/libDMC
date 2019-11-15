@@ -371,6 +371,8 @@ void DmcManager::close()
 
 	m_thread.join();
 
+	RdWrManager::instance().cancel();		//停止线程
+
 	::ClearCmdData(m_cmdData);
 	m_cmdData[0].CMD = SET_STATE;
 	m_cmdData[0].Data1 = STATE_INIT; 
@@ -915,9 +917,9 @@ void DmcManager::run()
 	int i, cols;
 	while(!m_canceled)
 	{		
-		while(!m_requests.empty())
+		m_mutex.lock();
+		if(!m_requests.empty())
 		{
-			m_mutex.lock();
 			beforeWriteCmd();
 
 			for(i = 0, cols = 0; i < DEF_MA_MAX; ++i)
@@ -938,20 +940,16 @@ void DmcManager::run()
 				RdWrManager::instance().pushItems(m_items, 1, cols);	//加入发送队列
 
 			copyRespData();//接收队列处理，刷新
-
-			m_mutex.unlock();
-
-			Poco::Thread::sleep(10);
 		}
-
-		RdWrManager::instance().setIdle();
-
-		m_mutex.lock();
-		m_condition.tryWait(m_mutex, 10);	//休眠10ms，等待用户命令
+		else
+		{
+			RdWrManager::instance().setIdle();
+			m_condition.tryWait(m_mutex, 10);	//休眠10ms，等待用户命令
+		}
 		m_mutex.unlock();
 	}
 
-	CLogSingle::logInformation("Thread canceled.", __FILE__, __LINE__);
+	CLogSingle::logInformation("DmcManager Thread canceled.", __FILE__, __LINE__);
 }
 
 unsigned long DmcManager::clr_alarm(short axis)

@@ -50,26 +50,29 @@ public:
 	static RdWrManager & instance();
 	virtual void run();
 	void start();
+	void cancel();				//停止线程
+
 	~RdWrManager();
 	void setIdle();
 	void pushItems(Item *items, int rows, int cols);
 	int peekQueue(int slaveidx);
 	void declStop(int slaveidx, DeclStopInfo *stopInfo);
+
 private:
 	RdWrManager();
+	void clear();
 	int popItems(transData *cmdData);
-
-	void setBusy();
 
 	Poco::Thread		m_thread;
 	Poco::Mutex  		m_mutex;
 	Poco::Condition 	m_condition;			//条件变量
 	bool				m_idle;
+	bool				m_canceled;				//线程停止
 
 	typedef std::deque<Item> ItemQueue;
 
 	enum QueueState{
-		QUEUE_IDLE,
+		QUEUE_IDLE = 0,
 		QUEUE_BUSY,
 	};
 

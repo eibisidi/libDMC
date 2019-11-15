@@ -13,7 +13,7 @@
 
 RdWrManager::RdWrManager()
 {
-	m_idle = true;
+	clear();
 }
 
 RdWrManager::~RdWrManager()
@@ -30,6 +30,34 @@ void RdWrManager::start()
 {
 	m_thread.setPriority(Poco::Thread::PRIO_HIGHEST);
 	m_thread.start(*this);
+}
+
+void RdWrManager::cancel()				//停止线程
+{
+	m_canceled = true;
+	m_thread.join();	//等待run函数返回
+	clear();
+}
+
+void RdWrManager::clear()
+{
+	m_idle = true;
+	m_canceled = false;
+	memset(queueState, 0, sizeof(queueState));	
+
+	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
+					iter!= tosend.end();
+					++iter)
+	{
+		if (iter->second)
+		{
+			delete (iter->second);
+			iter->second = NULL;
+		}
+	}
+	tosend.clear();
+	tostop.clear();
+	memset(lastSent, 0, sizeof(lastSent));
 }
 
 int RdWrManager::popItems(transData *cmdData)
@@ -162,7 +190,7 @@ void RdWrManager::pushItems(Item *items, int rows, int cols)
 		}
 
 		if (c == cols)
-		{
+		{//当前队列均为空闲
 			for(c = 0; c < cols; ++c)
 			{
 				slaveidx = items[c].index;
@@ -175,7 +203,7 @@ void RdWrManager::pushItems(Item *items, int rows, int cols)
 		m_mutex.unlock();
 		Poco::Thread::sleep(1);
 	}
-
+//////////////////////////////////////////////////////////////////////////////////////
 	for (size_t i = 0; i < rows * cols; ++i)
 	{
 		slaveidx = items[i].index;
@@ -183,7 +211,7 @@ void RdWrManager::pushItems(Item *items, int rows, int cols)
 			tosend[slaveidx] = new ItemQueue;
 		tosend[slaveidx]->push_back(items[i]);
 	}
-
+///////////////////////////////////////////////////////////////////////////////////////
 	//每个队列置为空闲
 	m_mutex.lock();	
 	for(c = 0; c < cols; ++c)
@@ -191,6 +219,7 @@ void RdWrManager::pushItems(Item *items, int rows, int cols)
 		slaveidx = items[c].index;
 		queueState[slaveidx] = QUEUE_IDLE;
 	}
+	
 	m_idle = false;
 	m_condition.signal();
 	m_mutex.unlock();
@@ -225,22 +254,12 @@ void RdWrManager::declStop(int slaveidx, DeclStopInfo *stopInfo)
 	m_mutex.unlock();
 }
 
-void RdWrManager::setBusy()
-{
-	m_mutex.lock();	
-	m_idle = false;
-	m_condition.signal();
-	m_mutex.unlock();
-}
-
 void RdWrManager::setIdle()
 {
 	m_mutex.lock();	
 	m_idle = true;
 	m_mutex.unlock();
 }
-
-
 
 void RdWrManager::run()
 {
@@ -258,9 +277,10 @@ void RdWrManager::run()
 	unsigned int last_remain = ECM_FIFO_SIZE;
 	unsigned int last_fifofull = FIFO_FULL(respData);
 	
-	int	flag1 = 0;
+	int		flag1 = 0;
+	bool	bRet;
 	
-	while(true)
+	while(!m_canceled)
 	{	
 		m_mutex.lock();
 		while(m_idle)
@@ -272,14 +292,20 @@ void RdWrManager::run()
 			memset(cmdData, 0, sizeof(cmdData));
 			popItems(cmdData);
 
-			if (!ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
-				printf("Write Error \n");
+			do{
+				bRet =  ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData));
+				if (!bRet)
+					printf("Write Error \n");
+			}while(!bRet);
 		}
 
 		do{
-			if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
-				printf("Read Error \n");
-
+			do {
+				bRet = ECMUSBRead((unsigned char*)respData, sizeof(respData));
+				if (!bRet)
+					printf("Read Error \n");
+			}while(!bRet);
+			
 			if (FIFO_FULL(respData) != last_fifofull)
 			{
 				printf("FIFO FULL Error \n");
