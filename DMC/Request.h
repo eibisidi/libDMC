@@ -99,28 +99,22 @@ private:
 	static void fsm_state_svoff(DStopRequest *req);
 	static void fsm_state_csp(DStopRequest *req);
 	static void fsm_state_start(DStopRequest *req);
-	bool 	startPlan();
+
 	bool 	positionReached(int q , int bias = 0) const;
 public:
 	void (* fsmstate)(DStopRequest *);	
 	
 	virtual ~DStopRequest() {}
 	virtual void exec();
-	double 		startSpeed;				//当前速度
-	double 		maxa;					//最大减速度
-	DParam		dParam;					//减速规划参数
+
+
 	bool		serveOff;				//停止后是否关闭使能
-
-	int 		startpos;				//起始位置
-	int			dstpos;					//终止位置
-
 	DeclStopInfo stopInfo;
-	DStopRequest()
+	
+	DStopRequest(int axis, double Tdec, bool svoff)
 	{
-		startpos = 0;
-		dstpos   = 0;
-		startSpeed = 0;
-		maxa 	 = 500;					//dummy value避免规划失败
+		slave_idx = axis;
+		stopInfo.decltime = Tdec;
 		serveOff = false;
 		fsmstate = fsm_state_start;
 	}

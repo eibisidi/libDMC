@@ -93,27 +93,20 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 		{
 			if (++req->attempts > MAX_ATTEMPTS)
 			{	
-				CLogSingle::logError("DStopRequest::fsm_state_csp timeout. nowpos=%d, dstpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->dstpos);
+				CLogSingle::logError("DStopRequest::fsm_state_csp timeout. nowpos=%d, endpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->stopInfo.endpos);
 				req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
 				req->reqState = REQUEST_STATE_FAIL;
 			}
 			else
 			{
-				CLogSingle::logWarning("DStopRequest::fsm_state_csp retries. nowpos=%d, dstpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->dstpos);
-				req->dmc->restoreLastCmd(req->cmdData);
+				CLogSingle::logWarning("DStopRequest::fsm_state_csp timeout attempts=%d. nowpos=%d, endpos=%d.", __FILE__, __LINE__, req->attempts, (int)req->respData->Data1, req->stopInfo.endpos);
 				req->rechecks = RETRIES;
 			}
-			
 			return;
 		}
 	}
 
-	
-
 	CLogSingle::logInformation("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
-
-	
-	//fprintf(stdout, "dec Reached. CurrentPos=%d, q1 = %f.\n", req->respData->Data1, req->dParam.q1);
 
 	//目标位置已到达,更新新的绝对位置
 	if(req->stopInfo.valid)
@@ -137,38 +130,13 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 
 void DStopRequest::fsm_state_start(DStopRequest *req)
 {
-	if (!req->startPlan())
-	{
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
-		req->reqState = REQUEST_STATE_FAIL;
-		return;
-	}
-
 	req->cmdData	= req->dmc->getCmdData(req->slave_idx);
 	req->respData	= req->dmc->getRespData(req->slave_idx);
 	req->fsmstate	 	= fsm_state_csp;
 	req->cmdData->CMD 	= CSP;
 	
-	req->cmdData->Data1 = req->dParam.position();
-
 	//将减速命令加入到队列中
 	RdWrManager::instance().declStop(req->slave_idx, &req->stopInfo);
-}
-
-bool DStopRequest::startPlan()
-{
-	dParam.q0 = this->startpos;
-	dParam.v0 = this->startSpeed;
-	dParam.amax = this->maxa;		
-	
-	if (-1 == ::Plan_D(&dParam))
-	{
-		CLogSingle::logError("Plan_D failed, axis=%d, q0=%f, v0=%f, amax=%f.", __FILE__, __LINE__,
-						this->slave_idx, dParam.q0, dParam.v0, dParam.amax);
-		return false;
-	}
-	this->dstpos = (int)(dParam.sign * dParam.q1);
-	return true;
 }
 
 bool  DStopRequest::positionReached(int q , int bias) const

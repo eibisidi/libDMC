@@ -1439,20 +1439,7 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 		MoveRequest *moveReq = dynamic_cast<MoveRequest * >(m_requests[axis]);
 		if (NULL != moveReq)
 		{//单轴运动
-			curspeed = moveReq->getCurSpeed();
-			curpos 	 = moveReq->getCurPos();
-
-			newReq = new DStopRequest;
-			
-			newReq->slave_idx	= axis;
-			newReq->stopInfo.decltime = tDec;
-			newReq->serveOff	= bServOff;
-			if (fabs(curspeed) > 1E-6)			//当前速度大于0，否则为500
-				newReq->maxa		= fabs(curspeed / tDec);
-			newReq->serveOff	= bServOff;
-			newReq->startSpeed	= curspeed;
-			newReq->startpos	= curpos;
-
+			newReq = new DStopRequest(axis, tDec, bServOff);
 			setMoveState(axis, MOVESTATE_BUSY);
 			addRequest(axis, newReq);
 		}
@@ -1468,17 +1455,7 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 				{
 					BaseMultiAxisPara *para = *iter;
 
-					curspeed = para->req->getCurSpeed();
-					curpos 	 = para->req->getCurPos();
-					
-					newReq = new DStopRequest;
-						
-					newReq->slave_idx 	= para->req->slave_idx;
-					if (fabs(curspeed) > 1E-6)			//当前速度大于0，否则为500
-						newReq->maxa		= fabs(curspeed / tDec);
-					newReq->serveOff	= bServOff;
-					newReq->startSpeed	= curspeed;
-					newReq->startpos	= curpos;
+					newReq = new DStopRequest(para->req->slave_idx, tDec, bServOff);
 					
 					setMoveState(para->req->slave_idx, MOVESTATE_BUSY);
 					addRequest(para->req->slave_idx, newReq);
