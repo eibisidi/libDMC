@@ -820,7 +820,6 @@ void DmcManager::setRespData(transData *respData)
 
 void DmcManager::copyRespData()
 {
-
 #if 0
 		LARGE_INTEGER frequency;								//计时器频率 
 		QueryPerformanceFrequency(&frequency);	 
@@ -830,25 +829,17 @@ void DmcManager::copyRespData()
 		double elapsed;
 		QueryPerformanceCounter(&timeStart); 
 #endif
-
-
-	bool wakedup = false;
 	m_mutexRespData.lock();
-	//printf("copyRespData\n");
 	
 	while(!newRespData)
-		//wakedup = m_conditionRespData.tryWait(m_mutexRespData, 10);
 		m_conditionRespData.wait(m_mutexRespData);
 
-	//if(wakedup)
-	{
-		memcpy(m_respData, m_realRespData, sizeof(m_realRespData));
-		newRespData = false;
-	}
+	memcpy(m_respData, m_realRespData, sizeof(m_realRespData));
+	newRespData = false;
+
 	m_mutexRespData.unlock();
 
-	//if (wakedup)
-		updateState();
+	updateState();
 
 #if 0
 			QueryPerformanceCounter(&timeEnd); 
@@ -944,9 +935,9 @@ void DmcManager::run()
 			}
 
 			if (cols > 0)
-				RdWrManager::instance().pushItems(m_items, 1, cols);
+				RdWrManager::instance().pushItems(m_items, 1, cols);	//加入发送队列
 
-			copyRespData();
+			copyRespData();//接收队列处理，刷新
 
 			m_mutex.unlock();
 
@@ -956,9 +947,8 @@ void DmcManager::run()
 		RdWrManager::instance().setIdle();
 
 		m_mutex.lock();
-		m_condition.tryWait(m_mutex, 10);	//休眠10ms
+		m_condition.tryWait(m_mutex, 10);	//休眠10ms，等待用户命令
 		m_mutex.unlock();
-		//Poco::Thread::yield();	//让出CPU避免连续获得锁//m_thread.wakeUp();	
 	}
 
 	CLogSingle::logInformation("Thread canceled.", __FILE__, __LINE__);
@@ -1418,9 +1408,6 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 	assert(tDec > 1E-6);
 	unsigned long retValue = ERR_NOERR;
 	DStopRequest *newReq = NULL;
-	double curspeed;
-	int    curpos ;
-	bool	moving = false;
 
 	m_mutex.lock();
 	do{

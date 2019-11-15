@@ -179,10 +179,10 @@ private:
 	unsigned char		m_slaveType[DEF_MA_MAX - 2]; //从站类型, DRIVER/IO
 
 
-	Poco::Mutex  		m_mutexRespData;				//互斥量
-	Poco::Condition		m_conditionRespData;
-	bool				newRespData;
-	transData			m_realRespData[DEF_MA_MAX];
+	Poco::Mutex  		m_mutexRespData;				//响应数据互斥量
+	Poco::Condition		m_conditionRespData;			//响应数据条件变量
+	bool				newRespData;					//响应数据是否刷新
+	transData			m_realRespData[DEF_MA_MAX];		//实时响应数据
 
 	MasterConfig		m_masterConfig;			//主站配置信息
 
