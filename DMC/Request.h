@@ -266,10 +266,6 @@ private:
 
 public:
 	BaseMultiAxisPara 	*axispara;
-	int				curpos;				//上一次规划的位置
-
-	double getCurSpeed() const;			//当前规划的速度
-	int    getCurPos()const;			//当前规划的位置
 
 	void (* fsmstate)(MultiAxisRequest *);	
 	

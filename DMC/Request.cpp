@@ -1283,17 +1283,6 @@ bool  MultiAxisRequest::positionReached(int q , int bias) const
 	return reached;
 }
 
-double MultiAxisRequest::getCurSpeed() const 		//当前规划的速度
-{
-	double v = this->axispara->getCurSpeed();
-	return v;
-}
-
-int MultiAxisRequest::getCurPos()const			//当前规划的位置
-{
-	return this->curpos;
-}
-
 void MultiAxisRequest::exec()
 {
 	fsmstate(this);
@@ -1312,7 +1301,6 @@ MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, b
 	this->slave_idx = axis;
 	this->fsmstate = fsm_state_start;
 	this->axispara = new LinearPara(newLinearRef, this, startpos, dstpos);
-	this->curpos   = startpos;
 
 	double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);	
 	if (dist > newLinearRef->max_dist)
@@ -1332,7 +1320,6 @@ MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, boo
 	this->slave_idx = axis;
 	this->fsmstate = fsm_state_start;
 	this->axispara = new ArchlMultiAxisPara(newArchlRef, this, startpos, dstpos, z);
-	this->curpos   = startpos;
 
 	if (z)
 	{
