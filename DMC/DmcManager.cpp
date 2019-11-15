@@ -1182,10 +1182,16 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 
 		//判断目标位置是否已经到达
 		if (!abs && Dist == 0)
+		{
+			setMoveState(axis, MOVESTATE_STOP);
 			break;						//相对模式，距离为0
+		}
 
 		if (abs && Dist == getDriverCmdPos(axis))
+		{
+			setMoveState(axis, MOVESTATE_STOP);
 			break;						//绝对模式，位置已到达
+		}
 	
 		newReq = new MoveRequest;
 		if (NULL == newReq)
@@ -1437,8 +1443,10 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 			curpos 	 = moveReq->getCurPos();
 
 			newReq = new DStopRequest;
-				
+			
 			newReq->slave_idx	= axis;
+			newReq->stopInfo.decltime = tDec;
+			newReq->serveOff	= bServOff;
 			if (fabs(curspeed) > 1E-6)			//当前速度大于0，否则为500
 				newReq->maxa		= fabs(curspeed / tDec);
 			newReq->serveOff	= bServOff;

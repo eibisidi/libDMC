@@ -5,6 +5,8 @@
 #include "NEXTWUSBLib_12B.h"
 #include "plan.h"
 #include "AxisPara.h"
+#include "RdWrManager.h"
+
 #include <vector>
 #include <fstream>
 #include <set>
@@ -111,6 +113,8 @@ public:
 
 	int 		startpos;				//起始位置
 	int			dstpos;					//终止位置
+
+	DeclStopInfo stopInfo;
 	DStopRequest()
 	{
 		startpos = 0;

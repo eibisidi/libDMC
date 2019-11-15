@@ -45,24 +45,90 @@ int RdWrManager::popItems(transData *cmdData)
 	QueryPerformanceCounter(&timeStart); 
 #endif
 	int activeItems = 0;
+	int slaveidx;
 	m_mutex.lock();	
 	
 	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
 				iter!= tosend.end();
 				++iter)
 	{
-		if (QUEUE_IDLE == queueState[iter->first])
+		slaveidx = iter->first;
+		if (QUEUE_IDLE == queueState[slaveidx])
 		{
-			queueState[iter->first] = QUEUE_BUSY;
-			ItemQueue *que = iter->second;
-			if (!que->empty())
-			{
-				cmdData[iter->first] =  (iter->second)->front().cmdData;
-				(iter->second)->pop();
-				++activeItems;			//活动命令计数+1
-			}
+			queueState[slaveidx] = QUEUE_BUSY;
+			///////////////////////////////////////////////////////////////////////////////////////////
 
-			queueState[iter->first] = QUEUE_IDLE;
+			if (0 == tostop.count(slaveidx))
+			{
+				ItemQueue *que = iter->second;
+				if (!que->empty())
+				{
+					lastSent[slaveidx] = cmdData[slaveidx] =  (iter->second)->front().cmdData;
+					(iter->second)->pop_front();
+				}
+			}
+			else
+			{//停止该从站
+				int unsents = (iter->second)->size();
+				
+				if (unsents > 0)
+				{
+					int estimate = (int)(tostop[slaveidx]->decltime * CYCLES_PER_SEC) + 1;					//预计停止周期数量
+					int	q0, q1;
+					if (unsents > 2 && estimate < unsents)
+					{//重新计算一条减速曲线
+						q0 = (iter->second)->front().cmdData.Data1;
+						(iter->second)->pop_front();
+						q1 = (iter->second)->front().cmdData.Data1;
+
+						(iter->second)->clear();		//清除当前队列中所有待发送CSP目标位置
+	
+						int     vel0 = (q1 > q0) ? (q1 - q0) : (q0 - q1);		//初始运动速率
+						double  dec  = 1.0 * vel0 / estimate;					//减速度
+						int     dir  = (q1 > q0) ? 1 : -1;						//运动方向
+						double  vel  = vel0;
+						int 	q    = q0;
+						
+						Item    item;
+						item.index 			= slaveidx;
+						item.cmdData.CMD 	= CSP;
+						item.cmdData.Data1	= q0;
+
+						lastSent[slaveidx] = cmdData[slaveidx] =  item.cmdData;
+						
+						while (vel > 0)
+						{
+							vel = vel - dec;
+							q 	= int(q + dir * vel);
+
+							item.cmdData.Data1 = q;
+							(iter->second)->push_back(item);
+						}
+					}
+					
+					tostop[slaveidx]->valid = true;
+					if ((iter->second)->size() > 0)
+						tostop[slaveidx]->endpos = (iter->second)->back().cmdData.Data1;
+					else
+						tostop[slaveidx]->endpos = q0;
+				}
+				else
+				{//并未运动
+					if (lastSent[slaveidx].CMD == CSP)
+					{
+						tostop[slaveidx]->valid = true;
+						tostop[slaveidx]->endpos = lastSent[slaveidx].Data1;
+					}
+					else{
+						tostop[slaveidx]->valid = false;
+					}
+				}
+
+				//移除该停止指令 
+				tostop.erase(slaveidx);
+			}
+			////////////////////////////////////////////////////////////////////////////////////////////
+			queueState[slaveidx] = QUEUE_IDLE;
 		}
 	}
 
@@ -115,7 +181,7 @@ void RdWrManager::pushItems(Item *items, int rows, int cols)
 		slaveidx = items[i].index;
 		if (0 == tosend.count(slaveidx))
 			tosend[slaveidx] = new ItemQueue;
-		tosend[slaveidx]->push(items[i]);
+		tosend[slaveidx]->push_back(items[i]);
 	}
 
 	//每个队列置为空闲
@@ -132,7 +198,7 @@ void RdWrManager::pushItems(Item *items, int rows, int cols)
 
 int RdWrManager::peekQueue(int slaveidx)
 {
-	int queuecount;
+	int queuecount = 0;
 	while(true)
 	{
 		m_mutex.lock(); 
@@ -144,10 +210,19 @@ int RdWrManager::peekQueue(int slaveidx)
 		Poco::Thread::sleep(1);
 	}
 
-	queuecount = tosend[slaveidx]->size();
+	if (tosend.count(slaveidx))
+		queuecount = tosend[slaveidx]->size();
 	m_mutex.unlock();
 
 	return queuecount;
+}
+
+//减速停止
+void RdWrManager::declStop(int slaveidx, DeclStopInfo *stopInfo)
+{
+	m_mutex.lock(); 
+	tostop[slaveidx] = stopInfo;
+	m_mutex.unlock();
 }
 
 void RdWrManager::setBusy()

@@ -3,7 +3,7 @@
 #include "CLogSingle.h"
 #include <assert.h>
 #include <ctime>
-#include "RdWrManager.h"
+
 
 #define RETRIES (10 * 50)
 #define MAX_ATTEMPTS (5)				
@@ -66,53 +66,61 @@ void DStopRequest::fsm_state_svoff(DStopRequest *req)
 
 void DStopRequest::fsm_state_csp(DStopRequest *req)
 {
-	if (req->dParam.cycles > req->dParam.elapsed)
-	{
-		req->cmdData->CMD	= CSP;
-		req->cmdData->Data1 = req->dParam.position();
+	if(RdWrManager::instance().peekQueue(req->slave_idx))
+	{//尚未发送完毕
 		return;
 	}
 
-	if(CSP != RESP_CMD_CODE(req->respData)
-		&& GET_STATUS != RESP_CMD_CODE(req->respData )
-		&& req->rechecks--)
+	//发送已经完成
+	if(req->stopInfo.valid)
 	{
-		return;
-	}
-
-	if ( !req->positionReached(req->respData->Data1) 
-		&& req->rechecks--)
-	{
-		return;
-	}
-
-	if (req->rechecks <= 0						//等待位置到达超时
-			&& (!req->dmc->isServo(req->slave_idx)) || (!req->positionReached(req->respData->Data1, req->dmc->getServoPosBias())))
-	{
-		if (++req->attempts > MAX_ATTEMPTS)
-		{	
-			CLogSingle::logError("DStopRequest::fsm_state_csp timeout. nowpos=%d, dstpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->dstpos);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-			req->reqState = REQUEST_STATE_FAIL;
-		}
-		else
+		if(CSP != RESP_CMD_CODE(req->respData)
+			&& GET_STATUS != RESP_CMD_CODE(req->respData )
+			&& req->rechecks--)
 		{
-			CLogSingle::logWarning("DStopRequest::fsm_state_csp retries. nowpos=%d, dstpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->dstpos);
-			req->dmc->restoreLastCmd(req->cmdData);
-			req->rechecks = RETRIES;
+			return;
 		}
-		
-		return;
+
+		int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+
+		if ( !req->positionReached(req->respData->Data1, posBias) 
+			&& req->rechecks--)
+		{
+			return;
+		}
+
+		if (req->rechecks <= 0)						//等待位置到达超时
+		{
+			if (++req->attempts > MAX_ATTEMPTS)
+			{	
+				CLogSingle::logError("DStopRequest::fsm_state_csp timeout. nowpos=%d, dstpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->dstpos);
+				req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+				req->reqState = REQUEST_STATE_FAIL;
+			}
+			else
+			{
+				CLogSingle::logWarning("DStopRequest::fsm_state_csp retries. nowpos=%d, dstpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->dstpos);
+				req->dmc->restoreLastCmd(req->cmdData);
+				req->rechecks = RETRIES;
+			}
+			
+			return;
+		}
 	}
 
-	//CLogSingle::logWarning("axis = %d Dec Reached.", __FILE__, __LINE__, req->slave_idx);
+	
+
+	CLogSingle::logInformation("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
 
 	
 	//fprintf(stdout, "dec Reached. CurrentPos=%d, q1 = %f.\n", req->respData->Data1, req->dParam.q1);
 
 	//目标位置已到达,更新新的绝对位置
-	req->dmc->setDriverCmdPos(req->slave_idx, req->dstpos);
-
+	if(req->stopInfo.valid)
+		req->dmc->setDriverCmdPos(req->slave_idx, req->stopInfo.endpos);
+	else
+		req->dmc->setDriverCmdPos(req->slave_idx, req->dmc->getCurpos(req->slave_idx));
+	
 	if (req->serveOff)
 	{//需关闭电机使能
 		req->fsmstate		= DStopRequest::fsm_state_svoff;
@@ -142,6 +150,9 @@ void DStopRequest::fsm_state_start(DStopRequest *req)
 	req->cmdData->CMD 	= CSP;
 	
 	req->cmdData->Data1 = req->dParam.position();
+
+	//将减速命令加入到队列中
+	RdWrManager::instance().declStop(req->slave_idx, &req->stopInfo);
 }
 
 bool DStopRequest::startPlan()
@@ -163,9 +174,9 @@ bool DStopRequest::startPlan()
 bool  DStopRequest::positionReached(int q , int bias) const
 {
 	if (bias)
-		return (::abs(q - this->dstpos) < bias);
+		return (::abs(q - this->stopInfo.endpos) < bias);
 	else
-		return q == this->dstpos;
+		return q == this->stopInfo.endpos;
 }
 
 void DStopRequest::exec()
@@ -373,6 +384,8 @@ void MoveRequest::fsm_state_start(MoveRequest *req)
 		req->dstpos = req->dist;
 	else
 		req->dstpos = req->startpos + req->dist;
+
+	CLogSingle::logInformation("MoveRequest::fsm_state_start startpos = %d, dstpos=%d.", __FILE__, __LINE__, req->startpos, req->dstpos);
 
 	if(req->dmc->isDriverOpCsp(req->slave_idx))
 	{//已经处于CSP模式
