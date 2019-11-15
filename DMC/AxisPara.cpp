@@ -2,6 +2,7 @@
 #include "CLogSingle.h"
 
 #include <stdlib.h>
+#include <cassert>
 
 BaseRef::BaseRef()
 {
@@ -411,13 +412,13 @@ int ArchlRef::startPlan()
 
 int ArchlRef::totalCycles() const
 {
+	assert(this->ts1 + this->down_param.cycles >= 1);
 	return (this->ts1 + this->down_param.cycles);
 }
 
-
 bool ArchlRef::lastCycle() const
 {
-	return (this->elapsed >= (this->ts1 + this->down_param.cycles) - 1);
+	return (this->elapsed >= totalCycles() - 1);
 }
 
 double	ArchlRef::getLineDistanceRatio(int slave_index)

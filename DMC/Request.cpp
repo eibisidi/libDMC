@@ -111,7 +111,7 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 		}
 	}
 
-	CLogSingle::logInformation("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
+	//CLogSingle::logInformation("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
 
 	//目标位置已到达,更新新的绝对位置
 	if(req->stopInfo.valid)
@@ -1259,14 +1259,6 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 			items[row * axises + col].index    		= para->req->slave_idx;							//从站地址
 			items[row * axises + col].cmdData.CMD  	= CSP;
 			items[row * axises + col].cmdData.Data1  = para->nextPosition(para->req->slave_idx);	//CSP目的位置
-
-			if (row == cycles - 1)	//存储最后一个位置用于重发
-			{
-				para->req->cmdData->CMD 	= CSP;
-				para->req->cmdData->Data1   = items[row * axises + col].cmdData.Data1;
-
-				CLogSingle::logInformation("Axis=%d, dstpos=%d.",__FILE__,__LINE__, para->req->slave_idx, (int)(items[row * axises + col].cmdData.Data1));
-			}
 		}
 	}
 
@@ -1308,7 +1300,6 @@ MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, b
 	this->slave_idx = axis;
 	this->fsmstate = fsm_state_start;
 	this->axispara = new LinearPara(newLinearRef, this, startpos, dstpos);
-	CLogSingle::logInformation("Line axis=%d, startpos=%d, dstpos=%d.", __FILE__, __LINE__, axis, startpos, dstpos);
 
 	double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);	
 	if (dist > newLinearRef->max_dist)
