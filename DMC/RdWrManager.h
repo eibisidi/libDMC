@@ -60,7 +60,7 @@ public:
 
 private:
 	void clear();
-	int popItems(transData *cmdData);
+	int popItems(transData *cmdData, size_t count);
 
 	Poco::Thread		m_thread;
 	Poco::Mutex  		m_mutex;

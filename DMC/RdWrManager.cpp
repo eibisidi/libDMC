@@ -2,7 +2,6 @@
 #include "CLogSingle.h"
 #include "DmcManager.h"
 
-
 #define FIFO_REMAIN(respData) 	((respData)[0].Data2 & 0xFFFF)	//FIFO剩余空间
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
@@ -54,20 +53,27 @@ void RdWrManager::clear()
 	memset(lastSent, 0, sizeof(lastSent));
 }
 
-int RdWrManager::popItems(transData *cmdData)
+int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 {	
-
-#if 0
-	LARGE_INTEGER frequency;								//计时器频率 
+#ifdef TIMING
+	static double longest = 0;
+	static double shortest = 1000000;
+	static double total = 0;
+	static int	  count = 0;
+	LARGE_INTEGER frequency;									//计时器频率 
 	QueryPerformanceFrequency(&frequency);	 
-	double quadpart = (double)frequency.QuadPart / 1000000;    //计时器频率   
+	double quadpart = (double)frequency.QuadPart / 1000000;    	//计时器频率   
 
 	LARGE_INTEGER timeStart, timeEnd;
 	double elapsed;
 	QueryPerformanceCounter(&timeStart); 
 #endif
+
 	int activeItems = 0;
 	int slaveidx;
+	
+	memset(cmdData, 0, sizeof(transData)* cmdcount);
+	
 	m_mutex.lock();	
 	
 	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
@@ -156,12 +162,26 @@ int RdWrManager::popItems(transData *cmdData)
 
 	m_mutex.unlock();
 
-	return activeItems;
-#if 0
+#ifdef TIMING
+
 	QueryPerformanceCounter(&timeEnd); 
 	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
-	printf("time elapsed = %f\n", elapsed);
+
+	if (elapsed > 1000)
+		(void)elapsed;
+	
+	total += elapsed;
+	if(elapsed > longest)
+		longest = elapsed;
+	if (elapsed < shortest)
+		shortest = elapsed;
+	++count;
+	printf("popItems elapsed = %f, longest=%f, shortest=%f, average=%f.\n", elapsed, longest, shortest, total/count);
 #endif
+
+
+	return activeItems;
+
 }
 
 //每行代表一个周期，每列代表一个从站
@@ -283,8 +303,7 @@ void RdWrManager::run()
 
 		while(towrite--)
 		{
-			memset(cmdData, 0, sizeof(cmdData));
-			popItems(cmdData);
+			popItems(cmdData, DEF_MA_MAX);
 
 			do{
 				bRet =  ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData));

@@ -11,17 +11,11 @@
 #include "Poco/Thread.h"
 #include "Request.h"
 
+//#define TIMING 1
+
 using std::map;
 
-#if 1
-#define FIFO_REMAIN(respData) 	((respData)[0].Data2 & 0xFFFF)	//FIFO剩余空间
-#define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
-#endif
-
-//#define BATCH_WRITE		(10)
-//#define FIFO_LOWATER	(100)			
-//#define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
 
 enum OpMode

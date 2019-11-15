@@ -794,30 +794,41 @@ void DmcManager::restoreLastCmd(transData *cmdData)
 
 void DmcManager::setRespData(transData *respData)
 {
-#if 0
-		LARGE_INTEGER frequency;								//计时器频率 
-		QueryPerformanceFrequency(&frequency);	 
-		double quadpart = (double)frequency.QuadPart / 1000000;    //计时器频率   
-	
-		LARGE_INTEGER timeStart, timeEnd;
-		double elapsed;
-		QueryPerformanceCounter(&timeStart); 
+#ifdef TIMING
+	static double longest = 0;
+	static double shortest = 1000000;
+	static double total = 0;
+	static int	  count = 0;
+	LARGE_INTEGER frequency;									//计时器频率 
+	QueryPerformanceFrequency(&frequency);	 
+	double quadpart = (double)frequency.QuadPart / 1000000; 	//计时器频率	
+
+	LARGE_INTEGER timeStart, timeEnd;
+	double elapsed;
+	QueryPerformanceCounter(&timeStart); 
 #endif
 
+
 	m_mutexRespData.lock();
-	//printf("setRespData signaled\n");
 
 	memcpy(m_realRespData, respData, sizeof(m_realRespData));
 	newRespData = true;
 	m_conditionRespData.signal();
 	m_mutexRespData.unlock();
 
-#if 0
-		QueryPerformanceCounter(&timeEnd); 
-		elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
-		printf("time elapsed = %f\n", elapsed);
-#endif
+#ifdef TIMING
 
+	QueryPerformanceCounter(&timeEnd); 
+	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
+	
+	total += elapsed;
+	if(elapsed > longest)
+		longest = elapsed;
+	if (elapsed < shortest)
+		shortest = elapsed;
+	++count;
+	printf("setRespData elapsed = %f, longest=%f, shortest=%f, average=%f.\n", elapsed, longest, shortest, total/count);
+#endif
 }
 
 void DmcManager::copyRespData()
