@@ -143,9 +143,10 @@ int LinearRef::totalCycles() const
 	return (moveparam->cycles);
 }
 
-bool LinearRef::moreCycles() const
-{
-	return (moveparam->cycles > moveparam->elapsed);
+bool LinearRef::lastCycle() const
+{//是否为最后一个周期
+	 return (moveparam->elapsed >= moveparam->cycles - 1);
+//	return (moveparam->cycles > moveparam->elapsed);
 }
 
 double	LinearRef::getDistanceRatio(int slave_index)
@@ -190,9 +191,9 @@ int  BaseMultiAxisPara::totalCycles() const
 	return cycles;
 }
 
-bool BaseMultiAxisPara::moreCycles() const
+bool BaseMultiAxisPara::lastCycle() const
 {
-	bool more = this->ref->moreCycles();
+	bool more = this->ref->lastCycle();
 	return more;
 }
 
@@ -271,7 +272,7 @@ int LinearPara::nextPosition(int slaveidx)
 	
 	double distRatio = linearRef->getDistanceRatio(slaveidx); // > 0
 	
-	if (!linearRef->moreCycles())
+	if (linearRef->lastCycle())
 	//避免浮点数计算误差
 		nextpos = this->dstpos;
 	else
@@ -414,9 +415,9 @@ int ArchlRef::totalCycles() const
 }
 
 
-bool ArchlRef::moreCycles() const
+bool ArchlRef::lastCycle() const
 {
-	return (this->elapsed < (this->ts1 + this->down_param.cycles));
+	return (this->elapsed >= (this->ts1 + this->down_param.cycles) - 1);
 }
 
 double	ArchlRef::getLineDistanceRatio(int slave_index)
@@ -507,7 +508,7 @@ int ArchlMultiAxisPara::nextPosition(int slaveidx) 	//获得下一个规划位置
 	int 	nextpos;
 	ArchlRef *archlRef = dynamic_cast<ArchlRef *> (this->ref);
 
-	if (!archlRef->moreCycles())//避免浮点数计算误差
+	if (archlRef->lastCycle())//避免浮点数计算误差
 		nextpos = this->dstpos;
 	else
 	{

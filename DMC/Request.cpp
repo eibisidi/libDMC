@@ -195,7 +195,8 @@ void MoveRequest::fsm_state_csp(MoveRequest *req)
 		else
 		{
 			CLogSingle::logWarning("MoveRequest::fsm_state_csp attempts=%d. axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->attempts, req->slave_idx, (int)req->respData->Data1, req->dstpos);
-			req->dmc->restoreLastCmd(req->cmdData);
+			req->cmdData->CMD   = CSP;
+			req->cmdData->Data1 = req->dstpos;
 			req->cmdData->Data2 = CSP_DATA2_DUMMY;	//特殊处理让充发位置可以进入待发送队列
 			req->rechecks = RETRIES;
 		}
@@ -981,15 +982,16 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 	{
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
-			CLogSingle::logError("LineRequest::fsm_state_csp, axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
+			CLogSingle::logError("MultiAxisRequest::fsm_state_csp, axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
 			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
 			req->axispara->setError();
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
 		{
-			CLogSingle::logWarning("LineRequest::fsm_state_csp retries, axis=%d nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
-			req->dmc->restoreLastCmd(req->cmdData);
+			CLogSingle::logWarning("MultiAxisRequest::fsm_state_csp attemps=%d, axis=%d nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->attempts, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
+			req->cmdData->CMD = CSP;
+			req->cmdData->Data1 = req->axispara->dstpos;
 			req->cmdData->Data2 = CSP_DATA2_DUMMY;	//特殊处理让充发位置可以进入待发送队列
 			req->rechecks = RETRIES;
 		}
@@ -1262,9 +1264,12 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 			{
 				para->req->cmdData->CMD 	= CSP;
 				para->req->cmdData->Data1   = items[row * axises + col].cmdData.Data1;
+
+				CLogSingle::logInformation("Axis=%d, dstpos=%d.",__FILE__,__LINE__, para->req->slave_idx, (int)(items[row * axises + col].cmdData.Data1));
 			}
 		}
 	}
+
 
 	req->dmc->m_rdWrManager.pushItems(items, cycles, axises);
 
@@ -1303,6 +1308,7 @@ MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, b
 	this->slave_idx = axis;
 	this->fsmstate = fsm_state_start;
 	this->axispara = new LinearPara(newLinearRef, this, startpos, dstpos);
+	CLogSingle::logInformation("Line axis=%d, startpos=%d, dstpos=%d.", __FILE__, __LINE__, axis, startpos, dstpos);
 
 	double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);	
 	if (dist > newLinearRef->max_dist)
