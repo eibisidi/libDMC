@@ -119,7 +119,7 @@ int _tmain(int argc, _TCHAR* argv[])
 #pragma region STEP 5 - SET_DC
 	cmdData[0].CMD = SET_DC;
 	cmdData[0].Parm = 0;
-	cmdData[0].Data1 = 2000; // set cycle time to 2000 us
+	cmdData[0].Data1 = 8000; // set cycle time to 2000 us
 	cmdData[0].Data2 = 0xFFFF; // Auto offet adjustment
 
 	if (!isOpen || !ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
@@ -204,7 +204,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		{
 			cmdData[1].CMD 	= CSP;
 			cmdData[1].Data1= curpos;
-			curpos += 60;					//每个周期固定增加0x100
+			curpos += 0x100;					//每个周期固定增加0x100
 
 
 			if (!isOpen || !ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))

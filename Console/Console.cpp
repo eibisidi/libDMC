@@ -9,11 +9,11 @@
 #include <math.h>
 #include <stdlib.h>
 
-#define  	TEST_MOVE
+//#define  	TEST_MOVE
 //#define 	TEST_HOME
 //#define TEST_IO
 //#define TEST_LINE
-//#define TEST_ARCHL
+#define TEST_ARCHL
 //#define TEST_DEC
 //#define TEST_ISTOP
 //#define TEST_INC
@@ -86,12 +86,11 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	if (0  != d1000_board_init())
 		return -1;
-	
 	//Sleep(3000);
 
 	HANDLE hThread;
     DWORD  threadId;
-	hThread = CreateThread(NULL, 0, ThreadFunc, 0, 0, &threadId); // 创建线程
+	//hThread = CreateThread(NULL, 0, ThreadFunc, 0, 0, &threadId); // 创建线程
 	
 	DWORD ms;
 #ifdef TEST_PLAN
@@ -154,21 +153,27 @@ int _tmain(int argc, _TCHAR* argv[])
 #ifdef TEST_DEC
 
 	srand(0);
-	long startpos = d1000_get_command_pos(1);
+	int axis = 1;
+	long startpos = d1000_get_command_pos(axis);
+	DWORD ret;
+	short axisArray[] = {1};
+	long distArray[] = {150000};
 	
 	while (true)
 	{
-		d1000_start_t_move(1, 150000, 0, 400000, 0.2);
+		//d1000_start_t_move(axis, 150000, 0, 30000, 0.2);
+		axisArray[0] = 1;
+		distArray[0] = -150000;
+		d1000_start_t_line(1, axisArray, distArray, 0, 30000, 0.2);
 
+		Sleep(50 + rand() % 1000);
 
-		Sleep(50 + rand() % 100);
-
-		//d1000_decel_stop(1, 0.1);
-		d1000_immediate_stop(1);
+		d1000_decel_stop(axis, 0.5);
+		//d1000_immediate_stop(1);
 
 		while(1)
 		{
-			ms = d1000_check_done(1);
+			ms = d1000_check_done(axis);
 			
 			if (MOVESTATE_BUSY != ms)
 				break;
@@ -178,22 +183,31 @@ int _tmain(int argc, _TCHAR* argv[])
 			printf("d1000_decel_stop error. ms=%d.\n", (int)ms);
 			throw;
 		}
-		//Sleep(2000);
+		Sleep(2000);
 
-		d1000_start_ta_move(1, startpos, 0, 400000, 0.2);
-		while(1)
-		{
-			ms = d1000_check_done(1);
-			
-			if (MOVESTATE_BUSY != ms)
-				break;
-		}
-		if (ms != MOVESTATE_STOP)
-		{
-			printf("d1000_decel_stop error.\n");
-			throw;
-		}
+		axisArray[0] = 1;
+		distArray[0] = startpos;
 
+
+		//if (ERR_NOERR == (ret=d1000_start_ta_move(axis, startpos, 0, 30000, 0.2)))
+		if (ERR_NOERR == (ret=d1000_start_ta_line(1, axisArray, distArray, 0, 30000, 0.2)))
+		{
+			while(1)
+			{
+				ms = d1000_check_done(axis);
+				
+				if (MOVESTATE_BUSY != ms)
+					break;
+			}
+			if (ms != MOVESTATE_STOP)
+			{
+				printf("d1000_start_ta_move error. ms=%d\n", ms);
+				throw;
+			}
+		}
+		else{
+			printf("ret = %d\n", ret);
+		}
 		//Sleep(2000);
 	}
 #endif
@@ -396,9 +410,12 @@ int _tmain(int argc, _TCHAR* argv[])
 		r_distArray[1] = 50000 + rand() % 100000;
 		r_distArray[2] = 50000 + rand() % 100000;
 
-		printf("zmove = %d, xmove=%d, ymove = %d.\n", r_distArray[0], r_distArray[1], r_distArray[2]);
+		//printf("zmove = %d, xmove=%d, ymove = %d.\n", r_distArray[0], r_distArray[1], r_distArray[2]);
 		
-		d1000_start_t_archl(2, r_axisArray, r_distArray,100000, 0.2, hh, hu, hd);	//
+		d1000_start_t_archl(3, r_axisArray, r_distArray,30000, 0.2, hh, hu, hd);	//
+
+		Sleep(500 + rand()/5000);
+		//d1000_immediate_stop(2);
 
 		while(1)
 		{
@@ -408,18 +425,20 @@ int _tmain(int argc, _TCHAR* argv[])
 				break;
 		}
 
-		if (ms != MOVESTATE_STOP)
+		if (ms != MOVESTATE_CMD_STOP && ms!= MOVESTATE_STOP)
 		{
-			printf("move error.\n");
+			printf("decel_stop error.\n");
 			throw;
 		}
+		Sleep(2000);
 
 		r_distArray[0] = zstartpos;
 		r_distArray[1] = xstartpos;
 		r_distArray[2] = ystartpos;
+		printf("zmove = %d, xmove=%d, ymove = %d.\n", r_distArray[0], r_distArray[1], r_distArray[2]);
 
-		d1000_start_ta_archl(2, r_axisArray, r_distArray,100000, 0.2, hh, hd, hu); //
-		
+		d1000_start_ta_archl(3, r_axisArray, r_distArray,30000, 0.2, hh, hd, hu); //
+		//d1000_start_ta_line(3, r_axisArray, r_distArray, 0, 100000, 0.2);
 		while(1)
 		{
 			ms = d1000_check_done(1);
@@ -430,9 +449,10 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		if (ms != MOVESTATE_STOP)
 		{
-			printf("move error.\n");
+			printf("d1000_start_ta_line error.\n");
 			throw;
 		}
+		Sleep(2000);
 	}
 	
 #endif
