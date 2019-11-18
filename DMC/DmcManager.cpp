@@ -145,9 +145,12 @@ void	DmcManager::clear()
 	m_init = false;
 	m_canceled = false;
 	m_sdoOwner = NULL;
+	newRespData = false;
 	memset(m_cmdData, 0, sizeof(m_cmdData));
 	memset(m_lastCmdData, 0, sizeof(m_lastCmdData));
 	memset(m_respData, 0, sizeof(m_respData));
+	memset(m_realRespData, 0, sizeof(m_respData));
+
 	memset(m_slaveType, None, sizeof(m_slaveType));
 
 	for(map<int, BaseRequest *>::const_iterator iter = m_requests.begin();
@@ -309,7 +312,9 @@ unsigned long DmcManager::init()
 	initSlaveState();
 
 	//启动线程
-	m_thread.setPriority(Poco::Thread::PRIO_HIGHEST);
+	m_rdWrManager.start();
+	
+	m_thread.setPriority(Poco::Thread::PRIO_NORMAL);
 	m_thread.start(*this);
 
 	//所有驱动器清除告警
@@ -366,6 +371,8 @@ void DmcManager::close()
 
 	m_thread.join();
 
+	m_rdWrManager.cancel();		//停止线程
+
 	::ClearCmdData(m_cmdData);
 	m_cmdData[0].CMD = SET_STATE;
 	m_cmdData[0].Data1 = STATE_INIT; 
@@ -383,6 +390,16 @@ void DmcManager::close()
 
 void DmcManager::beforeWriteCmd()
 {
+#ifdef TIMING
+	LARGE_INTEGER frequency;								//计时器频率 
+	QueryPerformanceFrequency(&frequency);	 
+	double quadpart = (double)frequency.QuadPart / 1000000;    //计时器频率   
+
+	LARGE_INTEGER timeStart, timeEnd;
+	double elapsed;
+	QueryPerformanceCounter(&timeStart); 
+#endif
+
 	memset(m_cmdData, 0, sizeof(m_cmdData));
 	for (map<int,BaseRequest *>::const_iterator iter = m_requests.begin();
 			iter != m_requests.end();
@@ -401,7 +418,6 @@ void DmcManager::beforeWriteCmd()
 		}
 		else
 			iter++;
-
 
 		if (m_cmdData[slave_idx].CMD != GET_STATUS)
 		{
@@ -431,6 +447,12 @@ void DmcManager::beforeWriteCmd()
 		}
 
 	}
+
+#ifdef TIMING
+	QueryPerformanceCounter(&timeEnd); 
+	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
+	printf("time elapsed = %f\n", elapsed);
+#endif
 }
 
 void  DmcManager::initSlaveState()
@@ -624,6 +646,7 @@ int DmcManager::getServoPosBias() const
 
 void DmcManager::updateState()
 {
+	#if 0
 	//检查FIFO是否被覆盖
 	if(m_masterState.fifoFull != FIFO_FULL(m_respData))
 	{
@@ -654,7 +677,7 @@ void DmcManager::updateState()
 	m_masterState.fifoFull = FIFO_FULL(m_respData);
 	m_masterState.fifoRemain = FIFO_REMAIN(m_respData);
 
-
+#endif
 	//更新驱动器状态
 	unsigned CMD;
 	for (map<int, DriverState>::iterator iter = m_driverState.begin();
@@ -769,6 +792,78 @@ void DmcManager::restoreLastCmd(transData *cmdData)
 	*cmdData = m_lastCmdData[slaveidx];
 }
 
+void DmcManager::setRespData(transData *respData)
+{
+#ifdef TIMING
+	static double longest = 0;
+	static double shortest = 1000000;
+	static double total = 0;
+	static int	  count = 0;
+	LARGE_INTEGER frequency;									//计时器频率 
+	QueryPerformanceFrequency(&frequency);	 
+	double quadpart = (double)frequency.QuadPart / 1000000; 	//计时器频率	
+
+	LARGE_INTEGER timeStart, timeEnd;
+	double elapsed;
+	QueryPerformanceCounter(&timeStart); 
+#endif
+
+
+	m_mutexRespData.lock();
+
+	memcpy(m_realRespData, respData, sizeof(m_realRespData));
+	newRespData = true;
+	m_conditionRespData.signal();
+	m_mutexRespData.unlock();
+
+#ifdef TIMING
+
+	QueryPerformanceCounter(&timeEnd); 
+	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
+	
+	total += elapsed;
+	if(elapsed > longest)
+		longest = elapsed;
+	if (elapsed < shortest)
+		shortest = elapsed;
+	++count;
+	printf("setRespData elapsed = %f, longest=%f, shortest=%f, average=%f.\n", elapsed, longest, shortest, total/count);
+#endif
+}
+
+void DmcManager::copyRespData()
+{
+#if 0
+		LARGE_INTEGER frequency;								//计时器频率 
+		QueryPerformanceFrequency(&frequency);	 
+		double quadpart = (double)frequency.QuadPart / 1000000;    //计时器频率   
+	
+		LARGE_INTEGER timeStart, timeEnd;
+		double elapsed;
+		QueryPerformanceCounter(&timeStart); 
+#endif
+	m_mutexRespData.lock();
+	
+	while(!newRespData)
+		m_conditionRespData.wait(m_mutexRespData);
+
+	memcpy(m_respData, m_realRespData, sizeof(m_realRespData));
+	newRespData = false;
+
+	m_mutexRespData.unlock();
+
+	updateState();
+
+#if 0
+			QueryPerformanceCounter(&timeEnd); 
+			elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
+			printf("time elapsed = %f\n", elapsed);
+#endif
+
+}
+
+
+
 bool DmcManager::isDriverOpCsp(short slaveidx)
 {
 	assert (m_driverState.count(slaveidx) > 0);
@@ -829,75 +924,43 @@ void DmcManager::setIoRS(short slavidx, IoRequestState iors)
 }
 
 void DmcManager::run()
-{
-	int towrite, written;
-
-	towrite = BATCH_WRITE;
-	written = 0;
-
-	//初始化FIFO状态
-	if (!ECMUSBRead((unsigned char*)m_respData, sizeof(m_respData)))
-	{
-		CLogSingle::logFatal("ECMUSBRead failed.", __FILE__, __LINE__);
-		return;
-	}
-	
-	m_masterState.fifoFull 		= FIFO_FULL(m_respData);
-	m_masterState.fifoRemain	= FIFO_REMAIN(m_respData);
-	
+{	
+	int i, cols;
 	while(!m_canceled)
-	{
+	{		
 		m_mutex.lock();
-		
-		if (!m_requests.empty())
+		if(!m_requests.empty())
 		{
-			while (written < towrite)
+			beforeWriteCmd();
+
+			for(i = 0, cols = 0; i < DEF_MA_MAX; ++i)
 			{
-				beforeWriteCmd();
-				while (!ECMUSBWrite((unsigned char*)m_cmdData, sizeof(m_cmdData)))
-				{
-					CLogSingle::logFatal("ECMUSBWrite failed.", __FILE__, __LINE__);
-				}
-				++written;
+				if (m_cmdData[i].CMD == GET_STATUS
+					|| (m_cmdData[i].CMD == CSP && m_cmdData[i].Data2 == 0))
+					continue;
+
+				if (m_cmdData[i].CMD == CSP)
+					m_cmdData[i].Data2 = 0;			//CSP最后位置重发
+			
+				m_items[cols].index = i;
+				m_items[cols].cmdData = m_cmdData[i];
+				++cols;
 			}
 
-			do {
-				if (!ECMUSBRead((unsigned char*)m_respData, sizeof(m_respData)))
-				{
-					CLogSingle::logFatal("ECMUSBWrite failed.", __FILE__, __LINE__);
-				}
+			if (cols > 0)
+				m_rdWrManager.pushItems(m_items, 1, cols);	//加入发送队列
 
-				updateState();
-
-				if (m_masterState.fifoEmptyCount >= 1)
-				{
-					break;//避免出现死循环
-				}
-			}while(!m_masterState.fifoIncre || m_masterState.fifoRemain <= FIFO_LOWATER);	//FIFO剩余空间增加，且剩余空间>FIFO_LOWATER
-
-			towrite = BATCH_WRITE;
-			written = 0;
-			m_masterState.fifoEmptyCount = 0;
-			printf("towrite = %d, remain=%d, full=%d, emptyCount=%d.\n", towrite, m_masterState.fifoRemain, m_masterState.fifoFull, m_masterState.fifoEmptyCount);
+			copyRespData();//接收队列处理，刷新
 		}
 		else
 		{
-			if (!ECMUSBRead((unsigned char*)m_respData, sizeof(m_respData)))
-			{
-				CLogSingle::logFatal("ECMUSBRead failed.", __FILE__, __LINE__);
-			}
-			updateState();
-			
-			m_condition.tryWait(m_mutex, 10);	//休眠10ms
+			m_rdWrManager.setIdle();
+			m_condition.tryWait(m_mutex, 10);	//休眠10ms，等待用户命令
 		}
-		
 		m_mutex.unlock();
-		Poco::Thread::yield();	//让出CPU避免连续获得锁//m_thread.wakeUp();	
-
-
 	}
 
-	CLogSingle::logInformation("Thread canceled.", __FILE__, __LINE__);
+	CLogSingle::logInformation("DmcManager Thread canceled.", __FILE__, __LINE__);
 }
 
 unsigned long DmcManager::clr_alarm(short axis)
@@ -1118,10 +1181,16 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 
 		//判断目标位置是否已经到达
 		if (!abs && Dist == 0)
+		{
+			setMoveState(axis, MOVESTATE_STOP);
 			break;						//相对模式，距离为0
+		}
 
 		if (abs && Dist == getDriverCmdPos(axis))
+		{
+			setMoveState(axis, MOVESTATE_STOP);
 			break;						//绝对模式，位置已到达
+		}
 	
 		newReq = new MoveRequest;
 		if (NULL == newReq)
@@ -1348,9 +1417,6 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 	assert(tDec > 1E-6);
 	unsigned long retValue = ERR_NOERR;
 	DStopRequest *newReq = NULL;
-	double curspeed;
-	int    curpos ;
-	bool	moving = false;
 
 	m_mutex.lock();
 	do{
@@ -1369,18 +1435,7 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 		MoveRequest *moveReq = dynamic_cast<MoveRequest * >(m_requests[axis]);
 		if (NULL != moveReq)
 		{//单轴运动
-			curspeed = moveReq->getCurSpeed();
-			curpos 	 = moveReq->getCurPos();
-
-			newReq = new DStopRequest;
-				
-			newReq->slave_idx	= axis;
-			if (fabs(curspeed) > 1E-6)			//当前速度大于0，否则为500
-				newReq->maxa		= fabs(curspeed / tDec);
-			newReq->serveOff	= bServOff;
-			newReq->startSpeed	= curspeed;
-			newReq->startpos	= curpos;
-
+			newReq = new DStopRequest(axis, tDec, bServOff);
 			setMoveState(axis, MOVESTATE_BUSY);
 			addRequest(axis, newReq);
 		}
@@ -1396,17 +1451,7 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 				{
 					BaseMultiAxisPara *para = *iter;
 
-					curspeed = para->req->getCurSpeed();
-					curpos 	 = para->req->getCurPos();
-					
-					newReq = new DStopRequest;
-						
-					newReq->slave_idx 	= para->req->slave_idx;
-					if (fabs(curspeed) > 1E-6)			//当前速度大于0，否则为500
-						newReq->maxa		= fabs(curspeed / tDec);
-					newReq->serveOff	= bServOff;
-					newReq->startSpeed	= curspeed;
-					newReq->startpos	= curpos;
+					newReq = new DStopRequest(para->req->slave_idx, tDec, bServOff);
 					
 					setMoveState(para->req->slave_idx, MOVESTATE_BUSY);
 					addRequest(para->req->slave_idx, newReq);

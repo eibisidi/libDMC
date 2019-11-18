@@ -44,6 +44,9 @@
     <ClInclude Include="AxisPara.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="RdWrManager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CLogSingle.cpp">
@@ -62,6 +65,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="AxisPara.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="RdWrManager.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

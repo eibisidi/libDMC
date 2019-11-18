@@ -2,6 +2,7 @@
 #define DMC_MANAGER
 #include "DMC.h"
 #include <map>
+#include "RdWrManager.h"
 
 #include "NEXTWUSBLib_12B.h"
 #include "Poco/Mutex.h"
@@ -10,15 +11,11 @@
 #include "Poco/Thread.h"
 #include "Request.h"
 
+//#define TIMING 1
+
 using std::map;
 
-#define FIFO_REMAIN(respData) 	((respData)[0].Data2 & 0xFFFF)	//FIFO剩余空间
-#define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
-
-#define BATCH_WRITE		(10)
-#define FIFO_LOWATER	(100)			
-#define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
 
 enum OpMode
@@ -143,8 +140,13 @@ public:
 	bool	getSdoCmdResp(BaseRequest *req, transData **ppCmd, transData **ppResp);		//获取SDO命令，成功返回true
 	void 	freeSdoCmdResp(BaseRequest *req);											  //释放SDO命令
 	void restoreLastCmd(transData *cmdData);
+
+	void setRespData(transData *respData);
+	void copyRespData();
 	
 	virtual ~DmcManager();
+
+	RdWrManager m_rdWrManager;			//发送接收管理线程
 private:
 	DmcManager();
 	void 	clear();
@@ -173,6 +175,11 @@ private:
 	unsigned char		m_slaveType[DEF_MA_MAX - 2]; //从站类型, DRIVER/IO
 
 
+	Poco::Mutex  		m_mutexRespData;				//响应数据互斥量
+	Poco::Condition		m_conditionRespData;			//响应数据条件变量
+	bool				newRespData;					//响应数据是否刷新
+	transData			m_realRespData[DEF_MA_MAX];		//实时响应数据
+
 	MasterConfig		m_masterConfig;			//主站配置信息
 
 	map<int, BaseRequest *> m_requests;			
@@ -180,6 +187,8 @@ private:
 	MasterState			 m_masterState;			//主站状态
 	map<int, DriverState>m_driverState;			//电机状态
 	map<int, IoState>	 m_ioState;				//IO状态
+
+	Item				m_items[DEF_MA_MAX];
 };
 
 #endif

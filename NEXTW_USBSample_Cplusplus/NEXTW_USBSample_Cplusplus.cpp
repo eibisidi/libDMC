@@ -188,9 +188,9 @@ int _tmain(int argc, _TCHAR* argv[])
 	ECMUSBRead((unsigned char*)respData,sizeof(respData));
 	printf("Current Position: Slave 1 = %d, Slave 2 = %d, Slave 3 = %d.\n",respData[1].Data1,respData[2].Data1,respData[3].Data1);
 
-#if 0
+#if 1
 	unsigned int curpos = respData[1].Data1;		//当前位置
-	int towrite = 160;
+	int towrite = 24;
 
 	unsigned int last_remain = 160;
 	unsigned int last_fifofull = FIFO_FULL(respData);
@@ -227,7 +227,6 @@ int _tmain(int argc, _TCHAR* argv[])
 					if (FIFO_REMAIN(respData) < last_remain)
 					{
 						flag1 = 1;
-						checkempty = true;
 					}
 					break;
 				case 1:
@@ -237,13 +236,11 @@ int _tmain(int argc, _TCHAR* argv[])
 					}
 					break;
 				case 2:
-					if (FIFO_REMAIN(respData) == 160)
+					if (FIFO_REMAIN(respData) > 32)
 					{
-						Sleep(2000);
 						flag1 = 0;
-						checkempty = false;
 						last_remain = FIFO_REMAIN(respData);
-						towrite = 80;
+						towrite = 24;
 						goto LABEL;
 					}
 					break;
@@ -254,7 +251,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			
 			last_remain = FIFO_REMAIN(respData);
 
-			if (checkempty && FIFO_REMAIN(respData) == 160)
+			if (flag1 && FIFO_REMAIN(respData) == 160)
 			{
 				printf("FIFO EMPTY Error \n");
 				throw;
@@ -269,6 +266,7 @@ LABEL:
 	};
 #endif
 
+#if 0
 	unsigned int curpos = respData[1].Data1;		//当前位置
 	int towrite = 160;
 
@@ -296,7 +294,7 @@ LABEL:
 		towrite = 160;
 		printf("curpos=0x%x.\n", curpos);
 	};
-
+#endif
 
 
 

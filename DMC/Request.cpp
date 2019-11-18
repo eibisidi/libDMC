@@ -4,9 +4,12 @@
 #include <assert.h>
 #include <ctime>
 
-#define RETRIES (BATCH_WRITE * 50)
+
+#define RETRIES (10 * 50)
 #define MAX_ATTEMPTS (5)				
 #define MAKE_DWORD(h,l) ((h << 16) | (l))
+
+#define CSP_DATA2_DUMMY (0xFF)
 
 BaseRequest::BaseRequest()
 {
@@ -63,53 +66,59 @@ void DStopRequest::fsm_state_svoff(DStopRequest *req)
 
 void DStopRequest::fsm_state_csp(DStopRequest *req)
 {
-	if (req->dParam.cycles > req->dParam.elapsed)
-	{
-		req->cmdData->CMD	= CSP;
-		req->cmdData->Data1 = req->dParam.position();
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
+	{//尚未发送完毕
 		return;
 	}
 
-	if(CSP != RESP_CMD_CODE(req->respData)
-		&& GET_STATUS != RESP_CMD_CODE(req->respData )
-		&& req->rechecks--)
+	//发送已经完成
+	if(req->stopInfo.valid)
 	{
-		return;
-	}
-
-	if ( !req->positionReached(req->respData->Data1) 
-		&& req->rechecks--)
-	{
-		return;
-	}
-
-	if (req->rechecks <= 0						//等待位置到达超时
-			&& (!req->dmc->isServo(req->slave_idx)) || (!req->positionReached(req->respData->Data1, req->dmc->getServoPosBias())))
-	{
-		if (++req->attempts > MAX_ATTEMPTS)
-		{	
-			CLogSingle::logError("DStopRequest::fsm_state_csp timeout. nowpos=%d, dstpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->dstpos);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-			req->reqState = REQUEST_STATE_FAIL;
-		}
-		else
+		if(CSP != RESP_CMD_CODE(req->respData)
+			&& GET_STATUS != RESP_CMD_CODE(req->respData )
+			&& req->rechecks--)
 		{
-			CLogSingle::logWarning("DStopRequest::fsm_state_csp retries. nowpos=%d, dstpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->dstpos);
-			req->dmc->restoreLastCmd(req->cmdData);
-			req->rechecks = RETRIES;
+			return;
 		}
-		
-		return;
+
+		int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+
+		if ( !req->positionReached(req->respData->Data1, posBias) 
+			&& req->rechecks--)
+		{
+			return;
+		}
+
+		if (req->rechecks <= 0)						//等待位置到达超时
+		{
+			if (++req->attempts > MAX_ATTEMPTS)
+			{	
+				CLogSingle::logError("DStopRequest::fsm_state_csp timeout. nowpos=%d, endpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->stopInfo.endpos);
+				req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+				req->reqState = REQUEST_STATE_FAIL;
+			}
+			else
+			{
+				CLogSingle::logWarning("DStopRequest::fsm_state_csp timeout attempts=%d. nowpos=%d, endpos=%d.", __FILE__, __LINE__, req->attempts, (int)req->respData->Data1, req->stopInfo.endpos);
+				req->rechecks = RETRIES;
+
+				req->cmdData->CMD 	= CSP;
+				req->cmdData->Data1 = req->stopInfo.endpos;	//重发最终位置
+				req->cmdData->Data2 = CSP_DATA2_DUMMY;		//特殊处理让充发位置可以进入待发送队列				
+
+			}
+			return;
+		}
 	}
 
-	//CLogSingle::logWarning("axis = %d Dec Reached.", __FILE__, __LINE__, req->slave_idx);
-
-	
-	//fprintf(stdout, "dec Reached. CurrentPos=%d, q1 = %f.\n", req->respData->Data1, req->dParam.q1);
+	//CLogSingle::logInformation("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
 
 	//目标位置已到达,更新新的绝对位置
-	req->dmc->setDriverCmdPos(req->slave_idx, req->dstpos);
-
+	if(req->stopInfo.valid)
+		req->dmc->setDriverCmdPos(req->slave_idx, req->stopInfo.endpos);
+	else
+		req->dmc->setDriverCmdPos(req->slave_idx, req->dmc->getCurpos(req->slave_idx));
+	
 	if (req->serveOff)
 	{//需关闭电机使能
 		req->fsmstate		= DStopRequest::fsm_state_svoff;
@@ -126,43 +135,21 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 
 void DStopRequest::fsm_state_start(DStopRequest *req)
 {
-	if (!req->startPlan())
-	{
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
-		req->reqState = REQUEST_STATE_FAIL;
-		return;
-	}
-
 	req->cmdData	= req->dmc->getCmdData(req->slave_idx);
 	req->respData	= req->dmc->getRespData(req->slave_idx);
 	req->fsmstate	 	= fsm_state_csp;
 	req->cmdData->CMD 	= CSP;
 	
-	req->cmdData->Data1 = req->dParam.position();
-}
-
-bool DStopRequest::startPlan()
-{
-	dParam.q0 = this->startpos;
-	dParam.v0 = this->startSpeed;
-	dParam.amax = this->maxa;		
-	
-	if (-1 == ::Plan_D(&dParam))
-	{
-		CLogSingle::logError("Plan_D failed, axis=%d, q0=%f, v0=%f, amax=%f.", __FILE__, __LINE__,
-						this->slave_idx, dParam.q0, dParam.v0, dParam.amax);
-		return false;
-	}
-	this->dstpos = (int)(dParam.sign * dParam.q1);
-	return true;
+	//将减速命令加入到队列中
+	req->dmc->m_rdWrManager.declStop(req->slave_idx, &req->stopInfo);
 }
 
 bool  DStopRequest::positionReached(int q , int bias) const
 {
 	if (bias)
-		return (::abs(q - this->dstpos) < bias);
+		return (::abs(q - this->stopInfo.endpos) < bias);
 	else
-		return q == this->dstpos;
+		return q == this->stopInfo.endpos;
 }
 
 void DStopRequest::exec()
@@ -177,10 +164,8 @@ void MoveRequest::fsm_state_done(MoveRequest *req)
 
 void MoveRequest::fsm_state_csp(MoveRequest *req)
 {
-	if (req->moveparam->cycles > req->moveparam->elapsed)
-	{
-		req->cmdData->CMD 	= CSP;
-		req->cmdData->Data1 = req->curpos = req->moveparam->position();
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
+	{//尚未发送完毕
 		return;
 	}
 
@@ -190,26 +175,29 @@ void MoveRequest::fsm_state_csp(MoveRequest *req)
 	{
 		return;
 	}
+		
+	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
 
-	if ( !req->positionReached(req->respData->Data1) 
+	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)
 	{
 		return;
 	}
 		
-	if (req->rechecks <= 0						//等待位置到达超时
-		&& (!req->dmc->isServo(req->slave_idx)) || (!req->positionReached(req->respData->Data1, req->dmc->getServoPosBias())))
+	if (req->rechecks <= 0)						//等待位置到达超时
 	{
 		if (++req->attempts > MAX_ATTEMPTS)
 		{	
-			CLogSingle::logError("MoveRequest::fsm_state_csp timeout. axis=%d, nowpos=%d, lastsentpos=%d, dstpos=%d.", __FILE__, __LINE__,req->slave_idx, (int)req->respData->Data1, req->curpos, req->dstpos);
+			CLogSingle::logError("MoveRequest::fsm_state_csp timeout. axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__,req->slave_idx, (int)req->respData->Data1, req->dstpos);
 			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
 		{
-			CLogSingle::logWarning("MoveRequest::fsm_state_csp retries. axis=%d, nowpos=%d, lastsentpos=%d, dstpos=%d.", __FILE__, __LINE__,req->slave_idx, (int)req->respData->Data1, req->curpos, req->dstpos);
-			req->dmc->restoreLastCmd(req->cmdData);
+			CLogSingle::logWarning("MoveRequest::fsm_state_csp attempts=%d. axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->attempts, req->slave_idx, (int)req->respData->Data1, req->dstpos);
+			req->cmdData->CMD   = CSP;
+			req->cmdData->Data1 = req->dstpos;
+			req->cmdData->Data2 = CSP_DATA2_DUMMY;	//特殊处理让充发位置可以进入待发送队列
 			req->rechecks = RETRIES;
 		}
 		return;
@@ -268,9 +256,9 @@ void MoveRequest::fsm_state_svon(MoveRequest *req)
 
 	req->fsmstate	 	= fsm_state_csp;
 	req->cmdData->CMD 	= CSP;
-	
-	req->cmdData->Data1 = req->curpos = req->moveparam->position();
 	req->rechecks		= RETRIES;
+
+	pushCspPoints(req);
 }
 
 void MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
@@ -321,7 +309,7 @@ void MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
 		}
 		req->fsmstate	 	= MoveRequest::fsm_state_csp;
 		req->cmdData->CMD 	= CSP;	
-		req->cmdData->Data1 = req->curpos = req->moveparam->position();
+		pushCspPoints(req);
 	}
 	else
 	{
@@ -371,6 +359,8 @@ void MoveRequest::fsm_state_start(MoveRequest *req)
 	else
 		req->dstpos = req->startpos + req->dist;
 
+	CLogSingle::logInformation("MoveRequest::fsm_state_start startpos = %d, dstpos=%d.", __FILE__, __LINE__, req->startpos, req->dstpos);
+
 	if(req->dmc->isDriverOpCsp(req->slave_idx))
 	{//已经处于CSP模式
 		req->cmdData 	= req->dmc->getCmdData(req->slave_idx);
@@ -386,7 +376,7 @@ void MoveRequest::fsm_state_start(MoveRequest *req)
 		
 			req->fsmstate	 	= MoveRequest::fsm_state_csp;
 			req->cmdData->CMD 	= CSP;
-			req->cmdData->Data1 = req->curpos = req->moveparam->position();
+			pushCspPoints(req);
 		}
 		else
 		{
@@ -454,17 +444,25 @@ bool  MoveRequest::positionReached(int q , int bias) const
 		return q == this->dstpos;
 }
 
-double  MoveRequest::getCurSpeed() const
+void MoveRequest::pushCspPoints(MoveRequest *req)
 {
-	if (NULL == this->moveparam)
-		return 0;
+	int cycles = req->moveparam->cycles;
 
-	return this->moveparam->speed();
-}
+	Item *items = new Item[cycles];
+	for (int row = 0; row < cycles; ++row)
+	{
+		items[row].index 		= req->slave_idx;
+		items[row].cmdData.CMD 	= CSP;
+		items[row].cmdData.Data1=req->moveparam->position();
+	}
 
-int     MoveRequest::getCurPos()const
-{
-	return this->curpos;
+	//将最后一个位置点进行存储
+	req->cmdData->CMD 	= CSP;
+	req->cmdData->Data1 	= items[cycles-1].cmdData.Data1; 
+
+	req->dmc->m_rdWrManager.pushItems(items, cycles, 1);
+	delete [] items;
+	
 }
 
 void MoveRequest::exec()
@@ -908,478 +906,6 @@ void ServoOnRequest::exec()
 	fsmstate(this);
 }
 
-int LineRef::startPlan(double maxvel, double maxa, double maxj, MoveType movetype)
-{
-	if (0 == _planned)	//尚未规划
-	{
-		if (MOVETYPE_T == movetype)
-		{
-			TParam *newT = new TParam;
-			newT->q0   = 0;		
-			newT->q1   = _max_dist;
-			newT->vmax = maxvel;
-			newT->amax = maxa;
-			_moveparam = newT;
-			if(-1 == ::Plan_T(newT))
-			{
-				CLogSingle::logError("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f.", __FILE__, __LINE__,
-						newT->q0, newT->q1, newT->vmax, newT->amax);
-				_planned = -1;
-			}
-			else
-				_planned = 1;
-		}
-		else
-		{//S型规划
-			SParam *newS = new SParam;
-			newS->q0   = 0;		
-			newS->q1   = _max_dist;
-			newS->vmax = maxvel;
-			newS->amax = maxa;
-			newS->jmax = maxj;			//最大加加速度
-			_moveparam = newS;
-			if (-1 == ::Plan_S(newS))
-			{
-				CLogSingle::logError("Plan_S failed, q0=%f, q1=%f, vmax=%f, amax=%f, jmax=%f.", __FILE__, __LINE__,
-						newS->q0, newS->q1, newS->vmax, newS->amax, newS->jmax);
-				_planned = -1;
-			}
-			else
-				_planned = 1;
-		}
-		
-	}
-	return _planned;
-}
-
-
-double  LineRef::getDistanceRatio(int slave_index)
-{
-	if (slave_index == _last_slaveidx)
-	{
-		_cur_ratio = _moveparam->position() / _max_dist;
-	}
-
-	return _cur_ratio;
-}
-
-double LineRef::getCurrentVel() const
-{
-	return _moveparam->speed();
-}
-
-double LineRef::getRefDistance() const
-{
-	return _max_dist;
-}
-
-void LineRequest::fsm_state_done(LineRequest *req)
-{
-}
-
-void  LineRequest::fsm_state_wait_all_pos_reached(LineRequest *req)
-{
-	if(0 != req->ref->getError())
-	{
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
-		req->reqState = REQUEST_STATE_FAIL;
-		return;
-	}
-
-	if ( !req->ref->pos_allreached() 
-		&& req->rechecks--)
-	{
-		return;
-	}
-		
-	if (req->rechecks <= 0)
-	{
-		if (++req->attempts > MAX_ATTEMPTS)
-		{
-			CLogSingle::logError("LineRequest::fsm_state_wait_all_pos_reached timeouts, axis=%d, %d != %d.", __FILE__, __LINE__, req->slave_idx, req->ref->_svon_count, req->ref->_pos_reached_count);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-			req->ref->setError();
-			req->reqState = REQUEST_STATE_FAIL;
-		}
-		else
-		{
-			CLogSingle::logWarning("LineRequest::fsm_state_wait_all_pos_reached retries, axis=%d, %d != %d.", __FILE__, __LINE__, req->slave_idx, req->ref->_svon_count, req->ref->_pos_reached_count);
-			req->rechecks = RETRIES;
-		}
-		return;
-	}
-
-	req->fsmstate		= LineRequest::fsm_state_done;
-	req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
-	req->reqState		= REQUEST_STATE_SUCCESS;
-}
-
-void  LineRequest::fsm_state_csp(LineRequest *req)
-{
-	if(0 != req->ref->getError())
-	{
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
-		req->reqState = REQUEST_STATE_FAIL;
-		return;
-	}
-
-	if (req->ref->moreCycles())
-	{
-		req->cmdData->CMD	= CSP;
-		req->cmdData->Data1 = req->getPosition();
-		return;
-	}
-
-	if(CSP != RESP_CMD_CODE(req->respData)
-		&& GET_STATUS != RESP_CMD_CODE(req->respData )
-		&& req->rechecks--)
-	{
-		return;
-	}
-
-	if ( !req->positionReached(req->respData->Data1) 
-		&& req->rechecks--)
-	{
-		return;
-	}
-	
-	if (req->rechecks <= 0						//等待位置到达超时
-		&& (!req->dmc->isServo(req->slave_idx)) || (!req->positionReached(req->respData->Data1, req->dmc->getServoPosBias())))
-	{
-		if (++req->attempts > MAX_ATTEMPTS)
-		{
-			CLogSingle::logError("LineRequest::fsm_state_csp, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->dstpos);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-			req->ref->setError();
-			req->reqState = REQUEST_STATE_FAIL;
-		}
-		else
-		{
-			CLogSingle::logWarning("LineRequest::fsm_state_csp, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->dstpos);
-			req->dmc->restoreLastCmd(req->cmdData);
-			req->rechecks = RETRIES;
-		}
-		return;
-	}
-
-	//目标位置已到达,更新新的绝对位置
-	req->dmc->setDriverCmdPos(req->slave_idx, req->dstpos);
-
-	req->ref->reg_pos_reached();										//位置已经到达
-	req->fsmstate		= LineRequest::fsm_state_wait_all_pos_reached;
-	req->rechecks	 	= RETRIES;										//!!!重置，检测目标是否到达时，已经可能消耗过多
-}
-
-void  LineRequest::fsm_state_wait_all_svon(LineRequest *req)
-{
-	if(0 != req->ref->getError())
-	{
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
-		req->reqState = REQUEST_STATE_FAIL;
-		return;
-	}
-
-	if (!req->ref->sv_allon()
-		&& req->rechecks --)
-	{
-		return;
-	}
-
-	if (req->rechecks <= 0)
-	{
-		if (++req->attempts > MAX_ATTEMPTS)
-		{
-			CLogSingle::logError("LineRequest::fsm_state_wait_all_svon timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-			req->ref->setError();
-			req->reqState = REQUEST_STATE_FAIL;
-		}
-		else
-		{
-			CLogSingle::logWarning("LineRequest::fsm_state_wait_all_svon timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
-			req->rechecks = RETRIES;
-		}
-		return;
-	}
-
-	//所有电机均已经励磁
-	if (!req->startPlan())
-	{//规划失败
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
-		req->ref->setError();
-		req->reqState = REQUEST_STATE_FAIL;
-		return;
-	}
-
-	req->fsmstate	 	= LineRequest::fsm_state_csp;
-	req->cmdData->CMD 	= CSP;
-	req->cmdData->Data1 = req->getPosition();
-	req->rechecks		= RETRIES;
-}
-
-void  LineRequest::fsm_state_svon(LineRequest *req)
-{
-	if(0 != req->ref->getError())
-	{//其它电机已经出现错误
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
-		req->reqState = REQUEST_STATE_FAIL;
-		return;
-	}
-
-	//fprintf(stdout, "addr = %p, retry = %d, Cmd = 0x%x \n", req->respData, req->rechecks, req->respData->CMD);
-	if(SV_ON != RESP_CMD_CODE(req->respData)
-			&& GET_STATUS != RESP_CMD_CODE(req->respData)
-			&& req->rechecks--)
-	{
-		return;
-	}
-	//fprintf(stdout, "SVON StatusWord = 0x%x, CurrentPos=%d.\n", req->respData->Parm,req->respData->Data1);
-
-	if (!req->dmc->isDriverOn(req->slave_idx)
-		&& req->rechecks--)
-	{
-		return;
-	}
-			
-	if (req->rechecks <= 0)
-	{
-		if (++req->attempts > MAX_ATTEMPTS)
-		{
-			CLogSingle::logError("LineRequest::fsm_state_svon timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-			req->ref->setError();
-			req->reqState = REQUEST_STATE_FAIL;
-		}
-		else
-		{
-			CLogSingle::logWarning("LineRequest::fsm_state_svon timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->restoreLastCmd(req->cmdData);
-			req->rechecks = RETRIES;
-		}
-		return;
-	}
-
-	//fprintf(stdout, "SVON StatusWord = 0x%x, CurrentPos=%d.\n", req->respData->Parm,req->respData->Data1);
-
-	req->ref->reg_sv_on(req->slave_idx, req->getDistance());
-	req->fsmstate		= LineRequest::fsm_state_wait_all_svon;
-	req->rechecks		= RETRIES;
-}
-
-void  LineRequest::fsm_state_sdowr_cspmode(LineRequest *req)
-{
-	if(0 != req->ref->getError())
-	{//其它电机已经出现错误
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
-		req->reqState = REQUEST_STATE_FAIL;
-		return;
-	}
-
-	if(SDO_WR != RESP_CMD_CODE(req->respData)
-		&& GET_STATUS != RESP_CMD_CODE(req->respData)
-		&& req->rechecks--)
-	{
-		return;
-	}
-
-	if ((req->slave_idx != req->respData->Parm ||  0x60600000 != req->respData->Data1 || CSP_MODE != req->respData->Data2)
-		&& req->rechecks--)
-	{
-		return;
-	}
-	
-	if (req->rechecks <= 0)
-	{
-		if (++req->attempts > MAX_ATTEMPTS)
-		{
-			CLogSingle::logError("LineRequest::fsm_state_sdowr_cspmode timeout, axis=%d\n", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-			req->ref->setError();		
-			req->reqState = REQUEST_STATE_FAIL;
-		}
-		else
-		{
-			CLogSingle::logWarning("LineRequest::fsm_state_sdowr_cspmode timeout, axis=%d\n", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->restoreLastCmd(req->cmdData);
-			req->rechecks = RETRIES;
-		}
-		return;
-	}
-
-	//fprintf(stdout, "cspmode = %d.\n",req->respData->Data2);
-
-	//free sdo
-	req->dmc->freeSdoCmdResp(req);
-
-	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
-	req->respData		= req->dmc->getRespData(req->slave_idx);
-	req->fsmstate		= LineRequest::fsm_state_svon;
-	req->cmdData->CMD	= SV_ON;
-	req->rechecks		= RETRIES;
-}
-
-void  LineRequest::fsm_state_wait_sdowr_cspmode(LineRequest *req)
-{
-	if(0 != req->ref->getError())
-	{//其它电机已经出现错误
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
-		req->reqState = REQUEST_STATE_FAIL;
-		return;
-	}
-
-	if (!req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData)
-		&& req->rechecks --)
-	{
-		return;
-	}
-
-	if (req->rechecks <= 0)
-	{
-		if (++req->attempts > MAX_ATTEMPTS)
-		{
-			CLogSingle::logError("LineRequest::fsm_state_wait_sdowr_cspmode timeouts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-			req->ref->setError();					
-			req->reqState = REQUEST_STATE_FAIL;
-		}
-		else
-		{
-			CLogSingle::logWarning("LineRequest::fsm_state_wait_sdowr_cspmode retries, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->rechecks = RETRIES;
-		}
-		return;
-	}
-
-	req->fsmstate		= LineRequest::fsm_state_sdowr_cspmode;
-	req->cmdData->CMD	= SDO_WR;
-	req->cmdData->Parm	= 0x0100 | (req->slave_idx & 0xFF); 			//size | slaveidx
-	req->cmdData->Data1 = 0x60600000;									//index 0x6060 subindex 0x0000
-	req->cmdData->Data2 = CSP_MODE; 
-	req->rechecks		= RETRIES;
-}
-
-void  LineRequest::fsm_state_start(LineRequest *req)
-{	
-	if(0 != req->ref->getError())
-	{//其它电机已经出现错误
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
-		req->reqState = REQUEST_STATE_FAIL;
-		return;
-	}
-
-	//起始终止位置赋初值
-	req->startpos = req->dmc->getDriverCmdPos(req->slave_idx);
-	//printf("axis=%d startpos=%d.\n", req->slave_idx, req->startpos);
-	if (req->abs)
-		req->dstpos = req->dist;
-	else
-		req->dstpos = req->startpos + req->dist;
-
-	if(req->dmc->isDriverOpCsp(req->slave_idx))
-	{//已经处于CSP模式
-		req->cmdData	= req->dmc->getCmdData(req->slave_idx);
-		req->respData	= req->dmc->getRespData(req->slave_idx);
-		if (req->dmc->isDriverOn(req->slave_idx))
-		{//电机已经励磁
-			req->ref->reg_sv_on(req->slave_idx, req->getDistance());
-			req->fsmstate		= LineRequest::fsm_state_wait_all_svon;
-		}
-		else
-		{//电机尚未励磁
-			req->fsmstate		= LineRequest::fsm_state_svon;
-			req->cmdData->CMD		= SV_ON;
-		}
-	}
-	else 
-	{//处于非CSP模式，先切换到CSP模式		
-		if (req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData))
-		{
-			req->fsmstate		= LineRequest::fsm_state_sdowr_cspmode;
-			req->cmdData->CMD	= SDO_WR;
-			req->cmdData->Parm	= 0x0100 | (req->slave_idx & 0xFF); 			//size | slaveidx
-			req->cmdData->Data1 = 0x60600000;									//index 0x6060 subindex 0x0000
-			req->cmdData->Data2 = CSP_MODE; 					
-		}
-		else
-			req->fsmstate		= LineRequest::fsm_state_wait_sdowr_cspmode;		
-	}
-}
-
-bool LineRequest::startPlan()
-{
-	assert(this->dir == 0);
-
-	//计算运动方向
-	if (this->abs) //绝对运动方式
-		this->dir = (this->dist > this->startpos) ? (1):(-1);
-	else			//相对运动方式
-		this->dir = (this->dist > 0) ? (1): (-1);
-
-	this->distRatio = getDistance() / (this->ref->getRefDistance());
-
-	if (-1 == this->ref->startPlan(this->maxvel, this->maxa, this->maxj, this->movetype))
-		return false;
-
-	return true;
-}
-
-unsigned int LineRequest::getDistance()
-{
-	if (!this->abs)	//相对运动方式
-		return (this->dist > 0)? (this->dist) : (-this->dist);	
-	else			//绝对运动方式
-		return ((this->dist > this->startpos) ? (this->dist - this->startpos):(this->startpos - this->dist));
-}
-
-int  LineRequest::getPosition()
-{
-	double distRatio;
-
-	distRatio = this->ref->getDistanceRatio(this->slave_idx); // > 0
-	
-	if (this->ref->isLastCycle())
-	{//避免浮点数计算误差，不使用ref_dist
-		curpos = this->dstpos;
-	}
-	else
-	{
-		if (this->abs)
-			curpos = (int)(this->startpos +  distRatio * (this->dist - this->startpos) );
-		else
-			curpos = (int)(this->startpos + distRatio * (this->dist));
-	}
-
-	return curpos;
-}
-
-bool	LineRequest::positionReached(int q, int bias)
-{
-	if (bias)
-		return (::abs(q - this->dstpos) < bias);
-	else
-		return q == this->dstpos;
-}
-
-double LineRequest::getCurSpeed() const 		//当前规划的速度
-{
-	double velref;		//基准参考速度
-	double v;
-	velref = this->ref->getCurrentVel();
-
-	v = (this->dir) * (this->distRatio) * velref;
-	return v;
-}
-
-int    LineRequest::getCurPos()const			//当前规划的位置
-{
-	return this->curpos;
-}
-
-void LineRequest::exec()
-{
-	fsmstate(this);
-}
-
 void MultiAxisRequest::fsm_state_done(MultiAxisRequest *req)
 {
 }
@@ -1432,10 +958,8 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		return;
 	}
 
-	if (req->axispara->moreCycles())
-	{
-		req->cmdData->CMD	= CSP;
-		req->cmdData->Data1 = req->curpos = req->axispara->nextPosition(req->slave_idx);
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
+	{//尚未发送完毕
 		return;
 	}
 
@@ -1446,26 +970,29 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		return;
 	}
 
-	if ( !req->positionReached(req->respData->Data1) 
+	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+
+	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)
 	{
 		return;
 	}
 	
-	if (req->rechecks <= 0						//等待位置到达超时
-		&& (!req->dmc->isServo(req->slave_idx)) || (!req->positionReached(req->respData->Data1, req->dmc->getServoPosBias())))
+	if (req->rechecks <= 0)						//等待位置到达超时
 	{
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
-			CLogSingle::logError("LineRequest::fsm_state_csp, axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
+			CLogSingle::logError("MultiAxisRequest::fsm_state_csp, axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
 			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
 			req->axispara->setError();
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
 		{
-			CLogSingle::logWarning("LineRequest::fsm_state_csp retries, axis=%d nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
-			req->dmc->restoreLastCmd(req->cmdData);
+			CLogSingle::logWarning("MultiAxisRequest::fsm_state_csp attemps=%d, axis=%d nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->attempts, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
+			req->cmdData->CMD = CSP;
+			req->cmdData->Data1 = req->axispara->dstpos;
+			req->cmdData->Data2 = CSP_DATA2_DUMMY;	//特殊处理让充发位置可以进入待发送队列
 			req->rechecks = RETRIES;
 		}
 		return;
@@ -1522,8 +1049,10 @@ void  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 
 	req->fsmstate	 	= MultiAxisRequest::fsm_state_csp;
 	req->cmdData->CMD 	= CSP;
-	req->cmdData->Data1 = req->curpos = req->axispara->nextPosition(req->slave_idx);
 	req->rechecks		= RETRIES;
+
+	//多轴插入CSP规划点
+	pushCspPoints(req);
 }
 
 void  MultiAxisRequest::fsm_state_svon(MultiAxisRequest *req)
@@ -1707,6 +1236,40 @@ void  MultiAxisRequest::fsm_state_start(MultiAxisRequest *req)
 	}
 }
 
+void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
+{
+	if (req->slave_idx != req->axispara->ref->last_slaveidx)
+		return;
+
+	//最后一个从站将所有的规划点假如发送队列
+	const std::set<BaseMultiAxisPara *> &paras = req->axispara->ref->paras;
+
+	int cycles = req->axispara->totalCycles();
+	int axises = paras.size();
+
+	Item *items = new Item[cycles * axises];
+	for (int row = 0; row < cycles; ++row)
+	{
+		int col = 0;
+		for (std::set<BaseMultiAxisPara *>::const_iterator iter = paras.begin();
+				iter != paras.end();
+				++iter, ++col)
+		{
+			BaseMultiAxisPara *para = *iter;
+			items[row * axises + col].index    		= para->req->slave_idx;							//从站地址
+			items[row * axises + col].cmdData.CMD  	= CSP;
+			items[row * axises + col].cmdData.Data1  = para->nextPosition(para->req->slave_idx);	//CSP目的位置
+		}
+	}
+
+
+	req->dmc->m_rdWrManager.pushItems(items, cycles, axises);
+
+	delete [] items;
+	
+				
+}
+
 bool MultiAxisRequest::startPlan()
 {
 	return this->axispara->startPlan();
@@ -1717,17 +1280,6 @@ bool  MultiAxisRequest::positionReached(int q , int bias) const
 	//return true;
 	bool reached = this->axispara->positionReached(q, bias);
 	return reached;
-}
-
-double MultiAxisRequest::getCurSpeed() const 		//当前规划的速度
-{
-	double v = this->axispara->getCurSpeed();
-	return v;
-}
-
-int MultiAxisRequest::getCurPos()const			//当前规划的位置
-{
-	return this->curpos;
 }
 
 void MultiAxisRequest::exec()
@@ -1748,7 +1300,6 @@ MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, b
 	this->slave_idx = axis;
 	this->fsmstate = fsm_state_start;
 	this->axispara = new LinearPara(newLinearRef, this, startpos, dstpos);
-	this->curpos   = startpos;
 
 	double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);	
 	if (dist > newLinearRef->max_dist)
@@ -1768,7 +1319,6 @@ MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, boo
 	this->slave_idx = axis;
 	this->fsmstate = fsm_state_start;
 	this->axispara = new ArchlMultiAxisPara(newArchlRef, this, startpos, dstpos, z);
-	this->curpos   = startpos;
 
 	if (z)
 	{
