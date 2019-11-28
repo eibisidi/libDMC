@@ -257,8 +257,8 @@ DMC1000_API DWORD WINAPI d1000_start_sa_line(short TotalAxis,short *AxisArray,lo
 		MaxVel： 最大行速度，单位： pps；
 		Tacc： 加速时间，单位： s。
 		hh:最高绝对高度
-		hu:相对上升高度，相对于终止点
-		hd:相对下降高度，相对于终止点
+		hu:相对上升高度，相对于起始点 >= 0
+		hd:相对下降高度，相对于终止点 >= 0
 返回值：正确：返回 ERR_NoError；
 错误：返回相关错误码。
 */
@@ -273,8 +273,8 @@ DMC1000_API DWORD WINAPI d1000_start_t_archl(short TotalAxis,short *AxisArray,lo
 		MaxVel： 运行速度，单位： pps；
 		Tacc： 加速时间，单位： s。
 		hh:最高绝对高度
-		hu:相对上升高度，相对于终止点
-		hd:相对下降高度，相对于终止点
+		hu:相对上升高度，相对于起始点 >= 0
+		hd:相对下降高度，相对于终止点 >= 0
 返回值：正确：返回 ERR_NoError；
 错误：返回相关错误码。
 */

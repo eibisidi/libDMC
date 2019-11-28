@@ -1335,7 +1335,9 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 {
 	if (totalAxis <= 0
 			|| Tacc < 1E-6
-			|| maxvel < 1E-6)
+			|| maxvel < 1E-6
+			|| hu < 0
+			|| hd < 0)
 			return ERR_INVALID_ARG;
 	
 	unsigned long	retValue = ERR_NOERR;
