@@ -388,6 +388,32 @@ void DmcManager::close()
 	clear();
 }
 
+void DmcManager::logCspPoints(const Item *pItems, int rows, int cols) const
+{
+	if (m_masterConfig.logpoint_axis.empty())
+		return;
+
+	for (int r = 0; r < rows; ++r)
+	{
+		//按照轴号顺序输出规划位置
+		for (std::set<int>::iterator iter = m_masterConfig.logpoint_axis.begin();
+											iter != m_masterConfig.logpoint_axis.end();
+											++iter)
+		{
+			for(int c = 0; c < cols; ++c)
+			{
+				if(pItems[r*cols + c].index == *iter)
+				{
+					CLogSingle::logPoint((int)(pItems[r*cols+c].cmdData.Data1));
+					break;
+				}
+			}
+		}
+		CLogSingle::logPoint("\n");
+	}
+}
+
+
 void DmcManager::beforeWriteCmd()
 {
 #ifdef TIMING
@@ -422,28 +448,6 @@ void DmcManager::beforeWriteCmd()
 		if (m_cmdData[slave_idx].CMD != GET_STATUS)
 		{
 			m_lastCmdData[slave_idx] = m_cmdData[slave_idx];
-
-			if (!m_masterConfig.logpoint_axis.empty())
-			{//开启了规划记录
-				std::set<int>::reverse_iterator riter = m_masterConfig.logpoint_axis.rbegin();
-				if (slave_idx == *riter 					//序号最大的轴，开始一行
-					&& m_cmdData[slave_idx].CMD == CSP)
-				{
-					std::string line;
-					for (std::set<int>::iterator iter = m_masterConfig.logpoint_axis.begin();
-									iter != m_masterConfig.logpoint_axis.end();
-									++iter)
-					{
-						//line += Poco::format("%d    ",  (int)m_cmdData[*iter].Data1);
-						CLogSingle::logPoint((int)m_cmdData[*iter].Data1);
-						//!!!!!!!!!!!!!!!!
-						//m_cmdData[*iter].CMD = GET_STATUS;
-						//ofs << (int)m_cmdData[*iter].Data1 << "    " ;
-					}
-					CLogSingle::logPoint("\n");
-				}
-			}
-
 		}
 
 	}

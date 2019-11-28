@@ -1262,6 +1262,7 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 		}
 	}
 
+	req->dmc->logCspPoints(items, cycles, axises);	//输出规划结果到日志
 
 	req->dmc->m_rdWrManager.pushItems(items, cycles, axises);
 
