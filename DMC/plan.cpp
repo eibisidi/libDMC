@@ -60,7 +60,7 @@ double TParam::tofdist(double dist) const
 	else
 	{
 		if (dist <= (S / 2))
-			t = sqrt(2 * dist) / this->amax;
+			t = sqrt((2 * dist) / this->amax);
 		else
 			t = this->Ta + this->Ta - sqrt(2 *(S - dist) / this->amax );
 	}
