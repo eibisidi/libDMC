@@ -17,6 +17,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Window", "Window\Window.vcx
 		{DC49CF61-E369-40A4-A94C-DA6E5FFCBC01} = {DC49CF61-E369-40A4-A94C-DA6E5FFCBC01}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "archl", "archl\archl.vcxproj", "{E73DBBE8-692F-44E0-B06C-1B254B507312}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -39,6 +41,10 @@ Global
 		{3BF1FF7C-C600-47A9-BED7-409C1B41A1E0}.Debug|Win32.Build.0 = Debug|Win32
 		{3BF1FF7C-C600-47A9-BED7-409C1B41A1E0}.Release|Win32.ActiveCfg = Release|Win32
 		{3BF1FF7C-C600-47A9-BED7-409C1B41A1E0}.Release|Win32.Build.0 = Release|Win32
+		{E73DBBE8-692F-44E0-B06C-1B254B507312}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E73DBBE8-692F-44E0-B06C-1B254B507312}.Debug|Win32.Build.0 = Debug|Win32
+		{E73DBBE8-692F-44E0-B06C-1B254B507312}.Release|Win32.ActiveCfg = Release|Win32
+		{E73DBBE8-692F-44E0-B06C-1B254B507312}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
