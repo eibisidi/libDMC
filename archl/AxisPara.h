@@ -117,7 +117,7 @@ public:
 	double			maxvel;						//最大速度，标量,用于直线插补
 	double 			zmaxvel;					//Z轴最大速度，标量
 	double 			maxa;						//最大加速度，标量
-	double 			zmaxa;						
+	double 			zmaxa;						//Z轴最大加速度，标量
 	int	 			hu;							//垂直上升距离 >=0
 	int	 			hh;							//绝对限高位置
 	int	 			hd;							//垂直下降距离 >=0

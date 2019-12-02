@@ -374,9 +374,9 @@ int ArchlRef::startPlan()
 				double t0 = up_param.tofdist(this->hu);
 				double t1 = down_param.tofdist(abs(this->hh - this->zdstpos) - hd);
 				
+				
 				//规划直线插补
 				double limt = (up_param.T - t0) + t1;
-				printf("timelimit = %f.\n", limt);
 				this->line_param.q0   = 0; 	
 				this->line_param.q1   = this->max_dist;
 				this->line_param.vmax = this->maxvel;
@@ -390,13 +390,8 @@ int ArchlRef::startPlan()
 					break;
 				}
 
-				this->ts0 = (int)(CYCLES_PER_SEC * t0 + 1);
-				this->ts1 = (int)(CYCLES_PER_SEC * (t0 + line_param.T - t1) + 1);
-				
-				//int tl0 = up_param.toDist(this->hu, true);
-				//int ts0 = up_param.toDist(this->hu, false);
-				//printf("vertical move pos = %d, ts0 = %d, tl0 = %d, ts0=%d.\n", up_param.position(this->ts0), this->ts0, tl0, ts0);
-				
+				this->ts0 = (int)(CYCLES_PER_SEC * t0) + 1;							//加一保证提升超过高度
+				this->ts1 = (int)(CYCLES_PER_SEC * (t0 + line_param.T - t1)) + 1;
 			}
 			else
 			{//水平位移最大值为0
