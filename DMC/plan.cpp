@@ -5,6 +5,40 @@
 
 double sigma = 0.1;
 
+unsigned int MParam::dist(int ts) const
+{
+	int pos;
+	unsigned int dist;
+	pos = position(ts);
+	if (this->sign > 0) //正向运动
+		dist = pos - (int)this->q0;
+	else
+		dist = (int)(-this->q0) - pos;
+	return dist;
+}
+
+int	MParam::toDist(unsigned long key, bool longer)const
+{
+	int left,right;
+	int mid;
+	unsigned int d;
+	left=0;
+	right=this->cycles - 1;
+	while(left<=right)
+	{
+		mid=left+(right-left)/2;
+		d = dist(mid);
+		if (d == key) return mid;		//exact match
+		else if (key < d) right = mid - 1;
+		else if (key > d) left = mid + 1;			 
+	}
+
+	if (longer)
+		return left; //left时刻恰好大于key
+	return right;
+}
+
+
 int TParam::position()
 {
 	int q_i = position(this->elapsed);

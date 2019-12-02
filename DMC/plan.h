@@ -27,6 +27,11 @@ public:
 	virtual int position(int ts)  const= 0;			//获得指定时间规划位置
 	virtual double speed() const = 0;				//获得当前速度
 	virtual double speed(int ts) const = 0;			//获得指定时间速度
+	
+	unsigned int dist(int ts) const;				//获得指定时间相对起点的运动距离
+	//获得指定运动距离对应的时刻，longer为true时，保证运动距离>=distKey
+	//longer为false时，保证运动距离<=distKey
+	int	toDist(unsigned long distKey, bool longer)const; 
 
 	MParam()
 	{
