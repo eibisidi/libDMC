@@ -75,7 +75,7 @@ private:
 		QUEUE_BUSY,
 	};
 
-	QueueState					queueState[DEF_MA_MAX];
+	QueueState					queueState[DEF_MA_MAX];				//todo 改成原子类型<atomic>
 	std::map<int, ItemQueue*> 	tosend;		//待发送	命令队列
 	std::map<int, DeclStopInfo*>	tostop;		//待减速停止
 	transData					lastSent[DEF_MA_MAX];		//记录上次发送命令
