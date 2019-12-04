@@ -364,10 +364,10 @@ void RdWrManager::run()
 				printf("FIFO EMPTY Error \n");
 				throw;
 			}
-		}while(readcount < BATCH_WRITE);	//防止出现死循环，连续读取之后跳出
+		}while(readcount < ECM_FIFO_SIZE);	//防止出现死循环，连续读取之后跳出
 
 LABEL:
-		//printf("to write = %d, last_remain=%d, fifo_remain=%d.\n", towrite, last_remain, FIFO_REMAIN(respData));
+		//printf("to write = %d, last_remain=%d, fifo_remain=%d, readcount = %d.\n", towrite, last_remain, FIFO_REMAIN(respData), readcount);
 		flag1 = 0;
 		towrite = BATCH_WRITE;
 	};
