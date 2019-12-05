@@ -12,8 +12,8 @@
 //#define  	TEST_MOVE
 //#define 	TEST_HOME
 //#define TEST_IO
-//#define TEST_LINE
-#define TEST_ARCHL
+#define TEST_LINE
+//#define TEST_ARCHL
 //#define TEST_DEC
 //#define TEST_ISTOP
 //#define TEST_INC
@@ -336,13 +336,13 @@ int _tmain(int argc, _TCHAR* argv[])
 	double rate = -1.5;
 	while (true)
 	{
-		printf("rate=%f.", rate);
+		//printf("rate=%f.", rate);
 		int move = 50000;
 
-		short axisArray[] = {1, 2};
+		short axisArray[] = {1, 3};
 		long  distArray[] = {move, rate*move};
 
-		d1000_start_s_line(2, axisArray, distArray, 0, 30000, 0.2);		//
+		d1000_start_t_line(2, axisArray, distArray, 0, 100000, 0.2);		//
 
 		while(1)
 		{
@@ -359,9 +359,9 @@ int _tmain(int argc, _TCHAR* argv[])
 		}
 
 		
-		short r_axisArray[] = {1,2};
-		long  r_distArray[] = {-move, -rate*move};
-		d1000_start_s_line(2, r_axisArray, r_distArray,0, 30000, 0.2);	//
+		short r_axisArray[] = {1,3};
+		long  r_distArray[] = {0, 0};
+		d1000_start_ta_line(2, r_axisArray, r_distArray,0, 100000, 0.2);	//
 
 
 
@@ -414,7 +414,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		
 		d1000_start_t_archl(3, r_axisArray, r_distArray,30000, 0.2, hh, hu, hd);	//
 
-		Sleep(500 + rand()/5000);
+		//Sleep(500 + rand()/5000);
 		//d1000_immediate_stop(2);
 
 		while(1)
@@ -430,12 +430,12 @@ int _tmain(int argc, _TCHAR* argv[])
 			printf("decel_stop error.\n");
 			throw;
 		}
-		Sleep(2000);
+		//Sleep(2000);
 
 		r_distArray[0] = zstartpos;
 		r_distArray[1] = xstartpos;
 		r_distArray[2] = ystartpos;
-		printf("zmove = %d, xmove=%d, ymove = %d.\n", r_distArray[0], r_distArray[1], r_distArray[2]);
+		//printf("zmove = %d, xmove=%d, ymove = %d.\n", r_distArray[0], r_distArray[1], r_distArray[2]);
 
 		d1000_start_ta_archl(3, r_axisArray, r_distArray,30000, 0.2, hh, hd, hu); //
 		//d1000_start_ta_line(3, r_axisArray, r_distArray, 0, 100000, 0.2);
@@ -452,7 +452,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			printf("d1000_start_ta_line error.\n");
 			throw;
 		}
-		Sleep(2000);
+		//Sleep(2000);
 	}
 	
 #endif
