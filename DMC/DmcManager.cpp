@@ -650,38 +650,6 @@ int DmcManager::getServoPosBias() const
 
 void DmcManager::updateState()
 {
-	#if 0
-	//检查FIFO是否被覆盖
-	if(m_masterState.fifoFull != FIFO_FULL(m_respData))
-	{
-		CLogSingle::logFatal("FIFO overwritten. lastfifofull = %?d, fifofull=%?d.", __FILE__, __LINE__, m_masterState.fifoFull, FIFO_FULL(m_respData));
-		//throw;
-		//assert(0);
-	}
-	
-	if (FIFO_REMAIN(m_respData) == ECM_FIFO_SIZE)
-	{
-		printf("FIFO is empty."); 
-		m_masterState.fifoEmptyCount++;
-	}
-	else
-		m_masterState.fifoEmptyCount = 0;
-
-	if (FIFO_REMAIN(m_respData) > m_masterState.fifoRemain)
-		m_masterState.fifoIncre = true;		//FIFO剩余空间开始增加，开始净消耗
-	else
-		m_masterState.fifoIncre = false;
-
-
-	
-	//printf("fiforemain=%d, incre = %d, empty=%d.\n", FIFO_REMAIN(m_respData), (int)m_masterState.fifoIncre, m_masterState.fifoEmptyCount);
-	
-	m_masterState.state		 = m_respData[0].Parm & 0xFF;	//更新主站状态
-	m_masterState.errorcode	 = m_respData[0].Parm >> 8;
-	m_masterState.fifoFull = FIFO_FULL(m_respData);
-	m_masterState.fifoRemain = FIFO_REMAIN(m_respData);
-
-#endif
 	//更新驱动器状态
 	unsigned CMD;
 	for (map<int, DriverState>::iterator iter = m_driverState.begin();

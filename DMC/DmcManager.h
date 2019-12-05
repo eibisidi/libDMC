@@ -143,8 +143,8 @@ public:
 	void 	freeSdoCmdResp(BaseRequest *req);											  //释放SDO命令
 	void restoreLastCmd(transData *cmdData);
 
-	void setRespData(transData *respData);
-	void copyRespData();
+	void setRespData(transData *respData);		// 发送接收线程返回数据，以及发送接收线程当前状态
+	void copyRespData();						// 处理返回的数据
 	
 	virtual ~DmcManager();
 

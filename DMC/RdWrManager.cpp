@@ -275,7 +275,14 @@ void RdWrManager::declStop(int slaveidx, DeclStopInfo *stopInfo)
 void RdWrManager::setIdle()
 {
 	m_mutex.lock();	
-	m_idle = true;
+
+	int i = 0
+	for (; i < DEF_MA_MAX; ++i)
+	{
+		if (true == queueFlags[i].load()) 	break;  //队列正忙
+	}
+
+	if (i == DEF_MA_MAX) m_idle = true;				//队列恰好为空，线程置为空闲
 	m_mutex.unlock();
 }
 
@@ -292,12 +299,12 @@ void RdWrManager::run()
 		return;
 	}
 
-	unsigned int last_remain = ECM_FIFO_SIZE;
-	unsigned int last_fifofull = FIFO_FULL(respData);
+	rdWrState.lastRemain 	= ECM_FIFO_SIZE;
+	rdWrState.lastFifoFull	= FIFO_FULL(respData);
+	rdWrState.readCount		= 0;
+	rdWrState.flag1			= 0;
 	
-	int		flag1 = 0;		//1 空闲数正在下降  2:空闲数正在上升
 	bool	bRet;
-	int		readcount = 0;	//连续读取次数
 	
 	while(!m_canceled)
 	{	
@@ -317,7 +324,7 @@ void RdWrManager::run()
 			}while(!bRet);
 		}
 
-		readcount = 0;
+		rdWrState.readCount 	= 0;
 		do{
 			do {
 				bRet = ECMUSBRead((unsigned char*)respData, sizeof(respData));
@@ -325,41 +332,43 @@ void RdWrManager::run()
 					printf("Read Error \n");
 			}while(!bRet);
 
-			++readcount;
-			if (FIFO_FULL(respData) != last_fifofull)
+			++rdWrState.readCount;
+			if (FIFO_FULL(respData) != rdWrState.lastFifoFull)
 			{
 				printf("FIFO FULL Error \n");
-				throw;
+				CLogSingle::logFatal("FIFO full.flag1=%d, readCount=%d, lastRemain=%?d, fifoRemain=%?d.", __FILE__, __LINE__,
+								rdWrState.flag1, rdWrState.readCount, rdWrState.lastRemain, FIFO_REMAIN(respData));
+				rdWrState.lastFifoFull = FIFO_FULL(respData);	//update lastFifoFull and keep running!!!
 			}
 
 			//更新响应数据
 			DmcManager::instance().setRespData(respData);
 
-			switch(flag1)
+			switch(rdWrState.flag1)
 			{
 				case 0:
-					if (FIFO_REMAIN(respData) < last_remain)
+					if (FIFO_REMAIN(respData) < rdWrState.lastRemain)
 					{
-						flag1 = 1;
+						rdWrState.flag1 = 1;
 					}
 					break;
 				case 1:
-					if (FIFO_REMAIN(respData) > last_remain)
+					if (FIFO_REMAIN(respData) > rdWrState.lastRemain)
 					{
 						if (FIFO_REMAIN(respData) > FIFO_LOWATER)
 						{
-							flag1 = 3;
-							last_remain = FIFO_REMAIN(respData);
+							rdWrState.flag1 = 3;
+							rdWrState.lastRemain = FIFO_REMAIN(respData);
 							goto LABEL;
 						}
-						flag1 = 2;
+						rdWrState.flag1 = 2;
 					}
 					break;
 				case 2:
 					if (FIFO_REMAIN(respData) > FIFO_LOWATER)
 					{
-						flag1 = 3;
-						last_remain = FIFO_REMAIN(respData);
+						rdWrState.flag1 = 3;
+						rdWrState.lastRemain = FIFO_REMAIN(respData);
 						goto LABEL;
 					}
 					break;
@@ -368,18 +377,21 @@ void RdWrManager::run()
 
 			}
 			
-			last_remain = FIFO_REMAIN(respData);
+			rdWrState.lastRemain = FIFO_REMAIN(respData);
 
-			if (flag1 && FIFO_REMAIN(respData) == ECM_FIFO_SIZE)
+			if (rdWrState.flag1 && FIFO_REMAIN(respData) == ECM_FIFO_SIZE)
 			{
 				printf("FIFO EMPTY Error \n");
-				throw;
+				CLogSingle::logFatal("FIFO empty.flag1=%d, readCount=%d, lastRemain=%?d, fifoRemain=%?d.", __FILE__, __LINE__,
+								rdWrState.flag1, rdWrState.readCount, rdWrState.lastRemain, FIFO_REMAIN(respData));
+				//update lastFifoFull and keep running!!!
+
 			}
-		}while(readcount >0);	//防止出现死循环，连续读取之后跳出
+		}while(rdWrState.readCount >0);	//防止出现死循环，连续读取之后跳出，todo?
 
 LABEL:
-		printf("last_remain=%d, fifo_remain=%d, readcount = %d, flag1=%d.\n", last_remain, FIFO_REMAIN(respData), readcount, flag1);
-		flag1 = 0;
+		printf("last_remain=%d, fifo_remain=%d, readcount = %d, flag1=%d.\n", rdWrState.lastRemain, FIFO_REMAIN(respData), rdWrState.readCount, rdWrState.flag1);
+		rdWrState.flag1 = 0;
 		towrite = BATCH_WRITE;
 		
 	};

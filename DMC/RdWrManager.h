@@ -45,6 +45,23 @@ public:
 	}
 };
 
+class RdWrState
+{
+public:
+	unsigned int lastRemain;
+	unsigned int lastFifoFull;
+	int 		 readCount;
+	int			 flag1;			//1 空闲数正在下降  2:空闲数正在上升
+
+	RdWrState()
+		:lastRemain(0),
+		 lastFifoFull(0),
+		 readCount(0),
+		 flag1(0)
+	{
+	}
+}
+
 class RdWrManager : public Poco::Runnable
 {
 public:
@@ -76,6 +93,7 @@ private:
 	std::map<int, ItemQueue*> 	tosend;								//待发送	命令队列
 	std::map<int, DeclStopInfo*>	tostop;							//待减速停止
 	transData					lastSent[DEF_MA_MAX];				//记录上次发送命令
+	RdWrState					rdWrState;
 };
 
 #endif
