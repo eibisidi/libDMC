@@ -93,7 +93,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 			if (0 == tostop.count(slaveidx))
 			{
 				ItemQueue *que = iter->second;
-				if (!que->empty())
+				if (que && !que->empty())
 				{
 					lastSent[slaveidx] = cmdData[slaveidx] =  (iter->second)->front().cmdData;
 					(iter->second)->pop_front();
@@ -276,13 +276,17 @@ void RdWrManager::setIdle()
 {
 	m_mutex.lock();	
 
-	int i = 0
-	for (; i < DEF_MA_MAX; ++i)
+	std::map<int, ItemQueue *>::iterator iter = tosend.begin();
+	for(; iter!= tosend.end(); ++iter)
 	{
-		if (true == queueFlags[i].load()) 	break;  //队列正忙
+		if (iter->second 
+			 && !(iter->second).empty())
+		{
+			break;
+		}
 	}
 
-	if (i == DEF_MA_MAX) m_idle = true;				//队列恰好为空，线程置为空闲
+	if (iter == tosend.end()) m_idle = true;				//队列恰好为空，线程置为空闲
 	m_mutex.unlock();
 }
 
