@@ -3,7 +3,8 @@
 
 #include <map>
 #include <deque>
-#include <vector>
+#include <atomic> 
+
 
 #include "NEXTWUSBLib_12B.h"
 #include "Poco/Mutex.h"
@@ -69,13 +70,18 @@ private:
 	bool				m_canceled;				//线程停止
 
 	typedef std::deque<Item> ItemQueue;
+	typedef std::atomic<bool> QueueFlag;
+
 
 	enum QueueState{
 		QUEUE_IDLE = 0,
 		QUEUE_BUSY,
 	};
 
+
+
 	QueueState					queueState[DEF_MA_MAX];				//todo 改成原子类型<atomic>
+	QueueFlag					queueFlags[DEF_MA_MAX];				//各队列当前状态，true正忙, false空闲
 	std::map<int, ItemQueue*> 	tosend;		//待发送	命令队列
 	std::map<int, DeclStopInfo*>	tostop;		//待减速停止
 	transData					lastSent[DEF_MA_MAX];		//记录上次发送命令

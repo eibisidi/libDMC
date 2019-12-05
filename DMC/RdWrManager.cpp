@@ -342,12 +342,19 @@ void RdWrManager::run()
 				case 1:
 					if (FIFO_REMAIN(respData) > last_remain)
 					{
+						if (FIFO_REMAIN(respData) > FIFO_LOWATER)
+						{
+							flag1 = 3;
+							last_remain = FIFO_REMAIN(respData);
+							goto LABEL;
+						}
 						flag1 = 2;
 					}
 					break;
 				case 2:
 					if (FIFO_REMAIN(respData) > FIFO_LOWATER)
 					{
+						flag1 = 3;
 						last_remain = FIFO_REMAIN(respData);
 						goto LABEL;
 					}
@@ -364,12 +371,13 @@ void RdWrManager::run()
 				printf("FIFO EMPTY Error \n");
 				throw;
 			}
-		}while(readcount < ECM_FIFO_SIZE);	//防止出现死循环，连续读取之后跳出
+		}while(readcount >0);	//防止出现死循环，连续读取之后跳出
 
 LABEL:
-		//printf("to write = %d, last_remain=%d, fifo_remain=%d, readcount = %d.\n", towrite, last_remain, FIFO_REMAIN(respData), readcount);
+		printf("last_remain=%d, fifo_remain=%d, readcount = %d, flag1=%d.\n", last_remain, FIFO_REMAIN(respData), readcount, flag1);
 		flag1 = 0;
 		towrite = BATCH_WRITE;
+		
 	};
 }
 
