@@ -36,7 +36,11 @@ void RdWrManager::clear()
 {
 	m_idle = true;
 	m_canceled = false;
-	memset(queueState, 0, sizeof(queueState));	
+	
+	for (int i = 0; i < DEF_MA_MAX; ++i)
+	{
+		queueFlags[i].store(false);	//各队列初始状态为空闲
+	}
 
 	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
 					iter!= tosend.end();
@@ -71,6 +75,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 
 	int activeItems = 0;
 	int slaveidx;
+	bool qflag;
 	
 	memset(cmdData, 0, sizeof(transData)* cmdcount);
 	
@@ -81,11 +86,10 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 				++iter)
 	{
 		slaveidx = iter->first;
-		if (QUEUE_IDLE == queueState[slaveidx])
+		qflag    = false;		//希望队列空闲
+		if (true == queueFlags[slaveidx].compare_exchange_weak(qflag, true))
 		{
-			queueState[slaveidx] = QUEUE_BUSY;
 			///////////////////////////////////////////////////////////////////////////////////////////
-
 			if (0 == tostop.count(slaveidx))
 			{
 				ItemQueue *que = iter->second;
@@ -156,7 +160,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 				tostop.erase(slaveidx);
 			}
 			////////////////////////////////////////////////////////////////////////////////////////////
-			queueState[slaveidx] = QUEUE_IDLE;
+			queueFlags[slaveidx].store(false);		//置队列空闲
 		}
 	}
 
@@ -197,7 +201,7 @@ void RdWrManager::pushItems(Item *items, int rows, int cols)
 		for(c = 0; c < cols; ++c)
 		{
 			slaveidx = items[c].index;
-			if (QUEUE_BUSY == queueState[slaveidx])
+			if (true == queueFlags[slaveidx].load())	//当前队列正忙
 			{
 				break;
 			}
@@ -208,7 +212,7 @@ void RdWrManager::pushItems(Item *items, int rows, int cols)
 			for(c = 0; c < cols; ++c)
 			{
 				slaveidx = items[c].index;
-				queueState[slaveidx] = QUEUE_BUSY;
+				queueFlags[slaveidx].store(true);		//当前队列设置为忙
 			}
 			m_mutex.unlock();
 			break;
@@ -231,7 +235,7 @@ void RdWrManager::pushItems(Item *items, int rows, int cols)
 	for(c = 0; c < cols; ++c)
 	{
 		slaveidx = items[c].index;
-		queueState[slaveidx] = QUEUE_IDLE;
+		queueFlags[slaveidx].store(false);		//当前队列设置为空闲
 	}
 	
 	m_idle = false;
@@ -245,7 +249,7 @@ int RdWrManager::peekQueue(int slaveidx)
 	while(true)
 	{
 		m_mutex.lock(); 
-		if (QUEUE_IDLE == queueState[slaveidx])
+		if (false == queueFlags[slaveidx].load())	//当前队列空闲
 		{
 			break;
 		}
