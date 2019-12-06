@@ -922,6 +922,7 @@ void DmcManager::run()
 			if (cols > 0)
 				m_rdWrManager.pushItems(m_items, 1, cols);	//加入发送队列
 
+			m_rdWrManager.setBusy();
 			copyRespData();//接收队列处理，刷新
 		}
 		else

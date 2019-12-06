@@ -237,9 +237,6 @@ void RdWrManager::pushItems(Item *items, int rows, int cols)
 		slaveidx = items[c].index;
 		queueFlags[slaveidx].store(false);		//当前队列设置为空闲
 	}
-	
-	m_idle = false;
-	m_condition.signal();
 	m_mutex.unlock();
 }
 
@@ -272,6 +269,18 @@ void RdWrManager::declStop(int slaveidx, DeclStopInfo *stopInfo)
 	m_mutex.unlock();
 }
 
+void RdWrManager::setBusy()
+{
+
+	m_mutex.lock();	
+
+	m_idle = false;
+	m_condition.signal();
+
+	m_mutex.unlock();
+
+}
+
 void RdWrManager::setIdle()
 {
 	m_mutex.lock();	
@@ -280,7 +289,7 @@ void RdWrManager::setIdle()
 	for(; iter!= tosend.end(); ++iter)
 	{
 		if (iter->second 
-			 && !(iter->second).empty())
+			 && !(iter->second)->empty())
 		{
 			break;
 		}
@@ -391,7 +400,7 @@ void RdWrManager::run()
 				//update lastFifoFull and keep running!!!
 
 			}
-		}while(rdWrState.readCount >0);	//防止出现死循环，连续读取之后跳出，todo?
+		}while(rdWrState.readCount < 300);	//防止出现死循环，连续读取之后跳出，todo?
 
 LABEL:
 		printf("last_remain=%d, fifo_remain=%d, readcount = %d, flag1=%d.\n", rdWrState.lastRemain, FIFO_REMAIN(respData), rdWrState.readCount, rdWrState.flag1);

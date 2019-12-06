@@ -60,7 +60,7 @@ public:
 		 flag1(0)
 	{
 	}
-}
+};
 
 class RdWrManager : public Poco::Runnable
 {
@@ -71,6 +71,7 @@ public:
 	void cancel();				//Í£Ö¹Ïß³Ì
 
 	~RdWrManager();
+	void setBusy();
 	void setIdle();
 	void pushItems(Item *items, int rows, int cols);
 	int peekQueue(int slaveidx);
