@@ -1190,9 +1190,9 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 		
 }
 
-unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,double Tacc)
+unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,long acc)
 {
-	if (Tacc < 1E-6
+	if (acc <= 0
 		|| highVel <= 0
 		|| lowVel <= 0)
 		return ERR_INVALID_ARG;
@@ -1228,7 +1228,7 @@ unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,double T
 		newReq->home_method = m_masterConfig.home_method;
 		newReq->high_speed  = highVel;
 		newReq->low_speed	= lowVel;
-		newReq->acc			= (unsigned int )(highVel / Tacc);	
+		newReq->acc			= acc;	
 		newReq->home_timeout= m_masterConfig.home_timeout;
 		addRequest(axis, newReq);
 	}while(0);
