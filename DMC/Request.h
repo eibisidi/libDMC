@@ -22,10 +22,10 @@ class DmcManager;
 class SDO
 {
 public:
-	unsigned int sdo_index;
-	unsigned int sdo_subindex;
-	unsigned char sdo_size;
-	unsigned int sdo_value;
+	unsigned int 	sdo_index;
+	unsigned int 	sdo_subindex;
+	unsigned char 	sdo_size;
+	int 			sdo_value;
 };
 
 class SlaveConfig

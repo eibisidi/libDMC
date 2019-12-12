@@ -525,7 +525,12 @@ bool DmcManager::loadXmlConfig()
 					sdo.sdo_index = Poco::NumberParser::parseHex(pIndexAttr->nodeValue());
 					sdo.sdo_subindex = Poco::NumberParser::parseHex(pSubIndexAttr->nodeValue());
 					sdo.sdo_size = Poco::NumberParser::parse(pSizeAttr->nodeValue());
-					sdo.sdo_value = Poco::NumberParser::parse(pValueAttr->nodeValue());
+
+					if (!Poco::NumberParser::tryParse(pValueAttr->nodeValue(), sdo.sdo_value))
+					{//值十进制解析失败后，使用16进制数解析
+						sdo.sdo_value = Poco::NumberParser::parseHex(pValueAttr->nodeValue());
+					}
+
 					sc.slave_sdos.push_back(sdo);
 				}
 
