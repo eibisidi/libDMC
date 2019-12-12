@@ -15,11 +15,11 @@ CDlg3::CDlg3(CWnd* pParent /*=NULL*/)
 	: CDialogEx(CDlg3::IDD, pParent)
 	, m_highVel(0)
 	, m_lowVel(0)
-	, m_tAcc(0)
+	, m_acc(0)
 {
-	m_highVel = 50000;
-	m_lowVel  = 5000;
-	m_tAcc	  = 0.2;
+	m_highVel = 50;
+	m_lowVel  = 20;
+	m_acc	  = 200;
 }
 
 CDlg3::~CDlg3()
@@ -32,7 +32,7 @@ void CDlg3::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_COMBO2, m_slaveAddrCombo);
 	DDX_Text(pDX, IDC_EDIT1, m_highVel);
 	DDX_Text(pDX, IDC_EDIT2, m_lowVel);
-	DDX_Text(pDX, IDC_EDIT3, m_tAcc);
+	DDX_Text(pDX, IDC_EDIT3, m_acc);
 	DDX_Control(pDX, IDC_EDIT5, m_cmdPosEdit);
 }
 
@@ -87,7 +87,7 @@ void CDlg3::OnBnClickedButton7()
 	int axis = m_slaveAddrCombo.GetCurSel() + 1;
 	DWORD ret;
 	
-	ret = d1000_home_move(axis, m_highVel, m_lowVel, m_tAcc);
+	ret = d1000_home_move(axis, m_highVel, m_lowVel, m_acc);
 
 	if (ERR_NOERR != ret)
 	{

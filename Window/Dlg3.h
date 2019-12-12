@@ -23,7 +23,7 @@ public:
 	CComboBox m_slaveAddrCombo;
 	long m_highVel;
 	long m_lowVel;
-	double m_tAcc;
+	long m_acc;
 	CEdit m_cmdPosEdit;
 	virtual BOOL OnInitDialog();
 	afx_msg void OnBnClickedButton4();

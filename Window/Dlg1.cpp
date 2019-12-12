@@ -20,7 +20,7 @@ CDlg1::CDlg1(CWnd* pParent /*=NULL*/)
 	, m_dist(0)
 	, m_tDec(0)
 {
-	m_maxv = 400000;
+	m_maxv = 200000;
 	m_tAcc = 0.2;
 	m_tDec = 0.2;
 }
