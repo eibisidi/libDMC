@@ -1551,6 +1551,46 @@ void HomeMoveRequest::fsm_state_sdowr_homemethod(HomeMoveRequest *req)
 
 }
 
+void HomeMoveRequest::fsm_state_sdowr_homeoffset(HomeMoveRequest *req)
+{
+	if(SDO_WR != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData)
+		&& req->rechecks--)
+	{
+		return;
+	}
+
+	if ((req->slave_idx != req->respData->Parm ||  0x607C0000 != req->respData->Data1 || 0 != req->respData->Data2)
+		&& req->rechecks--)
+	{
+		return;
+	}
+	
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			CLogSingle::logError("HomeMoveRequest::fsm_state_sdowr_homeoffset timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
+			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			CLogSingle::logWarning("HomeMoveRequest::fsm_state_sdowr_homeoffset retries, axis = %d.", __FILE__, __LINE__, req->slave_idx);
+			req->dmc->restoreLastCmd(req->cmdData);
+			req->rechecks = RETRIES;
+		}
+		return;
+	}
+
+	req->fsmstate		= HomeMoveRequest::fsm_state_sdowr_homemethod;
+	req->cmdData->CMD	= SDO_WR;
+	req->cmdData->Parm	= 0x0100 | (req->slave_idx & 0xFF); //size | slaveidx
+	req->cmdData->Data1 = 0x60980000;						//index 0x6098 subindex 0x0000
+	req->cmdData->Data2 = req->home_method; 				//回原点方式
+	req->rechecks		= RETRIES;
+}
+
 void HomeMoveRequest::fsm_state_sdowr_homemode(HomeMoveRequest *req)
 {
 	if(SDO_WR != RESP_CMD_CODE(req->respData)
@@ -1583,11 +1623,11 @@ void HomeMoveRequest::fsm_state_sdowr_homemode(HomeMoveRequest *req)
 		return;
 	}
 
-	req->fsmstate		= HomeMoveRequest::fsm_state_sdowr_homemethod;
+	req->fsmstate		= HomeMoveRequest::fsm_state_sdowr_homeoffset;
 	req->cmdData->CMD	= SDO_WR;
-	req->cmdData->Parm	= 0x0100 | (req->slave_idx & 0xFF); //size | slaveidx
-	req->cmdData->Data1 = 0x60980000;						//index 0x6098 subindex 0x0000
-	req->cmdData->Data2 = req->home_method; 				//回原点方式
+	req->cmdData->Parm	= 0x0400 | (req->slave_idx & 0xFF); //size | slaveidx
+	req->cmdData->Data1 = 0x607C0000;						//index 0x607C subindex 0x0000
+	req->cmdData->Data2 = 0; 								//原点偏移
 	req->rechecks		= RETRIES;
 }
 

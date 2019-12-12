@@ -291,6 +291,7 @@ private:
 	static void fsm_state_sdowr_lowspeed(HomeMoveRequest *req);
 	static void fsm_state_sdowr_highspeed(HomeMoveRequest *req);
 	static void fsm_state_sdowr_homemethod(HomeMoveRequest *req);
+	static void fsm_state_sdowr_homeoffset(HomeMoveRequest *req);
 	static void fsm_state_sdowr_homemode(HomeMoveRequest *req);
 	static void fsm_state_wait_sdowr_homemode(HomeMoveRequest *req);
 	static void fsm_state_svon(HomeMoveRequest *req);
