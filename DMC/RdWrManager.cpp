@@ -28,6 +28,9 @@ void RdWrManager::start()
 void RdWrManager::cancel()				//停止线程
 {
 	m_canceled = true;
+
+	setBusy();			//如果空闲，唤醒run，避免无法退出
+	
 	m_thread.join();	//等待run函数返回
 	clear();
 }
@@ -365,29 +368,28 @@ void RdWrManager::run()
 						rdWrState.flag1 = 1;
 					}
 					break;
-				case 1:
+				case 1://剩余FIFO数开始增加
 					if (FIFO_REMAIN(respData) > rdWrState.lastRemain)
 					{
 						if (FIFO_REMAIN(respData) > FIFO_LOWATER)
 						{
 							rdWrState.flag1 = 3;
 							rdWrState.lastRemain = FIFO_REMAIN(respData);
-							goto LABEL;
+							goto SEND;
 						}
 						rdWrState.flag1 = 2;
 					}
 					break;
-				case 2:
+				case 2://剩余FIFO数超过低值
 					if (FIFO_REMAIN(respData) > FIFO_LOWATER)
 					{
 						rdWrState.flag1 = 3;
 						rdWrState.lastRemain = FIFO_REMAIN(respData);
-						goto LABEL;
+						goto SEND;
 					}
 					break;
 				default:
-					throw;
-
+					CLogSingle::logFatal("Unexpected case.", __FILE__, __LINE__);
 			}
 			
 			rdWrState.lastRemain = FIFO_REMAIN(respData);
@@ -397,16 +399,16 @@ void RdWrManager::run()
 				printf("FIFO EMPTY Error \n");
 				CLogSingle::logFatal("FIFO empty.flag1=%d, readCount=%d, lastRemain=%?d, fifoRemain=%?d.", __FILE__, __LINE__,
 								rdWrState.flag1, rdWrState.readCount, rdWrState.lastRemain, FIFO_REMAIN(respData));
-				//update lastFifoFull and keep running!!!
-
+				//keep running!!!
 			}
 		}while(rdWrState.readCount < 300);	//防止出现死循环，连续读取之后跳出，todo?
 
-LABEL:
+SEND:
 		printf("last_remain=%d, fifo_remain=%d, readcount = %d, flag1=%d.\n", rdWrState.lastRemain, FIFO_REMAIN(respData), rdWrState.readCount, rdWrState.flag1);
 		rdWrState.flag1 = 0;
 		towrite = BATCH_WRITE;
-		
 	};
+
+	CLogSingle::logInformation("RdWrManager Thread canceled.", __FILE__, __LINE__);
 }
 

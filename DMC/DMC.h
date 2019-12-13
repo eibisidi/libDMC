@@ -1,7 +1,6 @@
 #ifndef DMC_H
 #define DMC_H
 
-
 #ifndef TRUE
 #define TRUE  1
 #endif
@@ -71,7 +70,6 @@ enum ErrorNum{
 };
 
 #define MAX_PULSE_PER_SEC(rpm, shaftrevo) ((rpm) * (shaftrevo) / 60)		//计算最大速度 (脉冲/s)
-
 
 #ifdef __cplusplus
 extern "C" {
