@@ -55,16 +55,14 @@ bool checkResponse(char slaves, char column, unsigned int expectValue, unsigned 
 
 		if (realValue == expectValue)
 		{
-			// printf("PASS\n");
 			break;
 		}
 		else if (retry == retried)
 		{
-			printf("Fail,realValue= %d   expectValue= %d, retry = %d \n", realValue, expectValue, retried);
+			;//printf("Fail,realValue= %d   expectValue= %d, retry = %d \n", realValue, expectValue, retried);
 		}
 		else
 		{
-			
 			ClearCmdData(respData);
 			ECMUSBWrite((unsigned char*)respData, sizeof(respData));
 		}
@@ -834,10 +832,7 @@ void DmcManager::copyRespData()
 	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
 	printf("time elapsed = %f\n", elapsed);
 #endif
-
 }
-
-
 
 bool DmcManager::isDriverOpCsp(short slaveidx)
 {

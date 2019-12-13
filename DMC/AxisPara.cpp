@@ -1,7 +1,5 @@
 #include "AxisPara.h"
 #include "CLogSingle.h"
-
-#include <stdlib.h>
 #include <cassert>
 
 BaseRef::BaseRef()

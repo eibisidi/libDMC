@@ -41,8 +41,6 @@ int	MParam::toDist(unsigned long key, bool longer)const
 int TParam::position()
 {
 	int q_i = position(this->elapsed);
-
-	//printf("S[%d] = %d, q_i = %d, q1=%f.\n", elapsed, q_i, q1);
 	++elapsed;
 	return q_i;
 }
@@ -122,7 +120,6 @@ int SParam::position(int ts)  const
 		q_f = ::Displace_S(t, this);
 		q_i = (int)(q_f);				// don't round up
 	}
-	//printf("S[%d] = %d, q_i = %d, q1=%f.\n", elapsed, q_i, q1);
 	return q_i;
 }
 
@@ -144,9 +141,6 @@ int DParam::position()
 {
 	int q_i;
 	q_i = position(this->elapsed);
-
-
-	//printf("D [%d], q_i=%d, q1=%f.\n", elapsed, q_i, q1);
 	elapsed++;
 	return q_i;
 }
@@ -164,7 +158,7 @@ int DParam::position(int ts) const
 		q_f = ::Displace_D(t, this);
 		q_i = (int)(q_f);				// don't round up
 	}
-	//printf("S[%d] = %d, q_i = %d, q1=%f.\n", elapsed, q_i, q1);
+	
 	return q_i;
 }
 
@@ -307,7 +301,6 @@ int Plan_S( SParam *param)
 	}
 	else
 	{//case1,朢??大????度不能达到
-		//printf("Binary solution.\n");
 		//使用二分法减小最大????度求解
 		double vl, vh, vmax;
 
