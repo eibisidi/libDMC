@@ -161,7 +161,6 @@ void	DmcManager::clear()
 	m_requests.clear();
 
 	m_masterConfig.clear();
-	m_masterState.clear();
 	m_driverState.clear();
 	m_ioState.clear();
 }
@@ -851,13 +850,6 @@ bool DmcManager::isDriverOn(short slaveidx)
 bool DmcManager::isDriverOff(short slaveidx)
 {
 	assert (m_driverState.count(slaveidx) > 0);
-#if 0
-
-	if (DRIVE == m_slaveType[slaveidx - 1])
-		return (0x0250 == m_driverState[slaveidx].status || 0x8250 == m_driverState[slaveidx].status); //伺服sv_off状态字为 0x0250 , 步进状态字为 0x670
-	else
-		return (0x0250 == m_driverState[slaveidx].status || 0x670 == m_driverState[slaveidx].status);
-#endif
 	//最低比特置1，代表电机已准备好。
 	return (0 == (0x01 & m_driverState[slaveidx].status ));
 }

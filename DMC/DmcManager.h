@@ -18,13 +18,13 @@ using std::map;
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
 
-enum OpMode
+enum OpMode						//控制模式
 {
 	OPMODE_NONE	  = -1,
-	OPMODE_HOMING = 6,
-	OPMODE_CSP	  = 8,
-	OPMODE_CSV	  = 9,
-	OPMODE_CST	  = 10,
+	OPMODE_HOMING = HOMING_MODE,
+	OPMODE_CSP	  = CSP_MODE,
+	OPMODE_CSV	  = CSV_MODE,
+	OPMODE_CST	  = CST_MODE,
 };
 
 //电机状态
@@ -62,31 +62,6 @@ struct IoState
 	{
 		input 	= 0;
 		iors	= IORS_NONE;
-	}
-};
-
-struct MasterState
-{
-	unsigned char 		state;			//INIT,PREOP, SAFEOP,OP
-	unsigned char		errorcode;
-	unsigned long		fifoFull;		//FIFOFULL计数，用于判断是否写过快,产生覆盖
-	unsigned long 		fifoRemain;		//FIFO剩余量
-	bool				fifoIncre;		//FIFO剩余空间是否增长
-	unsigned long		fifoEmptyCount;	//FIFO连续为空计数
-
-	MasterState()
-	{
-		clear();
-	}
-
-	void clear()
-	{
-		state 		= 0;
-		errorcode   = 0;
-		fifoFull 	= 0;
-		fifoRemain	= 0;
-		fifoIncre	= false;
-		fifoEmptyCount = 0;
 	}
 };
 
@@ -186,7 +161,6 @@ private:
 
 	map<int, BaseRequest *> m_requests;			
 
-	MasterState			 m_masterState;			//主站状态
 	map<int, DriverState>m_driverState;			//电机状态
 	map<int, IoState>	 m_ioState;				//IO状态
 
