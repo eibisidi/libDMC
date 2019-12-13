@@ -10,9 +10,9 @@
 #include <stdlib.h>
 
 //#define  	TEST_MOVE
-//#define 	TEST_HOME
+#define 	TEST_HOME
 //#define TEST_IO
-#define TEST_LINE
+//#define TEST_LINE
 //#define TEST_ARCHL
 //#define TEST_DEC
 //#define TEST_ISTOP
@@ -296,7 +296,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	while(true)
 	{
-		d1000_home_move(1, 50000, 5000, 0.2);
+		d1000_home_move(1, 1000, 500, 200);
 		while(true)
 		{
 			ms = d1000_check_done(1);
@@ -311,7 +311,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			throw;
 		}
 
-		d1000_start_t_move(1, -100000, 0, 100000, 0.2);			//伺服最大速度3000rpm， 80%上限
+		d1000_start_t_move(1, 0, 0, 100000, 0.2);			//伺服最大速度3000rpm， 80%上限
 
 		while(true)
 		{
@@ -327,6 +327,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			throw;
 		}
 
+		break;
 		Sleep(1000);
 	}
 	//Sleep(200);
@@ -412,7 +413,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		//printf("zmove = %d, xmove=%d, ymove = %d.\n", r_distArray[0], r_distArray[1], r_distArray[2]);
 		
-		d1000_start_t_archl(3, r_axisArray, r_distArray,30000, 0.2, hh, hu, hd);	//
+		d1000_start_t_archl(3, r_axisArray, r_distArray,100000, 0.2, hh, hu, hd);	//
 
 		//Sleep(500 + rand()/5000);
 		//d1000_immediate_stop(2);
@@ -437,7 +438,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		r_distArray[2] = ystartpos;
 		//printf("zmove = %d, xmove=%d, ymove = %d.\n", r_distArray[0], r_distArray[1], r_distArray[2]);
 
-		d1000_start_ta_archl(3, r_axisArray, r_distArray,30000, 0.2, hh, hd, hu); //
+		d1000_start_ta_archl(3, r_axisArray, r_distArray,100000, 0.2, hh, hd, hu); //
 		//d1000_start_ta_line(3, r_axisArray, r_distArray, 0, 100000, 0.2);
 		while(1)
 		{
