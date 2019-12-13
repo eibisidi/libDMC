@@ -1,6 +1,5 @@
 #include "DmcManager.h"
 #include "DMC.h"
-#include <assert.h>
 #include "CLogSingle.h"
 
 #include "Poco/DOM/DOMParser.h"
@@ -14,6 +13,8 @@
 #include "Poco/NumberParser.h"
 #include "Poco/DOM/NodeList.h"
 
+#include <fstream>
+#include <assert.h>
 
 #define  MAXJ_RATIO (5)			//最大加加速度倍率
 

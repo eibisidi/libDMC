@@ -7,6 +7,7 @@
 #define MAKE_DWORD(h,l) ((h << 16) | (l))
 
 #define CSP_DATA2_DUMMY (0xFF)
+#define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
 BaseRequest::BaseRequest()
 {

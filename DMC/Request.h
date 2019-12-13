@@ -1,16 +1,13 @@
 #ifndef REQUEST_H
 #define REQUEST_H
 
-#include "stddef.h"
-#include "NEXTWUSBLib_12B.h"
-#include "plan.h"
 #include "AxisPara.h"
 #include "RdWrManager.h"
 
-#include <vector>
-#include <fstream>
-#include <set>
 #include "Poco/Timestamp.h"
+
+#include <vector>
+#include <set>
 
 #define DEF_HOME_METHOD     (19)			//缺省回原点方式
 #define DEF_HOME_TIMEOUT 	(30)			//缺省回原点超时时间30s
@@ -360,6 +357,5 @@ public:
 		fsmstate = fsm_state_start;
 	}
 };
-
 
 #endif

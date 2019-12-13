@@ -1,22 +1,19 @@
 #ifndef DMC_MANAGER
 #define DMC_MANAGER
 #include "DMC.h"
-#include <map>
 #include "RdWrManager.h"
+#include "Request.h"
 
 #include "NEXTWUSBLib_12B.h"
 #include "Poco/Mutex.h"
 #include "Poco/Condition.h"
 #include "Poco/Runnable.h"
 #include "Poco/Thread.h"
-#include "Request.h"
 
+#include <map>
 //#define TIMING 1
 
 using std::map;
-
-#define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
-
 
 enum OpMode						//控制模式
 {
@@ -159,10 +156,10 @@ private:
 
 	MasterConfig		m_masterConfig;			//主站配置信息
 
-	map<int, BaseRequest *> m_requests;			
+	std::map<int, BaseRequest *> m_requests;			
 
-	map<int, DriverState>m_driverState;			//电机状态
-	map<int, IoState>	 m_ioState;				//IO状态
+	std::map<int, DriverState>m_driverState;			//电机状态
+	std::map<int, IoState>	 m_ioState;				//IO状态
 
 	Item				m_items[DEF_MA_MAX];
 };
