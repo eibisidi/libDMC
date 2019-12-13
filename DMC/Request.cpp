@@ -1,9 +1,6 @@
 #include "Request.h"
 #include "DmcManager.h"
 #include "CLogSingle.h"
-#include <assert.h>
-#include <ctime>
-
 
 #define RETRIES (10 * 50)
 #define MAX_ATTEMPTS (5)				
@@ -56,8 +53,6 @@ void DStopRequest::fsm_state_svoff(DStopRequest *req)
 		}
 		return;
 	}
-
-	//fprintf(stdout, "SVOFF StatusWord = 0x%x\n", req->respData->Parm);
 
 	req->fsmstate		= DStopRequest::fsm_state_done;
 	req->dmc->setMoveState(req->slave_idx, MOVESTATE_CMD_STOP);
@@ -216,14 +211,12 @@ void MoveRequest::fsm_state_csp(MoveRequest *req)
 
 void MoveRequest::fsm_state_svon(MoveRequest *req)
 {
-	//fprintf(stdout, "addr = %p, retry = %d, Cmd = 0x%x \n", req->respData, req->rechecks, req->respData->CMD);
 	if(SV_ON != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
 		return;
 	}
-	//fprintf(stdout, "SVON StatusWord = 0x%x, CurrentPos=%d.\n", req->respData->Parm,req->respData->Data1);
 
 	if (!req->dmc->isDriverOn(req->slave_idx)
 		&& req->rechecks--)
@@ -247,8 +240,6 @@ void MoveRequest::fsm_state_svon(MoveRequest *req)
 		}
 		return;
 	}
-
-	//fprintf(stdout, "SVON StatusWord = 0x%x, CurrentPos=%d.\n", req->respData->Parm,req->respData->Data1);
 
 	if (!req->startPlan())
 	{
@@ -743,8 +734,6 @@ void ServoOnRequest::fsm_state_svon(ServoOnRequest *req)
 		return;
 	}
 
-	//printf("status = 0x%x\n", req->dmc->getDriverStatus(req->slave_idx));
-
 	if (!req->dmc->isDriverOn(req->slave_idx)
 		&& req->rechecks--)
 	{
@@ -1084,14 +1073,12 @@ void  MultiAxisRequest::fsm_state_svon(MultiAxisRequest *req)
 		return;
 	}
 
-	//fprintf(stdout, "addr = %p, retry = %d, Cmd = 0x%x \n", req->respData, req->rechecks, req->respData->CMD);
 	if(SV_ON != RESP_CMD_CODE(req->respData)
 			&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
 		return;
 	}
-	//fprintf(stdout, "SVON StatusWord = 0x%x, CurrentPos=%d.\n", req->respData->Parm,req->respData->Data1);
 
 	if (!req->dmc->isDriverOn(req->slave_idx)
 		&& req->rechecks--)
@@ -1116,8 +1103,6 @@ void  MultiAxisRequest::fsm_state_svon(MultiAxisRequest *req)
 		}
 		return;
 	}
-
-	//fprintf(stdout, "SVON StatusWord = 0x%x, CurrentPos=%d.\n", req->respData->Parm,req->respData->Data1);
 
 	req->axispara->reg_sv_on(req->slave_idx);
 	req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_svon;
@@ -1164,8 +1149,6 @@ void  MultiAxisRequest::fsm_state_sdowr_cspmode(MultiAxisRequest *req)
 		}
 		return;
 	}
-
-	//fprintf(stdout, "cspmode = %d.\n",req->respData->Data2);
 
 	//free sdo
 	req->dmc->freeSdoCmdResp(req);

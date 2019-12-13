@@ -1,6 +1,3 @@
-#include <Windows.h>
-#include <stdio.h>
-
 #include "DMC.h"
 #include "DmcManager.h"
 
