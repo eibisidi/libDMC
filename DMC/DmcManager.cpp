@@ -784,16 +784,15 @@ void DmcManager::setRespData(transData *respData)
 	QueryPerformanceCounter(&timeStart); 
 #endif
 
-
 	m_mutexRespData.lock();
 
 	memcpy(m_realRespData, respData, sizeof(m_realRespData));
 	newRespData = true;
 	m_conditionRespData.signal();
+	
 	m_mutexRespData.unlock();
 
 #ifdef TIMING
-
 	QueryPerformanceCounter(&timeEnd); 
 	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
 	
@@ -809,14 +808,14 @@ void DmcManager::setRespData(transData *respData)
 
 void DmcManager::copyRespData()
 {
-#if 0
-		LARGE_INTEGER frequency;								//计时器频率 
-		QueryPerformanceFrequency(&frequency);	 
-		double quadpart = (double)frequency.QuadPart / 1000000;    //计时器频率   
-	
-		LARGE_INTEGER timeStart, timeEnd;
-		double elapsed;
-		QueryPerformanceCounter(&timeStart); 
+#if TIMING
+	LARGE_INTEGER frequency;								//计时器频率 
+	QueryPerformanceFrequency(&frequency);	 
+	double quadpart = (double)frequency.QuadPart / 1000000;    //计时器频率   
+
+	LARGE_INTEGER timeStart, timeEnd;
+	double elapsed;
+	QueryPerformanceCounter(&timeStart); 
 #endif
 	m_mutexRespData.lock();
 	
@@ -830,10 +829,10 @@ void DmcManager::copyRespData()
 
 	updateState();
 
-#if 0
-			QueryPerformanceCounter(&timeEnd); 
-			elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
-			printf("time elapsed = %f\n", elapsed);
+#if TIMING
+	QueryPerformanceCounter(&timeEnd); 
+	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
+	printf("time elapsed = %f\n", elapsed);
 #endif
 
 }
@@ -1141,7 +1140,6 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 	MoveRequest *newReq = NULL;
 	
 	m_mutex.lock();
-	//printf("[%d] abspos = %d, curpos = %d.\n", axis, getDriverCmdPos(axis), getCurpos(axis));
 
 	do{
 		if ( 0 == m_driverState.count(axis))
@@ -1191,7 +1189,6 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 	m_mutex.unlock();
 
 	return retValue;
-		
 }
 
 unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,long acc)
