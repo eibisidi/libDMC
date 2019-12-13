@@ -6,8 +6,11 @@
 #include "DMC.h"
 #include <Windows.h>
 #include <assert.h>
-#include <math.h>
+
+
+#define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>
+#include <crtdbg.h>
 
 //#define  	TEST_MOVE
 #define 	TEST_HOME
@@ -84,6 +87,8 @@ DWORD WINAPI ThreadFunc(LPVOID p)
 
 int _tmain(int argc, _TCHAR* argv[])
 {
+	_CrtSetDbgFlag ( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );	//To Dectect Memory Leaks.
+
 	if (0  != d1000_board_init())
 		return -1;
 	//Sleep(3000);
@@ -311,7 +316,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			throw;
 		}
 
-		d1000_start_t_move(1, 0, 0, 100000, 0.2);			//伺服最大速度3000rpm， 80%上限
+		d1000_start_t_move(1, 100000, 0, 100000, 0.2);			//伺服最大速度3000rpm， 80%上限
 
 		while(true)
 		{
