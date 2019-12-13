@@ -21,6 +21,7 @@ BaseRequest::BaseRequest()
 
 void DStopRequest::fsm_state_done(DStopRequest *req)
 {
+	//shall not be called
 }
 
 void DStopRequest::fsm_state_svoff(DStopRequest *req)
@@ -724,6 +725,7 @@ void InitSlaveRequest::exec()
 
 void ServoOnRequest::fsm_state_done(ServoOnRequest *req)
 {
+	//shall not be called
 }
 
 void ServoOnRequest::fsm_state_svon(ServoOnRequest *req)
@@ -914,6 +916,7 @@ void ServoOnRequest::exec()
 
 void MultiAxisRequest::fsm_state_done(MultiAxisRequest *req)
 {
+	//shall not be called
 }
 
 void  MultiAxisRequest::fsm_state_wait_all_pos_reached(MultiAxisRequest *req)
@@ -1274,8 +1277,6 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 	req->dmc->m_rdWrManager.pushItems(items, cycles, axises);
 
 	delete [] items;
-	
-				
 }
 
 bool MultiAxisRequest::startPlan()
@@ -1285,7 +1286,6 @@ bool MultiAxisRequest::startPlan()
 
 bool  MultiAxisRequest::positionReached(int q , int bias) const
 {
-	//return true;
 	bool reached = this->axispara->positionReached(q, bias);
 	return reached;
 }
@@ -1343,6 +1343,7 @@ MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, boo
 
 void HomeMoveRequest::fsm_state_done(HomeMoveRequest *req)
 {
+	//shall not be called
 }
 
 void HomeMoveRequest::fsm_state_aborthome(HomeMoveRequest *req)
@@ -1761,6 +1762,7 @@ void HomeMoveRequest::exec()
 
 void ReadIoRequest::fsm_state_done(ReadIoRequest *req)
 {
+	//shall not be called
 }
 
 void ReadIoRequest::fsm_state_io_rd(ReadIoRequest *req)
@@ -1811,6 +1813,7 @@ void ReadIoRequest::exec()
 
 void WriteIoRequest::fsm_state_done(WriteIoRequest *req)
 {
+	//shall not be called
 }
 
 void WriteIoRequest::fsm_state_io_wr(WriteIoRequest *req)
