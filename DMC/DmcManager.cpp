@@ -619,11 +619,10 @@ bool DmcManager::loadXmlConfig()
 			pNode = it.nextNode();
 		}
 	}
-	catch (Exception& exc)
+	catch (Poco::Exception& exc)
 	{
 		CLogSingle::logError("XML Exception, %s.", __FILE__, __LINE__, exc.displayText());
 		return false;
-
 	}
 
 	//设置从站的类型

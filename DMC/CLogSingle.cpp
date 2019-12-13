@@ -1,12 +1,13 @@
 #include "CLogSingle.h"
 #include <fstream>
 
-Logger* pLogger = NULL;
-//Logger* pPointsLogger = NULL;
+using namespace std;
+using namespace Poco;
+
+Poco::Logger* pLogger = NULL;
 std::fstream		ofs;
 
-
-Logger* CLogSingle::getLogger()
+Poco::Logger* CLogSingle::getLogger()
 {
 	if (!pLogger)
 	{	
@@ -38,41 +39,9 @@ Logger* CLogSingle::getLogger()
 	return pLogger;
 }
 
-#if 0
-Logger* CLogSingle::getPointsLogger()
-{
-	if (!pPointsLogger)
-	{	
-		string		loggerName = "DMCPOINTS.log";
-
-		Poco::File  pointlog(loggerName);
-		if (pointlog.exists())
-			pointlog.remove();
-
-
-		AutoPtr<FileChannel> pChannel(new FileChannel);
-			
-		pChannel->setProperty("path", 		loggerName);
-		pChannel->setProperty("rotation", "12 M");
-		pChannel->setProperty("archive", "timestamp");
-		pChannel->setProperty("compress", "true");
-		pChannel->setProperty("purgeAge", "10days"); 
-
-		AutoPtr<AsyncChannel> pAC(new AsyncChannel(pChannel));
-		
-		Poco::Logger& logger = Logger::get(loggerName);
-		logger.setChannel(pChannel);
-			
-		pPointsLogger = &logger;
-	}
-
-	return pPointsLogger;
-}
-#endif
-
 void CLogSingle::logFatal(const std::string &msg ,const char* file, int line)
 {
-	Logger* 	pLogger = getLogger();
+	Poco::Logger* 	pLogger = getLogger();
 
 	if (pLogger->fatal())
 	{
@@ -82,7 +51,7 @@ void CLogSingle::logFatal(const std::string &msg ,const char* file, int line)
 
 void CLogSingle::logError(const std::string &msg ,const char* file, int line)
 {
-	Logger* 	pLogger = getLogger();
+	Poco::Logger* 	pLogger = getLogger();
 
 	if (pLogger->error())
 	{
@@ -92,8 +61,7 @@ void CLogSingle::logError(const std::string &msg ,const char* file, int line)
 
 void CLogSingle::logWarning(const std::string &msg ,const char* file, int line)
 {
-
-	Logger* 	pLogger = getLogger();
+	Poco::Logger* 	pLogger = getLogger();
 
 	if (pLogger->warning())
 	{
@@ -103,8 +71,7 @@ void CLogSingle::logWarning(const std::string &msg ,const char* file, int line)
 
 void CLogSingle::logInformation(const std::string &msg ,const char* file, int line)
 {
-
-	Logger* 	pLogger = getLogger();
+	Poco::Logger* 	pLogger = getLogger();
 
 	if (pLogger->information())
 	{
@@ -118,36 +85,17 @@ void CLogSingle::logDump(const std::string &msg, const void* buffer, std::size_t
 	pLogger->dump(msg, buffer, length, Message::PRIO_FATAL);
 }
 
-
- void CLogSingle::logPoint(int p)
+void CLogSingle::logPoint(int p)
 {
-#if 0
-	Logger* 	pLogger = getPointsLogger();
-	
-	if (pLogger->information())
-	{
-		pLogger->information(format("%d", p));
-	}
-#endif
 	if (ofs.is_open())
 		ofs << p << "    ";
 }
 
-
 void CLogSingle::logPoint(const std::string &line)
 {
-#if 0
-	Logger*	 pLogger = getPointsLogger();
-
-	if (pLogger->information())
-	{
-	 	pLogger->information(line);
-	}
-#endif
 	if (ofs.is_open())
 		ofs << line;
 }
-
 
 void CLogSingle::setLogLevel(int nLevel, bool logpoints)
 {
@@ -165,11 +113,7 @@ void CLogSingle::setLogLevel(int nLevel, bool logpoints)
 	//开启规划点记录
 	if (logpoints)
 		ofs.open("DMCPOINTS.log",std::fstream::out | std::fstream::trunc);
-
-	//Logger* 	pPointLogger = getPointsLogger();
-	//pPointLogger->setLevel(Poco::Message::Priority::PRIO_TRACE);
 }
-
 
 void CLogSingle::initLogger()
 {
@@ -187,13 +131,6 @@ void CLogSingle::closeLogger()
 		pLogger = NULL;
 	}
 
-#if 0
-	if (pPointsLogger)
-	{
-		pPointsLogger->getChannel()->close();
-		pPointsLogger = NULL;
-	}
-#endif
 	if (ofs.is_open())
 		ofs.close();
 }

@@ -11,9 +11,6 @@
 #include "Poco/AutoPtr.h"
 #include "Poco/AsyncChannel.h"
 
-using namespace std;
-using namespace Poco;
-
 class CLogSingle
 {
 public:
@@ -22,7 +19,7 @@ public:
 	template <typename... Args>
 	static void logFatal(const std::string &fmt, const char* file, int line, Args&&... args)
 	{
-		Logger* 	pLogger = getLogger();
+		Poco::Logger* 	pLogger = getLogger();
 		
 		if (pLogger->error())
 		{
@@ -36,7 +33,7 @@ public:
 	template <typename... Args>
 	static void logError(const std::string &fmt, const char* file, int line, Args&&... args)
 	{
-		Logger* 	pLogger = getLogger();
+		Poco::Logger* 	pLogger = getLogger();
 		
 		if (pLogger->error())
 		{
@@ -50,7 +47,7 @@ public:
 	template <typename... Args>
 	static void logWarning(const std::string &fmt, const char* file, int line, Args&&... args)
 	{
-		Logger* 	pLogger = getLogger();
+		Poco::Logger* 	pLogger = getLogger();
 		
 		if (pLogger->warning())
 		{
@@ -64,7 +61,7 @@ public:
 	template <typename... Args>
 	static void logInformation( const std::string &fmt, const char* file, int line, Args&&... args)
 	{
-		Logger* 	pLogger = getLogger();
+		Poco::Logger* 	pLogger = getLogger();
 		
 		if (pLogger->information())
 		{
@@ -79,7 +76,7 @@ public:
 	static void logPoint( const std::string &fmt, Args&&... args)
 	{
 
-		Logger* 	pLogger = getPointsLogger();
+		Poco::Logger* 	pLogger = getPointsLogger();
 		if (pLogger->information())
 		{
 			pLogger->information(Poco::format(fmt, std::forward<Args>(args)...));
@@ -97,10 +94,8 @@ private:
 	CLogSingle();
 	virtual ~CLogSingle();
 
-
 	static Poco::Logger* getLogger();
 	static Poco::Logger* getPointsLogger();
-
 };
 
 #endif
