@@ -62,6 +62,8 @@ void DStopRequest::fsm_state_svoff(DStopRequest *req)
 	req->fsmstate		= DStopRequest::fsm_state_done;
 	req->dmc->setMoveState(req->slave_idx, MOVESTATE_CMD_STOP);
 	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void DStopRequest::fsm_state_csp(DStopRequest *req)
@@ -123,7 +125,6 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 	{//需关闭电机使能
 		req->fsmstate		= DStopRequest::fsm_state_svoff;
 		req->cmdData->CMD	= SV_OFF;
-		req->rechecks		= RETRIES;
 	}
 	else
 	{//不需关闭电机使能
@@ -131,6 +132,8 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 		req->dmc->setMoveState(req->slave_idx, MOVESTATE_CMD_STOP);
 		req->reqState		= REQUEST_STATE_SUCCESS;
 	}
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void DStopRequest::fsm_state_start(DStopRequest *req)
@@ -209,6 +212,8 @@ void MoveRequest::fsm_state_csp(MoveRequest *req)
 	req->fsmstate	 	= fsm_state_done;
 	req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
 	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void MoveRequest::fsm_state_svon(MoveRequest *req)
@@ -257,6 +262,7 @@ void MoveRequest::fsm_state_svon(MoveRequest *req)
 	req->fsmstate	 	= fsm_state_csp;
 	req->cmdData->CMD 	= CSP;
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 
 	pushCspPoints(req);
 }
@@ -317,6 +323,7 @@ void MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
 		req->cmdData->CMD		= SV_ON;
 	}
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void MoveRequest::fsm_state_wait_sdowr_cspmode(MoveRequest *req)
@@ -349,6 +356,7 @@ void MoveRequest::fsm_state_wait_sdowr_cspmode(MoveRequest *req)
 	req->cmdData->Data1 = 0x60600000;									//index 0x6060 subindex 0x0000
 	req->cmdData->Data2 = CSP_MODE;	
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void MoveRequest::fsm_state_start(MoveRequest *req)
@@ -515,6 +523,8 @@ void ClrAlarmRequest::fsm_state_sdord_errcode(ClrAlarmRequest *req)
 	req->fsmstate		= ClrAlarmRequest::fsm_state_done;
 	req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
 	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void ClrAlarmRequest::fsm_state_wait_sdord_errcode(ClrAlarmRequest *req)
@@ -546,6 +556,7 @@ void ClrAlarmRequest::fsm_state_wait_sdord_errcode(ClrAlarmRequest *req)
 	req->cmdData->Parm	= 0x0200 | (req->slave_idx & 0xFF); 			//size | slaveidx
 	req->cmdData->Data1 = 0x603F0000;
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void ClrAlarmRequest::fsm_state_alm_clr(ClrAlarmRequest *req)
@@ -580,10 +591,11 @@ void ClrAlarmRequest::fsm_state_alm_clr(ClrAlarmRequest *req)
 		req->cmdData->CMD	= SDO_RD;
 		req->cmdData->Parm	= 0x0200 | (req->slave_idx & 0xFF); 			//size | slaveidx
 		req->cmdData->Data1 = 0x603F0000;
-		req->rechecks		= RETRIES;
 	}
 	else
 		req->fsmstate  = ClrAlarmRequest::fsm_state_wait_sdord_errcode;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void ClrAlarmRequest::fsm_state_start(ClrAlarmRequest *req)
@@ -655,8 +667,9 @@ void InitSlaveRequest::fsm_state_sdowr(InitSlaveRequest *req)
 		req->cmdData->Parm	= (req->iter->sdo_size << 8) | (req->slave_idx & 0xFF); 			//size | slaveidx
 		req->cmdData->Data1 = MAKE_DWORD(req->iter->sdo_index,req->iter->sdo_subindex); 		//index 0x6091 subindex 0x0001
 		req->cmdData->Data2 = (req->iter->sdo_value);										//分辨率比值	
-		req->rechecks		= RETRIES;
 	}
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void InitSlaveRequest::fsm_state_wait_sdowr(InitSlaveRequest *req)
@@ -689,6 +702,7 @@ void InitSlaveRequest::fsm_state_wait_sdowr(InitSlaveRequest *req)
 	req->cmdData->Data1 = MAKE_DWORD(req->iter->sdo_index,req->iter->sdo_subindex);
 	req->cmdData->Data2 = (req->iter->sdo_value);
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void InitSlaveRequest::fsm_state_start(InitSlaveRequest *req)
@@ -762,7 +776,8 @@ void ServoOnRequest::fsm_state_svon(ServoOnRequest *req)
 	req->fsmstate	 	= ServoOnRequest::fsm_state_done;
 	req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
 	req->reqState		= REQUEST_STATE_SUCCESS;
-
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void ServoOnRequest::fsm_state_svoff(ServoOnRequest *req)
@@ -800,6 +815,7 @@ void ServoOnRequest::fsm_state_svoff(ServoOnRequest *req)
 	req->fsmstate		= ServoOnRequest::fsm_state_svon;
 	req->cmdData->CMD	= SV_ON;
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void ServoOnRequest::fsm_state_sdowr_cspmode(ServoOnRequest *req)
@@ -842,6 +858,7 @@ void ServoOnRequest::fsm_state_sdowr_cspmode(ServoOnRequest *req)
 	req->fsmstate		= ServoOnRequest::fsm_state_svoff;
 	req->cmdData->CMD	= SV_OFF;
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void ServoOnRequest::fsm_state_wait_sdowr_cspmode(ServoOnRequest *req)
@@ -874,6 +891,7 @@ void ServoOnRequest::fsm_state_wait_sdowr_cspmode(ServoOnRequest *req)
 	req->cmdData->Data1 = 0x60600000;									//index 0x6060 subindex 0x0000
 	req->cmdData->Data2 = CSP_MODE;	
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void ServoOnRequest::fsm_state_start(ServoOnRequest *req)
@@ -947,6 +965,8 @@ void  MultiAxisRequest::fsm_state_wait_all_pos_reached(MultiAxisRequest *req)
 	req->fsmstate		= MultiAxisRequest::fsm_state_done;
 	req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
 	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
@@ -1003,7 +1023,8 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 
 	req->axispara->reg_pos_reached();									//位置已经到达
 	req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_pos_reached;
-	req->rechecks	 	= RETRIES;										//!!!重置，检测目标是否到达时，已经可能消耗过多
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
@@ -1050,6 +1071,7 @@ void  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 	req->fsmstate	 	= MultiAxisRequest::fsm_state_csp;
 	req->cmdData->CMD 	= CSP;
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 
 	//多轴插入CSP规划点
 	pushCspPoints(req);
@@ -1102,6 +1124,7 @@ void  MultiAxisRequest::fsm_state_svon(MultiAxisRequest *req)
 	req->axispara->reg_sv_on(req->slave_idx);
 	req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_svon;
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void  MultiAxisRequest::fsm_state_sdowr_cspmode(MultiAxisRequest *req)
@@ -1154,6 +1177,7 @@ void  MultiAxisRequest::fsm_state_sdowr_cspmode(MultiAxisRequest *req)
 	req->fsmstate		= MultiAxisRequest::fsm_state_svon;
 	req->cmdData->CMD	= SV_ON;
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void  MultiAxisRequest::fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req)
@@ -1194,6 +1218,7 @@ void  MultiAxisRequest::fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req)
 	req->cmdData->Data1 = 0x60600000;									//index 0x6060 subindex 0x0000
 	req->cmdData->Data2 = CSP_MODE; 
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void  MultiAxisRequest::fsm_state_start(MultiAxisRequest *req)
@@ -1387,6 +1412,8 @@ void HomeMoveRequest::fsm_state_gohome(HomeMoveRequest *req)
 	req->fsmstate		= HomeMoveRequest::fsm_state_done;
 	req->dmc->setMoveState(req->slave_idx, MOVESTATE_O_STOP);
 	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void HomeMoveRequest::fsm_state_sdowr_acc(HomeMoveRequest *req)
@@ -1429,6 +1456,7 @@ void HomeMoveRequest::fsm_state_sdowr_acc(HomeMoveRequest *req)
 	req->respData		= req->dmc->getRespData(req->slave_idx);
 	req->cmdData->CMD	= GO_HOME;
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void HomeMoveRequest::fsm_state_sdowr_lowspeed(HomeMoveRequest *req)
@@ -1469,6 +1497,7 @@ void HomeMoveRequest::fsm_state_sdowr_lowspeed(HomeMoveRequest *req)
 	req->cmdData->Data1 = 0x609A0000;						//index 0x609A subindex 0x0000
 	req->cmdData->Data2 = req->acc; 						//加速度		
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void HomeMoveRequest::fsm_state_sdowr_highspeed(HomeMoveRequest *req)
@@ -1509,6 +1538,7 @@ void HomeMoveRequest::fsm_state_sdowr_highspeed(HomeMoveRequest *req)
 	req->cmdData->Data1 = 0x60990002;						//index 0x6099 subindex 0x0002
 	req->cmdData->Data2 = req->low_speed; 					//低速				
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void HomeMoveRequest::fsm_state_sdowr_homemethod(HomeMoveRequest *req)
@@ -1536,7 +1566,7 @@ void HomeMoveRequest::fsm_state_sdowr_homemethod(HomeMoveRequest *req)
 		}
 		else
 		{
-			CLogSingle::logError("HomeMoveRequest::fsm_state_sdowr_homemethod timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
+			CLogSingle::logWarning("HomeMoveRequest::fsm_state_sdowr_homemethod retries, axis=%d.", __FILE__, __LINE__, req->slave_idx);
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
@@ -1549,7 +1579,7 @@ void HomeMoveRequest::fsm_state_sdowr_homemethod(HomeMoveRequest *req)
 	req->cmdData->Data1 = 0x60990001;						//index 0x6099 subindex 0x0001
 	req->cmdData->Data2 = req->high_speed; 					//高速		
 	req->rechecks		= RETRIES;
-
+	req->attempts		= 0;
 }
 
 void HomeMoveRequest::fsm_state_sdowr_homeoffset(HomeMoveRequest *req)
@@ -1590,6 +1620,7 @@ void HomeMoveRequest::fsm_state_sdowr_homeoffset(HomeMoveRequest *req)
 	req->cmdData->Data1 = 0x60980000;						//index 0x6098 subindex 0x0000
 	req->cmdData->Data2 = req->home_method; 				//回原点方式
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void HomeMoveRequest::fsm_state_sdowr_homemode(HomeMoveRequest *req)
@@ -1630,6 +1661,7 @@ void HomeMoveRequest::fsm_state_sdowr_homemode(HomeMoveRequest *req)
 	req->cmdData->Data1 = 0x607C0000;						//index 0x607C subindex 0x0000
 	req->cmdData->Data2 = 0; 								//原点偏移
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void HomeMoveRequest::fsm_state_wait_sdowr_homemode(HomeMoveRequest *req)
@@ -1662,6 +1694,7 @@ void HomeMoveRequest::fsm_state_wait_sdowr_homemode(HomeMoveRequest *req)
 	req->cmdData->Data1 = 0x60600000;									//index 0x6060 subindex 0x0000
 	req->cmdData->Data2 = HOMING_MODE;					
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void HomeMoveRequest::fsm_state_svon(HomeMoveRequest *req)
@@ -1707,6 +1740,7 @@ void HomeMoveRequest::fsm_state_svon(HomeMoveRequest *req)
 	else
 		req->fsmstate		= HomeMoveRequest::fsm_state_wait_sdowr_homemode;		
 	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void HomeMoveRequest::fsm_state_start(HomeMoveRequest *req)
@@ -1776,6 +1810,8 @@ void ReadIoRequest::fsm_state_io_rd(ReadIoRequest *req)
 	req->fsmstate		= ReadIoRequest::fsm_state_done;
 	req->reqState		= REQUEST_STATE_SUCCESS;
 	req->dmc->setIoRS(req->slave_idx, IORS_SUCCESS);
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void ReadIoRequest::fsm_state_start(ReadIoRequest *req)
@@ -1824,6 +1860,8 @@ void WriteIoRequest::fsm_state_io_wr(WriteIoRequest *req)
 	req->fsmstate		= WriteIoRequest::fsm_state_done;
 	req->reqState		= REQUEST_STATE_SUCCESS;
 	req->dmc->setIoRS(req->slave_idx, IORS_SUCCESS);
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 }
 
 void WriteIoRequest::fsm_state_start(WriteIoRequest *req)
