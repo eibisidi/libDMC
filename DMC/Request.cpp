@@ -1347,7 +1347,8 @@ void HomeMoveRequest::fsm_state_aborthome(HomeMoveRequest *req)
 		return;
 	}
 
-	//req->dmc->setDriverCmdPos(req->slave_idx, 0);
+	long curpos =  req->dmc->getCurpos(req->slave_idx);
+	req->dmc->setDriverCmdPos(req->slave_idx, curpos);			//回失败，将命令位置置为当前位置
 
 	req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
 	req->reqState = REQUEST_STATE_FAIL;
@@ -1381,7 +1382,7 @@ void HomeMoveRequest::fsm_state_gohome(HomeMoveRequest *req)
 	}
 
 	CLogSingle::logInformation("Homed, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-	req->dmc->setDriverCmdPos(req->slave_idx, 0);
+	req->dmc->setDriverCmdPos(req->slave_idx, 0);			//回原点后，将命令位置置为0
 
 	req->fsmstate		= HomeMoveRequest::fsm_state_done;
 	req->dmc->setMoveState(req->slave_idx, MOVESTATE_O_STOP);
