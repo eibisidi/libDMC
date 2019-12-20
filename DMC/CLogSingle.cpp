@@ -101,8 +101,8 @@ void CLogSingle::setLogLevel(int nLevel, bool logpoints)
 {
 	Logger* 	pLogger = getLogger();
 
-	if (nLevel < Poco::Message::Priority::PRIO_FATAL
-		|| nLevel > Poco::Message::Priority::PRIO_TRACE
+	if (nLevel < Poco::Message::PRIO_FATAL
+		|| nLevel > Poco::Message::PRIO_TRACE
 		)
 	{
 		nLevel = 0; //turn off
@@ -117,7 +117,7 @@ void CLogSingle::setLogLevel(int nLevel, bool logpoints)
 
 void CLogSingle::initLogger()
 {
-	setLogLevel(Poco::Message::Priority::PRIO_TRACE);	//初始化记录所有信息
+	setLogLevel(Poco::Message::PRIO_TRACE);	//初始化记录所有信息
 
 	if (ofs.is_open())
 		ofs.close();

@@ -42,7 +42,7 @@ void RdWrManager::clear()
 	
 	for (int i = 0; i < DEF_MA_MAX; ++i)
 	{
-		queueFlags[i].store(false);	//各队列初始状态为空闲
+		queueFlags[i] = false;	//各队列初始状态为空闲
 	}
 
 	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
@@ -78,7 +78,6 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 
 	int activeItems = 0;
 	int slaveidx;
-	bool qflag;
 	
 	memset(cmdData, 0, sizeof(transData)* cmdcount);
 	
@@ -89,9 +88,9 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 				++iter)
 	{
 		slaveidx = iter->first;
-		qflag    = false;		//希望队列空闲
-		if (true == queueFlags[slaveidx].compare_exchange_weak(qflag, true))
+		if (false == queueFlags[slaveidx])
 		{
+			queueFlags[slaveidx] = true;
 			///////////////////////////////////////////////////////////////////////////////////////////
 			if (0 == tostop.count(slaveidx))
 			{
@@ -163,7 +162,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 				tostop.erase(slaveidx);
 			}
 			////////////////////////////////////////////////////////////////////////////////////////////
-			queueFlags[slaveidx].store(false);		//置队列空闲
+			queueFlags[slaveidx] = false;		//置队列空闲
 		}
 	}
 
@@ -204,7 +203,7 @@ void RdWrManager::pushItems(Item *items, int rows, size_t cols)
 		for(c = 0; c < cols; ++c)
 		{
 			slaveidx = items[c].index;
-			if (true == queueFlags[slaveidx].load())	//当前队列正忙
+			if (true == queueFlags[slaveidx])	//当前队列正忙
 			{
 				break;
 			}
@@ -215,7 +214,7 @@ void RdWrManager::pushItems(Item *items, int rows, size_t cols)
 			for(c = 0; c < cols; ++c)
 			{
 				slaveidx = items[c].index;
-				queueFlags[slaveidx].store(true);		//当前队列设置为忙
+				queueFlags[slaveidx] = true;		//当前队列设置为忙
 			}
 			m_mutex.unlock();
 			break;
@@ -238,7 +237,7 @@ void RdWrManager::pushItems(Item *items, int rows, size_t cols)
 	for(c = 0; c < cols; ++c)
 	{
 		slaveidx = items[c].index;
-		queueFlags[slaveidx].store(false);		//当前队列设置为空闲
+		queueFlags[slaveidx] = false;		//当前队列设置为空闲
 	}
 	m_mutex.unlock();
 }
@@ -249,7 +248,7 @@ size_t RdWrManager::peekQueue(int slaveidx)
 	while(true)
 	{
 		m_mutex.lock(); 
-		if (false == queueFlags[slaveidx].load())	//当前队列空闲
+		if (false == queueFlags[slaveidx])	//当前队列空闲
 		{
 			break;
 		}
@@ -311,7 +310,7 @@ void RdWrManager::run()
 	//初始化FIFO状态
 	if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
 	{
-		LOGSINGLE_FATAL("ECMUSBRead failed.%s", __FILE__, __LINE__, "");
+		LOGSINGLE_FATAL("ECMUSBRead failed.%s", __FILE__, __LINE__, std::string(""));
 		return;
 	}
 
@@ -389,7 +388,7 @@ void RdWrManager::run()
 					}
 					break;
 				default:
-					LOGSINGLE_FATAL("Unexpected case.%s", __FILE__, __LINE__, "");
+					LOGSINGLE_FATAL("Unexpected case.%s", __FILE__, __LINE__, std::string(""));
 			}
 			
 			rdWrState.lastRemain = FIFO_REMAIN(respData);
@@ -409,6 +408,6 @@ SEND:
 		towrite = BATCH_WRITE;
 	};
 
-	LOGSINGLE_INFORMATION("RdWrManager Thread canceled.%s", __FILE__, __LINE__, "");
+	LOGSINGLE_INFORMATION("RdWrManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));
 }
 
