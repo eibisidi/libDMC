@@ -171,18 +171,18 @@ unsigned long DmcManager::init()
 	//初始化日志
 	CLogSingle::initLogger();
 
-	CLogSingle::logInformation("libDMC ver 1.0. buildtime : %s %s.", __FILE__, __LINE__, std::string(__DATE__), std::string(__TIME__));
+	LOGSINGLE_INFORMATION("libDMC ver 1.0. buildtime : %s %s.", __FILE__, __LINE__, std::string(__DATE__), std::string(__TIME__));
 
 	if (m_init)
 	{	
-		CLogSingle::logError("init already called.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("init already called.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_DUP_INIT;
 	}
 
 	//读取配置信息
 	if (!loadXmlConfig())
 	{
-		CLogSingle::logError("loadXmlConfig failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("loadXmlConfig failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_LOAD_XML;
 	}
 
@@ -191,11 +191,11 @@ unsigned long DmcManager::init()
 
 	if (!::OpenECMUSB())
 	{
-		CLogSingle::logError("OpenECMUSB failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("OpenECMUSB failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_OPENUSB;
 	}
 
-	CLogSingle::logInformation("OpenECMUSB success.", __FILE__, __LINE__);
+	LOGSINGLE_INFORMATION("OpenECMUSB success.%s", __FILE__, __LINE__, std::string(""));
 
 	Sleep(100);
 
@@ -205,13 +205,13 @@ unsigned long DmcManager::init()
 	m_cmdData[0].Data1 = STATE_PRE_OP; 
 	if (!::ECMUSBWrite((unsigned char*)m_cmdData, sizeof(m_cmdData)))
 	{
-		CLogSingle::logError("ECMUSBWrite failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("ECMUSBWrite failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_ECM_WRITE;
 	}
 
 	if (!::checkResponse(0, 1, STATE_PRE_OP, 1000))
 	{
-		CLogSingle::logError("checkResponse failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("checkResponse failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_ECM_PREOP;
 	}
 
@@ -232,7 +232,7 @@ unsigned long DmcManager::init()
 		m_cmdData[0].Data2 = 0;
 		if (!::ECMUSBWrite((unsigned char*)m_cmdData, sizeof(m_cmdData)))
 		{
-			CLogSingle::logError("ECMUSBWrite failed.", __FILE__, __LINE__);
+			LOGSINGLE_ERROR("ECMUSBWrite failed.%s", __FILE__, __LINE__, std::string(""));
 			return ERR_ECM_WRITE;
 		}
 		Sleep(2);
@@ -246,13 +246,13 @@ unsigned long DmcManager::init()
 
 	if (!::ECMUSBWrite((unsigned char*)m_cmdData, sizeof(m_cmdData)))
 	{
-		CLogSingle::logError("ECMUSBWrite failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("ECMUSBWrite failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_ECM_WRITE;
 	}
 	Sleep(2);
 	if (!::ECMUSBRead((unsigned char*)m_respData, sizeof(m_respData)))
 	{
-		CLogSingle::logError("ECMUSBRead failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("ECMUSBRead failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_ECM_READ;
 	}
 
@@ -270,7 +270,7 @@ unsigned long DmcManager::init()
 	}
 	if (!::ECMUSBWrite((unsigned char*)m_cmdData, sizeof(m_cmdData)))
 	{
-		CLogSingle::logError("ECMUSBWrite failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("ECMUSBWrite failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_ECM_WRITE;
 	}
 
@@ -282,12 +282,12 @@ unsigned long DmcManager::init()
 	m_cmdData[0].Data1 = STATE_SAFE_OP;
 	if (!::ECMUSBWrite((unsigned char*)m_cmdData, sizeof(m_cmdData)))
 	{
-		CLogSingle::logError("ECMUSBWrite failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("ECMUSBWrite failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_ECM_WRITE;
 	}
 	if(!::checkResponse(0, 1, STATE_SAFE_OP, 1000))  // wait for enter to safe op mode
 	{
-		CLogSingle::logError("checkResponse failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("checkResponse failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_ECM_SAFEOP;
 	}
 	
@@ -297,13 +297,13 @@ unsigned long DmcManager::init()
 	m_cmdData[0].Data1 = STATE_OPERATIONAL;
 	if (!::ECMUSBWrite((unsigned char*)m_cmdData, sizeof(m_cmdData)))
 	{
-		CLogSingle::logError("ECMUSBWrite failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("ECMUSBWrite failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_ECM_WRITE;
 	}
 
 	if (!::checkResponse(0, 1, STATE_OPERATIONAL, 1000))// wait for enter to op mode
 	{
-		CLogSingle::logError("checkResponse failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("checkResponse failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_ECM_OP;
 	}
 
@@ -322,7 +322,7 @@ unsigned long DmcManager::init()
 		{
 			if (ERR_NOERR != clr_alarm(i))
 			{
-				CLogSingle::logFatal("clr_alarm for axis %d failed.", __FILE__, __LINE__, i);
+				LOGSINGLE_FATAL("clr_alarm for axis %d failed.", __FILE__, __LINE__, i);
 				return ERR_CLR_ALARM;
 			}
 		}
@@ -336,7 +336,7 @@ unsigned long DmcManager::init()
 		{
 			if (ERR_NOERR != init_driver(i))
 			{
-				CLogSingle::logFatal("init_driver for axis %d failed.", __FILE__, __LINE__, i);
+				LOGSINGLE_FATAL("init_driver for axis %d failed.", __FILE__, __LINE__, i);
 				return ERR_INIT_AXIS;
 			}
 		}
@@ -349,7 +349,7 @@ unsigned long DmcManager::init()
 		{
 			if (ERR_NOERR != servo_on(i))
 			{
-				CLogSingle::logFatal("servo_on for axis %d failed.", __FILE__, __LINE__, i);
+				LOGSINGLE_FATAL("servo_on for axis %d failed.", __FILE__, __LINE__, i);
 				return ERR_SERVO_ON;
 			}
 		}
@@ -376,7 +376,7 @@ void DmcManager::close()
 	m_cmdData[0].Data1 = STATE_INIT; 
 	if (!::ECMUSBWrite((unsigned char*)m_cmdData, sizeof(m_cmdData)))
 	{
-		CLogSingle::logError("ECMUSBWrite failed.", __FILE__, __LINE__);
+		LOGSINGLE_ERROR("ECMUSBWrite failed.%s", __FILE__, __LINE__, std::string(""));
 	}
 	::CloseECMUSB();
 
@@ -386,7 +386,7 @@ void DmcManager::close()
 	clear();
 }
 
-void DmcManager::logCspPoints(const Item *pItems, int rows, int cols) const
+void DmcManager::logCspPoints(const Item *pItems, int rows, size_t cols) const
 {
 	if (m_masterConfig.logpoint_axis.empty())
 		return;
@@ -394,7 +394,7 @@ void DmcManager::logCspPoints(const Item *pItems, int rows, int cols) const
 	for (int r = 0; r < rows; ++r)
 	{
 		//按照轴号顺序输出规划位置
-		for (std::set<int>::iterator iter = m_masterConfig.logpoint_axis.begin();
+		for (std::set<int>::const_iterator iter = m_masterConfig.logpoint_axis.begin();
 											iter != m_masterConfig.logpoint_axis.end();
 											++iter)
 		{
@@ -498,7 +498,7 @@ bool DmcManager::loadXmlConfig()
 					slave_type = IO;
 				else
 				{
-					CLogSingle::logError("XML Error, Slave %d, Unknown type = %s.", __FILE__, __LINE__, slave_index, pAttr->nodeValue());
+					LOGSINGLE_ERROR("XML Error, Slave %d, Unknown type = %s.", __FILE__, __LINE__, slave_index, pAttr->nodeValue());
 					return false;
 				}
 
@@ -534,7 +534,7 @@ bool DmcManager::loadXmlConfig()
 
 				if (0 != m_masterConfig.slave_indexes.count(sc.slave_index))
 				{
-					CLogSingle::logError("XML Error, duplicate slave index %d.", __FILE__, __LINE__, sc.slave_index);
+					LOGSINGLE_ERROR("XML Error, duplicate slave index %d.", __FILE__, __LINE__, sc.slave_index);
 					return false;
 				}
 
@@ -619,7 +619,7 @@ bool DmcManager::loadXmlConfig()
 	}
 	catch (Poco::Exception& exc)
 	{
-		CLogSingle::logError("XML Exception, %s.", __FILE__, __LINE__, exc.displayText());
+		LOGSINGLE_ERROR("XML Exception, %s.", __FILE__, __LINE__, exc.displayText());
 		return false;
 	}
 
@@ -762,7 +762,7 @@ void DmcManager::freeSdoCmdResp(BaseRequest *req)
 void DmcManager::restoreLastCmd(transData *cmdData)
 {
 	int slaveidx;
-	slaveidx = cmdData - m_cmdData;
+	slaveidx = (int)(cmdData - m_cmdData);
 	*cmdData = m_lastCmdData[slaveidx];
 }
 
@@ -924,7 +924,7 @@ void DmcManager::run()
 		m_mutex.unlock();
 	}
 
-	CLogSingle::logInformation("DmcManager Thread canceled.", __FILE__, __LINE__);
+	LOGSINGLE_INFORMATION("DmcManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));
 }
 
 unsigned long DmcManager::clr_alarm(short axis)
@@ -976,12 +976,12 @@ unsigned long DmcManager::clr_alarm(short axis)
 	if (MOVESTATE_STOP == ms)
 	{
 		retValue = ERR_NOERR;
-		CLogSingle::logInformation("clr_alarm axis(%?d) succeed, status = 0x%?x.", __FILE__, __LINE__, axis, getDriverStatus(axis));
+		LOGSINGLE_INFORMATION("clr_alarm axis(%?d) succeed, status = 0x%?x.", __FILE__, __LINE__, axis, getDriverStatus(axis));
 	}
 	else
 	{
 		retValue = ERR_CLR_ALARM;
-		CLogSingle::logError("clr_alarm axis(%?d) failed.",	__FILE__, __LINE__, axis);
+		LOGSINGLE_ERROR("clr_alarm axis(%?d) failed.",	__FILE__, __LINE__, axis);
 	}
 
 	return retValue;
@@ -1046,12 +1046,12 @@ unsigned long DmcManager::init_driver(short axis)
 		if (MOVESTATE_STOP == ms)
 		{
 			retValue = ERR_NOERR;
-			CLogSingle::logInformation("init_driver axis(%?d) succeed.", __FILE__, __LINE__, axis);
+			LOGSINGLE_INFORMATION("init_driver axis(%?d) succeed.", __FILE__, __LINE__, axis);
 		}
 		else
 		{
 			retValue = ERR_CLR_ALARM;
-			CLogSingle::logError("init_driver axis(%?d) failed.",	__FILE__, __LINE__, axis);
+			LOGSINGLE_ERROR("init_driver axis(%?d) failed.",	__FILE__, __LINE__, axis);
 		}
 	}
 	return retValue;		
@@ -1106,12 +1106,12 @@ unsigned long DmcManager::servo_on(short axis)
 	if (MOVESTATE_STOP == ms)
 	{
 		retValue = ERR_NOERR;
-		CLogSingle::logInformation("servo_on axis(%?d) succeed, cmdpos = %?d.", __FILE__, __LINE__, axis, getDriverCmdPos(axis));
+		LOGSINGLE_INFORMATION("servo_on axis(%?d) succeed, cmdpos = %?d.", __FILE__, __LINE__, axis, getDriverCmdPos(axis));
 	}
 	else
 	{
 		retValue = ERR_SERVO_ON;
-		CLogSingle::logError("servo_on axis(%?d) failed.",  __FILE__, __LINE__, axis);
+		LOGSINGLE_ERROR("servo_on axis(%?d) failed.",  __FILE__, __LINE__, axis);
 	}
 
 	return retValue;
@@ -1253,7 +1253,7 @@ unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *dis
 
 		if (m_requests.count(axis))
 		{
-			CLogSingle::logError("Axis %?d is busy.", __FILE__, __LINE__, axis);
+			LOGSINGLE_ERROR("Axis %?d is busy.", __FILE__, __LINE__, axis);
 			retValue = ERR_AXIS_BUSY;
 			goto DONE;
 		}

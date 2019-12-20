@@ -107,7 +107,7 @@ int LinearRef::startPlan()
 			this->moveparam = newT;
 			if(-1 == ::Plan_T(newT))
 			{
-				CLogSingle::logError("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f.", __FILE__, __LINE__,
+				LOGSINGLE_ERROR("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f.", __FILE__, __LINE__,
 						newT->q0, newT->q1, newT->vmax, newT->amax);
 				planned = -1;
 			}
@@ -125,7 +125,7 @@ int LinearRef::startPlan()
 			moveparam = newS;
 			if (-1 == ::Plan_S(newS))
 			{
-				CLogSingle::logError("Plan_S failed, q0=%f, q1=%f, vmax=%f, amax=%f, jmax=%f.", __FILE__, __LINE__,
+				LOGSINGLE_ERROR("Plan_S failed, q0=%f, q1=%f, vmax=%f, amax=%f, jmax=%f.", __FILE__, __LINE__,
 						newS->q0, newS->q1, newS->vmax, newS->amax, newS->jmax);
 				planned = -1;
 			}
@@ -321,7 +321,7 @@ int ArchlRef::startPlan()
 				if (this->zstartpos + this->hu > this->hh
 					|| this->zdstpos + this->hd > this->hh)	//正向运动超限高
 				{
-					CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
+					LOGSINGLE_ERROR("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
 						this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
 					planned = -1;
 					break;
@@ -332,7 +332,7 @@ int ArchlRef::startPlan()
 				if (this->zstartpos - this->hu < this->hh
 					|| this->zdstpos - this->hd < this->hh) //负向运动超限高
 				{
-					CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
+					LOGSINGLE_ERROR("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
 						this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
 					planned = -1;
 					break;
@@ -346,7 +346,7 @@ int ArchlRef::startPlan()
 			up_param.vmax = this->maxvel;
 			if (-1 == ::Plan_T(&this->up_param))
 			{
-				CLogSingle::logError("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f.", __FILE__, __LINE__,
+				LOGSINGLE_ERROR("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f.", __FILE__, __LINE__,
 						this->up_param.q0, this->up_param.q1, this->up_param.vmax, this->up_param.amax);
 				planned = -1;
 				break;
@@ -359,7 +359,7 @@ int ArchlRef::startPlan()
 			down_param.vmax = this->maxvel;
 			if (-1 == ::Plan_T(&this->down_param))
 			{
-				CLogSingle::logError("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f.", __FILE__, __LINE__,
+				LOGSINGLE_ERROR("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f.", __FILE__, __LINE__,
 						this->down_param.q0, this->down_param.q1, this->down_param.vmax, this->down_param.amax);
 				planned = -1;
 				break;
@@ -381,7 +381,7 @@ int ArchlRef::startPlan()
 				
 				if(-1 == ::Plan_T(&this->line_param, limt))
 				{
-					CLogSingle::logError("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f, limt=%f.", __FILE__, __LINE__,
+					LOGSINGLE_ERROR("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f, limt=%f.", __FILE__, __LINE__,
 							this->line_param.q0, this->line_param.q1, this->line_param.vmax, this->line_param.amax, limt);
 					planned = -1;
 					break;
@@ -396,9 +396,9 @@ int ArchlRef::startPlan()
 				this->ts1 = up_param.cycles;
 			}
 			
-			CLogSingle::logInformation("Archl Result For zstartpos=%d, zdstpos=%d, hh=%d, hu=%d, hd=%d, max_dist=%f, maxa=%f, maxvel=%f.", __FILE__, __LINE__, 
+			LOGSINGLE_INFORMATION("Archl Result For zstartpos=%d, zdstpos=%d, hh=%d, hu=%d, hd=%d, max_dist=%f, maxa=%f, maxvel=%f.", __FILE__, __LINE__, 
 						this->zstartpos, this->zdstpos, this->hh, this->hu, this->hd, this->max_dist, this->maxa, this->maxvel);
-			CLogSingle::logInformation("up-cycles=%d, down-cycles=%d, line-cycles=%d, ts=%d, total-cycles=%d, total-time=%fs.", __FILE__, __LINE__, 
+			LOGSINGLE_INFORMATION("up-cycles=%d, down-cycles=%d, line-cycles=%d, ts=%d, total-cycles=%d, total-time=%fs.", __FILE__, __LINE__, 
 									this->up_param.cycles, this->down_param.cycles, this->line_param.cycles, this->ts1, this->ts1 + this->down_param.cycles,  (this->ts1 + this->down_param.cycles) * 1.0 / CYCLES_PER_SEC);
 			
 			planned = 1;

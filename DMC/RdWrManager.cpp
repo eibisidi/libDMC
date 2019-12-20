@@ -104,7 +104,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 			}
 			else
 			{//停止该从站
-				int unsents = (iter->second)->size();
+				size_t unsents = (iter->second)->size();
 				
 				if (unsents > 0)
 				{
@@ -192,7 +192,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 }
 
 //每行代表一个周期，每列代表一个从站
-void RdWrManager::pushItems(Item *items, int rows, int cols)
+void RdWrManager::pushItems(Item *items, int rows, size_t cols)
 {
 	//一行为一个周期，一列为一个轴
 	int c;
@@ -243,9 +243,9 @@ void RdWrManager::pushItems(Item *items, int rows, int cols)
 	m_mutex.unlock();
 }
 
-int RdWrManager::peekQueue(int slaveidx)
+size_t RdWrManager::peekQueue(int slaveidx)
 {
-	int queuecount = 0;
+	size_t queuecount = 0;
 	while(true)
 	{
 		m_mutex.lock(); 
@@ -311,7 +311,7 @@ void RdWrManager::run()
 	//初始化FIFO状态
 	if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
 	{
-		CLogSingle::logFatal("ECMUSBRead failed.", __FILE__, __LINE__);
+		LOGSINGLE_FATAL("ECMUSBRead failed.%s", __FILE__, __LINE__, "");
 		return;
 	}
 
@@ -352,7 +352,7 @@ void RdWrManager::run()
 			if (FIFO_FULL(respData) != rdWrState.lastFifoFull)
 			{
 				printf("FIFO FULL Error \n");
-				CLogSingle::logFatal("FIFO full.flag1=%d, readCount=%d, lastRemain=%?d, fifoRemain=%?d.", __FILE__, __LINE__,
+				LOGSINGLE_FATAL("FIFO full.flag1=%d, readCount=%d, lastRemain=%?d, fifoRemain=%?d.", __FILE__, __LINE__,
 								rdWrState.flag1, rdWrState.readCount, rdWrState.lastRemain, FIFO_REMAIN(respData));
 				rdWrState.lastFifoFull = FIFO_FULL(respData);	//update lastFifoFull and keep running!!!
 			}
@@ -389,7 +389,7 @@ void RdWrManager::run()
 					}
 					break;
 				default:
-					CLogSingle::logFatal("Unexpected case.", __FILE__, __LINE__);
+					LOGSINGLE_FATAL("Unexpected case.%s", __FILE__, __LINE__, "");
 			}
 			
 			rdWrState.lastRemain = FIFO_REMAIN(respData);
@@ -397,7 +397,7 @@ void RdWrManager::run()
 			if (rdWrState.flag1 && FIFO_REMAIN(respData) == ECM_FIFO_SIZE)
 			{
 				printf("FIFO EMPTY Error \n");
-				CLogSingle::logFatal("FIFO empty.flag1=%d, readCount=%d, lastRemain=%?d, fifoRemain=%?d.", __FILE__, __LINE__,
+				LOGSINGLE_FATAL("FIFO empty.flag1=%d, readCount=%d, lastRemain=%?d, fifoRemain=%?d.", __FILE__, __LINE__,
 								rdWrState.flag1, rdWrState.readCount, rdWrState.lastRemain, FIFO_REMAIN(respData));
 				//keep running!!!
 			}
@@ -409,6 +409,6 @@ SEND:
 		towrite = BATCH_WRITE;
 	};
 
-	CLogSingle::logInformation("RdWrManager Thread canceled.", __FILE__, __LINE__);
+	LOGSINGLE_INFORMATION("RdWrManager Thread canceled.%s", __FILE__, __LINE__, "");
 }
 

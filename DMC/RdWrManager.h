@@ -3,8 +3,6 @@
 
 #include <map>
 #include <deque>
-#include <atomic> 
-
 
 #include "NEXTWUSBLib_12B.h"
 #include "Poco/Mutex.h"
@@ -73,8 +71,8 @@ public:
 	~RdWrManager();
 	void setBusy();
 	void setIdle();
-	void pushItems(Item *items, int rows, int cols);
-	int peekQueue(int slaveidx);
+	void pushItems(Item *items, int rows, size_t cols);
+	size_t peekQueue(int slaveidx);
 	void declStop(int slaveidx, DeclStopInfo *stopInfo);
 
 private:
@@ -88,7 +86,7 @@ private:
 	bool				m_canceled;				//线程停止
 
 	typedef std::deque<Item> ItemQueue;
-	typedef std::atomic<bool> QueueFlag;
+	typedef bool		 	QueueFlag;
 
 	QueueFlag					queueFlags[DEF_MA_MAX];				//各队列当前状态，true正忙, false空闲
 	std::map<int, ItemQueue*> 	tosend;								//待发送	命令队列
