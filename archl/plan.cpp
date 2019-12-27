@@ -139,31 +139,6 @@ double TaParam::speed(int ts) const
 	return v;
 }
 
-double TaParam::tofdist(double dist) const
-{//todo
-	double t;
-	double Smin = (this->vmax * this->vmax) / this->amax;
-	double S   = (this->q1 - this->q0);
-	if ( S > Smin)
-	{
-		if (dist <= Smin/2)
-			t = sqrt(2 * dist / this->amax);
-		else if (dist > Smin/2 && dist <= (S - Smin/2))
-			t = this->Ta + (dist - Smin/2) / (this->vmax);
-		else
-			t = this->Ta + this->Tv + this->Ta - sqrt(2*(S - dist) / this->amax);
-	}
-	else
-	{
-		if (dist <= (S / 2))
-			t = sqrt((2 * dist) / this->amax);
-		else
-			t = this->Ta + this->Ta - sqrt(2 *(S - dist) / this->amax );
-	}
-
-	return t;
-}
-
 int SParam::position()
 {
 	int q_i;
@@ -599,22 +574,24 @@ int Plan_T( TParam *tp, double tlim)
 	return 0;
 }
 
+//非对称梯形速度函数
 double Speed_Ta(double t, const TaParam *tp)
-{//todo
+{
 	assert(t >= 0);
 	double v;
 	double amax = tp->amax;
-	double vmax = tp->vmax;
+	double dmax = tp->dmax;
+	double vlim = tp->vlim;
 	double Ta = tp->Ta;
 	double Tv	= tp->Tv;
 	double T	= tp->T;
 	
-	if (t>= 0 && t < Ta)						//加????阶???
+	if (t>= 0 && t < Ta)						//加速阶段
 		v = amax * t;
-	else if ( t >= Ta && t < (Ta + Tv)) 		//匢??速阶???
-		v = tp->vmax;
-	else if (t >= (Ta + Tv) && t < T)			//减????阶???
-		v = vmax - amax * (t - Ta - Tv);
+	else if ( t >= Ta && t < (Ta + Tv)) 		//匀速阶段
+		v = vlim;
+	else if (t >= (Ta + Tv) && t < T)			//减速阶段
+		v = vlim  - dmax * (t - Ta - Tv);
 	else
 		v = 0;
 

@@ -114,8 +114,6 @@ public:
 	virtual int position(int ts)  const;
 	virtual double speed() const;
 	virtual double speed(int ts) const;
-
-	double tofdist(double dist) const;			//运动距离消耗时间 
 	
 	virtual ~TaParam() {};
 
