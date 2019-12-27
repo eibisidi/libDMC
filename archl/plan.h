@@ -66,6 +66,7 @@ public:
 	}
 };
 
+//对称梯形速度曲线
 class TParam:public MParam
 {
 public:
@@ -92,7 +93,38 @@ public:
 		vmax=amax=vlim=alima=Ta=Tv = 0;
 	}
 };
- 
+
+//非对称梯形速度曲线
+class TaParam:public MParam
+{
+public:
+	double vmax;			//最大速率
+	double amax;			//最大加速度（标量)
+	double dmax;			//最大减速度
+
+	//轨迹参数
+	double vlim;			//实际达到最大速度
+	double alima;			//实际到达最大加速度
+	double dlimd;			//实际到达最大减速度
+
+	double Ta;				//加速时间
+	double Tv;				//匀速时间
+	double Td;				//减速时间
+	virtual int position();
+	virtual int position(int ts)  const;
+	virtual double speed() const;
+	virtual double speed(int ts) const;
+
+	double tofdist(double dist) const;			//运动距离消耗时间 
+	
+	virtual ~TaParam() {};
+
+	TaParam()
+	{
+		vmax=amax=dmax=vlim=alima=dlimd=Ta=Tv=Td= 0;
+	}
+};
+
 //匀减速
 class DParam : public MParam
 {
@@ -122,6 +154,12 @@ double Speed_T(double t, const TParam *tp);
 double Displace_T(double t, const TParam *tp);
 int Plan_T(TParam *tp);
 int Plan_T( TParam *tp, double tlim);
+
+//非对称梯形曲线
+double Speed_Ta(double t, const TaParam *tp);
+double Displace_Ta(double t, const TaParam *tp);
+int Plan_Ta(TaParam *tp);
+int Plan_Ta( TaParam *tp, double tlim);
 
 //匀减速
 double Displace_D(double t, const DParam *dp);

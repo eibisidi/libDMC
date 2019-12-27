@@ -299,6 +299,7 @@ ArchlRef::ArchlRef()
 	maxvel = 0;
 	zmaxvel = 0;
 	maxa   = 0;
+	maxd	= 0;
 	zmaxa	= 0;
 	max_dist = 0;
 
@@ -381,8 +382,9 @@ int ArchlRef::startPlan()
 				this->line_param.q1   = this->max_dist;
 				this->line_param.vmax = this->maxvel;
 				this->line_param.amax = this->maxa;
+				this->line_param.dmax = this->maxd;
 				
-				if(-1 == ::Plan_T(&this->line_param, limt))
+				if(-1 == ::Plan_Ta(&this->line_param, limt))
 				{
 					//CLogSingle::logError("Plan_T failed, q0=%f, q1=%f, vmax=%f, amax=%f, limt=%f.", __FILE__, __LINE__,
 					//		this->line_param.q0, this->line_param.q1, this->line_param.vmax, this->line_param.amax, limt);
@@ -403,8 +405,14 @@ int ArchlRef::startPlan()
 			//			this->zstartpos, this->zdstpos, this->hh, this->hu, this->hd, this->max_dist, this->maxa, this->maxvel);
 			//CLogSingle::logInformation("up-cycles=%d, down-cycles=%d, line-cycles=%d, ts=%d, total-cycles=%d, total-time=%fs.", __FILE__, __LINE__, 
 			//						this->up_param.cycles, this->down_param.cycles, this->line_param.cycles, this->ts1, this->ts1 + this->down_param.cycles,  (this->ts1 + this->down_param.cycles) * 1.0 / CYCLES_PER_SEC);
-			printf("up-cycles=%d, down-cycles=%d, total=%d\n", up_param.cycles, down_param.cycles, up_param.cycles + down_param.cycles);
-			printf("line-cycles=%d\n", line_param.cycles);
+			//printf("**************************\n");
+			//printf("up-cycles=%d, down-cycles=%d, total=%d\n", up_param.cycles, down_param.cycles, up_param.cycles + down_param.cycles);
+			//printf("line-cycles=%d, time-limit=%f\n", line_param.cycles, timelimit *(CYCLES_PER_SEC));
+			//printf("alima=%f, vlim=%f, amax=%f, vmax=%f\n", line_param.alima, line_param.vlim, line_param.amax, line_param.vmax);
+			//printf("**************************\n");
+
+			//printf("totoal-cycles=%d\n", totalCycles());
+
 			planned = 1;
 		}while(0);
 		

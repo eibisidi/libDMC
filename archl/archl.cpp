@@ -6,7 +6,8 @@
 		*startpos   起始点位置, startpos[0]为起始Z轴点位
 		*endpos		终止点位置, endpos[0]为终止Z轴点位
 		MaxVel： 最大行速度，单位： pps；
-		Tacc： 加速时间，单位： s。
+		Tacc： 加速时间，单位：s。
+		Tdec:  减速时间，单位：s
 		hh:最高绝对高度
 		hu:相对上升高度，相对于起始点 >= 0
 		hd:相对下降高度，相对于终止点 >= 0
@@ -16,7 +17,8 @@
 错误：返回相关错误码。
 */
 int archl(short totalAxis, const long *beginPos, const long *endPos, long zmaxvel,
-				long maxvel, double ztacc, double Tacc, long hh, long hu, long hd, long ** ppResult, int * pCycles)
+				long maxvel, double ztacc, double Tacc, double Tdec,
+				long hh, long hu, long hd, long ** ppResult, int * pCycles)
 {
 	if (totalAxis <= 0
 			|| Tacc < 1E-6
@@ -40,6 +42,7 @@ int archl(short totalAxis, const long *beginPos, const long *endPos, long zmaxve
 	newArchlRef->maxvel = maxvel;
 	newArchlRef->zmaxvel = zmaxvel;
 	newArchlRef->maxa	= maxvel / Tacc;
+	newArchlRef->maxd   = maxvel / Tdec;
 	newArchlRef->zmaxa  = zmaxvel / ztacc;
 	newArchlRef->hu 	= hu;
 	newArchlRef->hh 	= hh;
@@ -113,14 +116,16 @@ DONE:
 
 int main()
 {
-	long startpos[3] = {2000/*Z轴起始*/, 			464, 		13000};				//起始点坐标
-	long endpos[3]   = {3000/*Z轴终止*/, 	464, 	22509};			//终止点坐标
+	long startpos[] = {5520/*Z轴起始*/, 			1393, 		2391,3880};				//起始点坐标
+	long endpos[]   = {2380/*Z轴终止*/, 	1868, 	22056, 4678};			//终止点坐标
 	int cycles = 0;
 	long *pResult = NULL;
 
 	int totalAxis = sizeof(startpos)/sizeof(startpos[0]);
-	if (0 == archl(totalAxis, startpos, endpos, 200000, 150000/*最大速率*/, 0.1, 0.13/*加速时间*/, 
-						1000, 500, 500, &pResult, &cycles))
+	
+	if (0 == archl(totalAxis, startpos, endpos, 150000, 150000/*最大速率*/, 0.1/*Z轴加速时间*/,
+						0.08/*加速时间*/, 0.32/*减速时间*/,
+						1500, 1200, 400, &pResult, &cycles))
 	{
 		std::ofstream ofs;
 		ofs.open("DMCPOINTS.log",std::fstream::out | std::fstream::trunc);

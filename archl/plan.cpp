@@ -43,7 +43,6 @@ int TParam::position()
 {
 	int q_i = position(this->elapsed);
 
-	//printf("S[%d] = %d, q_i = %d, q1=%f.\n", elapsed, q_i, q1);
 	++elapsed;
 	return q_i;
 }
@@ -79,6 +78,69 @@ double TParam::speed(int ts) const
 
 double TParam::tofdist(double dist) const
 {
+	double t;
+	double Smin = (this->vmax * this->vmax) / this->amax;
+	double S   = (this->q1 - this->q0);
+	if ( S > Smin)
+	{
+		if (dist <= Smin/2)
+			t = sqrt(2 * dist / this->amax);
+		else if (dist > Smin/2 && dist <= (S - Smin/2))
+			t = this->Ta + (dist - Smin/2) / (this->vmax);
+		else
+			t = this->Ta + this->Tv + this->Ta - sqrt(2*(S - dist) / this->amax);
+	}
+	else
+	{
+		if (dist <= (S / 2))
+			t = sqrt((2 * dist) / this->amax);
+		else
+			t = this->Ta + this->Ta - sqrt(2 *(S - dist) / this->amax );
+	}
+
+	return t;
+}
+
+int TaParam::position()
+{
+	int q_i = position(this->elapsed);
+
+	//printf("S[%d] = %d, q_i = %d, q1=%f.\n", elapsed, q_i, q1);
+	++elapsed;
+	return q_i;
+}
+
+int TaParam::position(int ts) const
+{
+	int q_i;
+	if (ts == this->cycles - 1)
+		q_i = (int)((sign == 1)? q1 : -q1);
+	else
+	{
+		double q_f;
+		double t = ts * 1.0 / CYCLES_PER_SEC;
+		q_f = ::Displace_Ta(t, this);
+		q_i = (int)(q_f);				// don't round up
+	}
+	return q_i;
+}
+
+double TaParam::speed() const
+{
+	double v;
+	v = speed(this->elapsed);
+	return v;
+}
+
+double TaParam::speed(int ts) const
+{
+	double t = ts * 1.0 / CYCLES_PER_SEC;
+	double v=::Speed_Ta(t, this);
+	return v;
+}
+
+double TaParam::tofdist(double dist) const
+{//todo
 	double t;
 	double Smin = (this->vmax * this->vmax) / this->amax;
 	double S   = (this->q1 - this->q0);
@@ -458,7 +520,6 @@ int Plan_T( TParam *tp)
 	return 0;
 }
 
-
 int Plan_T( TParam *tp, double tlim)
 {
 	if(fabs(tp->vmax) < 1e-6)
@@ -535,6 +596,150 @@ int Plan_T( TParam *tp, double tlim)
 
 	tp->cycles = (int)(tp->T * CYCLES_PER_SEC + 1);
 
+	return 0;
+}
+
+double Speed_Ta(double t, const TaParam *tp)
+{//todo
+	assert(t >= 0);
+	double v;
+	double amax = tp->amax;
+	double vmax = tp->vmax;
+	double Ta = tp->Ta;
+	double Tv	= tp->Tv;
+	double T	= tp->T;
+	
+	if (t>= 0 && t < Ta)						//加????阶???
+		v = amax * t;
+	else if ( t >= Ta && t < (Ta + Tv)) 		//匢??速阶???
+		v = tp->vmax;
+	else if (t >= (Ta + Tv) && t < T)			//减????阶???
+		v = vmax - amax * (t - Ta - Tv);
+	else
+		v = 0;
+
+	if (tp->sign > 0)
+		return v;
+	else
+		return -v;
+}
+
+//非对称梯形速度曲线轨迹函数
+double Displace_Ta(double t, const TaParam *tp)
+{
+	assert(t >= 0);
+	double q;
+	double q0   = tp->q0;
+	double q1	= tp->q1;
+	double vlim = tp->vlim;
+	double amax = tp->alima;
+	double dmax = tp->dlimd;
+	double Ta = tp->Ta;
+	double Tv   = tp->Tv;
+	double T	= tp->T;
+	
+	if (t>= 0 && t < Ta)						//加速阶段
+		q = q0 + 0.5 * amax * t * t;
+	else if ( t >= Ta && t < (Ta + Tv))			//匀速阶段
+		q = q0 + 0.5 * amax * Ta * Ta  + vlim * (t - Ta );
+	else if (t >= (Ta + Tv) && t < T)			//减速阶段
+		q = q1 -0.5 * dmax * (T -t) * (T -t);
+	else
+		q = q1;
+
+	if (tp->sign > 0)
+		return q;
+	else
+		return -q;
+}
+
+//规划非对称梯型曲线，计算时间
+int Plan_Ta( TaParam *tp)
+{
+	if(fabs(tp->vmax) < 1e-6)
+		return -1;
+	if (fabs(tp->amax) < 1e-6)
+		return -1;
+	if (fabs(tp->dmax) < 1e-6)
+		return -1;
+	
+	tp->sign = (tp->q1 > tp->q0) ? (1) : (-1);
+	if (tp->sign < 0)
+	{
+		tp->q0 = -(tp->q0);
+		tp->q1 = -(tp->q1);
+	}
+
+	double Smin = ((tp->vmax * tp->vmax) / tp->amax + (tp->vmax * tp->vmax) / tp->dmax) / 2;
+	double Sv   = (tp->q1 - tp->q0) - Smin;
+	if ( Sv > 0)
+	{//最大速度可达
+		tp->vlim = tp->vmax;
+		tp->alima = tp->amax;
+		tp->dlimd = tp->dmax;
+		tp->Ta   = tp->vmax / tp->amax;
+		tp->Tv	 = Sv / tp->vmax;
+		tp->Td	 = tp->vmax / tp->dmax;
+		tp->T	 = tp->Ta + tp->Tv + tp->Td;
+	}
+	else
+	{//最大速度不可达
+		tp->vlim = sqrt(2 * (tp->q1 - tp->q0)*(tp->amax)*(tp->dmax) / (tp->amax + tp->dmax));
+		tp->alima = tp->amax;
+		tp->dlimd = tp->dmax;
+		tp->Ta	= tp->vlim / tp->amax;
+		tp->Tv	= 0;
+		tp->Td 	= tp->vlim / tp->dmax;
+		tp->T	= tp->Ta + tp->Tv + tp->Td;
+	}
+
+	tp->cycles = (int)(tp->T * CYCLES_PER_SEC + 1);
+
+	return 0;
+}
+
+//规划非对称梯型曲线，计算时间
+int Plan_Ta( TaParam *tp, double tlim)
+{
+	if(fabs(tp->vmax) < 1e-6)
+		return -1;
+	if (fabs(tp->amax) < 1e-6)
+		return -1;
+	if (fabs(tp->dmax) < 1e-6)
+		return -1;
+
+	if (0 != Plan_Ta(tp))
+		return -1;
+
+	if (tp->T > tlim)	
+		return 0;
+
+	//不满足时间约束条件，逐渐减小最大速度
+	TaParam tmpTp = *tp;
+	double v, vl, vh;
+	vl = 0;
+	vh = tmpTp.vmax;
+
+	while (vl < vh)
+	{
+		v  = vl + (vh - vl)/2;
+		tmpTp.vmax = v;
+		if (0 != Plan_Ta(&tmpTp))
+			return -1;
+
+		if(tmpTp.T < tlim) 					//过快
+			vh = v;
+		else if (tmpTp.T - tlim > sigma)	//过慢
+			vl = v;
+		else
+			break;
+	}
+
+	if (tmpTp.T < tlim)
+		return -1;
+
+	*tp = tmpTp;
+	
 	return 0;
 }
 

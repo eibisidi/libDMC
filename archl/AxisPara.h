@@ -117,6 +117,7 @@ public:
 	double			maxvel;						//最大速度，标量,用于直线插补
 	double 			zmaxvel;					//Z轴最大速度，标量
 	double 			maxa;						//最大加速度，标量
+	double 			maxd;						//最大减速度，标量
 	double 			zmaxa;						//Z轴最大加速度，标量
 	int	 			hu;							//垂直上升距离 >=0
 	int	 			hh;							//绝对限高位置
@@ -138,7 +139,7 @@ public:
 	double getZCurrentSpeed() const;								//获取Z轴速度
 	int	   getZPosition(int slave_index);							//获取Z轴规划位置
 private:
-	TParam		   	line_param;					//直线插补规划结果
+	TaParam		   	line_param;					//直线插补规划结果(非对称梯形)
 
 	TParam			up_param;					//Z轴上升阶段规划结果
 	TParam			down_param;					//Z轴下降阶段规划结果
