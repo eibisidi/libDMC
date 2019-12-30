@@ -501,76 +501,39 @@ int Plan_T( TParam *tp, double tlim)
 		return -1;
 	if (fabs(tp->amax) < 1e-6)
 		return -1;
-	if (fabs(tp->q1 - tp->q0) < 1e-6)				//不允许位移为0
+	
+	if (0 != Plan_T(tp))
+		return -1;
+	
+	if (tp->T > tlim)	
+		return 0;
+
+	//不满足时间约束条件，逐渐减小最大速度
+	TParam tmpTp = *tp;
+	double v, vl, vh;
+	vl = 0;
+	vh = tmpTp.vmax;
+
+	while (vl < vh)
+	{
+		v  = vl + (vh - vl)/2;
+		tmpTp.vmax = v;
+		if (0 != Plan_T(&tmpTp))
+			return -1;
+
+		if(tmpTp.T < tlim)					//过快
+			vh = v;
+		else if (tmpTp.T - tlim > sigma)	//过慢
+			vl = v;
+		else
+			break;
+	}
+
+	if (tmpTp.T < tlim)
 		return -1;
 
-	tp->sign = (tp->q1 > tp->q0) ? (1) : (-1);
-	if (tp->sign < 0)
-	{
-		tp->q0 = -(tp->q0);
-		tp->q1 = -(tp->q1);
-	}
-
-
-	double a, al,ah;
-	double s;
-	al = 0;
-	ah = tp->amax;
-	s = tp->q1 - tp->q0;
+	*tp = tmpTp;
 	
-	while(true)
-	{
-		a = (al + ah)/2;
-		if (s <= tp->vmax * tp->vmax / a)
-		{
-			tp->Ta = sqrt(s / a);
-			tp->T  = tp->Ta + tp->Ta;
-
-			if (ah - al > 0.001)
-			{
-				if (tp->T - tlim> sigma) //时间过长
-					al = a;
-				else if (tp->T < tlim )
-					ah = a;
-				else
-				{
-					tp->vlim = tp->Ta * a;
-					tp->alima = a;
-					tp->Ta  = tp->Ta;
-					tp->Tv  = 0;
-					tp->T	= tp->Ta + tp->Ta;
-					break;
-				}
-			}
-			else
-			{
-				tp->vlim = tp->Ta * a;
-				tp->alima = a;
-				tp->Ta  = tp->Ta;
-				tp->Tv  = 0;
-				tp->T	= tp->T;
-				break;
-			}
-		}
-		else
-		{
-			tp->T = tp->vmax / a + s / tp->vmax;
-			if (tp->T > tlim)
-			{
-				tp->vlim = tp->vmax;
-				tp->alima= a;
-				tp->Ta	 = tp->vmax / a;
-				tp->Tv = (s - tp->vmax * tp->vmax / a) / tp->vmax;
-				tp->T	= tp->T;
-				break;
-			}
-			else
-				ah = a;
-		}
-	}
-
-	tp->cycles = (int)(tp->T * CYCLES_PER_SEC + 1);
-
 	return 0;
 }
 
