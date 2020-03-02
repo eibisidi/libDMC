@@ -58,7 +58,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="NEXTWUSBLib.lib"
-				AdditionalLibraryDirectories="..\3rd-party\libs"
+				AdditionalLibraryDirectories="..\3rd-party\libs\ecm"
 				GenerateDebugInformation="true"
 				TargetMachine="1"
 			/>
@@ -128,7 +128,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="NEXTWUSBLib.lib"
-				AdditionalLibraryDirectories="..\3rd-party\libs"
+				AdditionalLibraryDirectories="..\3rd-party\libs\ecm"
 				GenerateDebugInformation="true"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
