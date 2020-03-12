@@ -1,21 +1,15 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 10.00
-# Visual Studio 2008
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DMC", "DMC\DMC.vcproj", "{73D297AF-BC95-445A-88BA-15C4BDA30B8E}"
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DMC", "DMC\DMC.vcxproj", "{73D297AF-BC95-445A-88BA-15C4BDA30B8E}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Console", "Console\Console.vcproj", "{CCC9CA25-62CF-47FC-A4DA-2D1277A19738}"
-	ProjectSection(ProjectDependencies) = postProject
-		{73D297AF-BC95-445A-88BA-15C4BDA30B8E} = {73D297AF-BC95-445A-88BA-15C4BDA30B8E}
-	EndProjectSection
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Console", "Console\Console.vcxproj", "{CCC9CA25-62CF-47FC-A4DA-2D1277A19738}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NEXTW_USBSample_Cplusplus", "NEXTW_USBSample_Cplusplus\NEXTW_USBSample_Cplusplus.vcproj", "{C76DAE02-4C93-4D3B-A7FC-B4D88C2412EA}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NEXTW_USBSample_Cplusplus", "NEXTW_USBSample_Cplusplus\NEXTW_USBSample_Cplusplus.vcxproj", "{C76DAE02-4C93-4D3B-A7FC-B4D88C2412EA}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Window", "Window\Window.vcproj", "{5D598FCF-404D-46E2-9407-99742620DB23}"
-	ProjectSection(ProjectDependencies) = postProject
-		{73D297AF-BC95-445A-88BA-15C4BDA30B8E} = {73D297AF-BC95-445A-88BA-15C4BDA30B8E}
-	EndProjectSection
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Window", "Window\Window.vcxproj", "{5D598FCF-404D-46E2-9407-99742620DB23}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "archl", "archl\archl.vcproj", "{ABAE6A33-8815-4919-9F9B-48EC8624AB26}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "archl", "archl\archl.vcxproj", "{ABAE6A33-8815-4919-9F9B-48EC8624AB26}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
