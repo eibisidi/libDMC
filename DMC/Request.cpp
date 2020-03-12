@@ -459,6 +459,7 @@ void MoveRequest::pushCspPoints(MoveRequest *req)
 	req->cmdData->CMD 	= CSP;
 	req->cmdData->Data1 	= items[cycles-1].cmdData.Data1; 
 
+	req->dmc->logCspPoints(items, cycles, 1);	//输出规划结果到日志
 	req->dmc->m_rdWrManager.pushItems(items, cycles, 1);
 	delete [] items;
 	
