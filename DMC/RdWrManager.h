@@ -93,6 +93,9 @@ private:
 	std::map<int, DeclStopInfo*>	tostop;							//待减速停止
 	transData					lastSent[DEF_MA_MAX];				//记录上次发送命令
 	RdWrState					rdWrState;
+
+	Poco::FastMutex		coreMutex[DEF_MA_MAX];						//Main Core Mutext To Guard each queueMutex
+	Poco::FastMutex		queueMutex[DEF_MA_MAX];
 };
 
 #endif
