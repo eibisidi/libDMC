@@ -39,11 +39,6 @@ void RdWrManager::clear()
 {
 	m_idle = true;
 	m_canceled = false;
-	
-	for (int i = 0; i < DEF_MA_MAX; ++i)
-	{
-		queueFlags[i] = false;	//各队列初始状态为空闲
-	}
 
 	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
 					iter!= tosend.end();
@@ -80,17 +75,16 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 	int slaveidx;
 	
 	memset(cmdData, 0, sizeof(transData)* cmdcount);
-	
-	m_mutex.lock();	
+
+	coreMutex.lock();//获取队列大锁
 	
 	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
 				iter!= tosend.end();
 				++iter)
 	{
 		slaveidx = iter->first;
-		if (false == queueFlags[slaveidx])
+		if (true == queueMutex[slaveidx].tryLock())	
 		{
-			queueFlags[slaveidx] = true;
 			///////////////////////////////////////////////////////////////////////////////////////////
 			if (0 == tostop.count(slaveidx))
 			{
@@ -162,11 +156,11 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 				tostop.erase(slaveidx);
 			}
 			////////////////////////////////////////////////////////////////////////////////////////////
-			queueFlags[slaveidx] = false;		//置队列空闲
+			queueMutex[slaveidx].unlock();
 		}
 	}
 
-	m_mutex.unlock();
+	coreMutex.unlock();//释放队列大锁
 
 #ifdef TIMING
 
@@ -193,72 +187,75 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 //每行代表一个周期，每列代表一个从站
 void RdWrManager::pushItems(Item *items, int rows, size_t cols)
 {
-	//一行为一个周期，一列为一个轴
-	int c;
-	int slaveidx;
-	while(true)
-	{
-		m_mutex.lock();	
+	if (cols == 1)
+	{//单轴运动，获得小锁
+		int		slaveidx = items[0].index;
+		queueMutex[slaveidx].lock();
+		
+		for (size_t i = 0; i < rows * cols; ++i)
+		{
+			if (0 == tosend.count(slaveidx))
+				tosend[slaveidx] = new ItemQueue;
+			tosend[slaveidx]->push_back(items[i]);
+		}
 
+		queueMutex[slaveidx].unlock();
+	}
+	else//多轴插补
+	{
+		//一行为一个周期，一列为一个轴
+		int c = 0;
+		int slaveidx;
+		
+		while(c < cols)
+		{
+			coreMutex.lock(); //获得大锁
+	
+			for( ; c < cols; ++c)
+			{
+				slaveidx = items[c].index;
+				if (false == queueMutex[slaveidx].tryLock())
+					break; //当前队列正忙
+			}
+			
+			coreMutex.unlock();
+			Poco::Thread::sleep(1);
+		}
+
+		//已经获得所有的队列锁
+		
+	//////////////////////////////////////////////////////////////////////////////////////
+		for (size_t i = 0; i < rows * cols; ++i)
+		{
+			slaveidx = items[i].index;
+			if (0 == tosend.count(slaveidx))
+				tosend[slaveidx] = new ItemQueue;
+			tosend[slaveidx]->push_back(items[i]);
+		}
+	///////////////////////////////////////////////////////////////////////////////////////
+	
+		//释放所有的队列锁
+		coreMutex.lock(); 
 		for(c = 0; c < cols; ++c)
 		{
 			slaveidx = items[c].index;
-			if (true == queueFlags[slaveidx])	//当前队列正忙
-			{
-				break;
-			}
+			queueMutex[slaveidx].unlock();
 		}
+		coreMutex.unlock();
+}
 
-		if (c == cols)
-		{//当前队列均为空闲
-			for(c = 0; c < cols; ++c)
-			{
-				slaveidx = items[c].index;
-				queueFlags[slaveidx] = true;		//当前队列设置为忙
-			}
-			m_mutex.unlock();
-			break;
-		}
-		
-		m_mutex.unlock();
-		Poco::Thread::sleep(1);
-	}
-//////////////////////////////////////////////////////////////////////////////////////
-	for (size_t i = 0; i < rows * cols; ++i)
-	{
-		slaveidx = items[i].index;
-		if (0 == tosend.count(slaveidx))
-			tosend[slaveidx] = new ItemQueue;
-		tosend[slaveidx]->push_back(items[i]);
-	}
-///////////////////////////////////////////////////////////////////////////////////////
-	//每个队列置为空闲
-	m_mutex.lock();	
-	for(c = 0; c < cols; ++c)
-	{
-		slaveidx = items[c].index;
-		queueFlags[slaveidx] = false;		//当前队列设置为空闲
-	}
-	m_mutex.unlock();
+	
 }
 
 size_t RdWrManager::peekQueue(int slaveidx)
 {
 	size_t queuecount = 0;
-	while(true)
-	{
-		m_mutex.lock(); 
-		if (false == queueFlags[slaveidx])	//当前队列空闲
-		{
-			break;
-		}
-		m_mutex.unlock();
-		Poco::Thread::sleep(1);
-	}
+
+	queueMutex[slaveidx].lock();
 
 	if (tosend.count(slaveidx))
 		queuecount = tosend[slaveidx]->size();
-	m_mutex.unlock();
+	queueMutex[slaveidx].unlock();
 
 	return queuecount;
 }
@@ -266,9 +263,9 @@ size_t RdWrManager::peekQueue(int slaveidx)
 //减速停止
 void RdWrManager::declStop(int slaveidx, DeclStopInfo *stopInfo)
 {
-	m_mutex.lock(); 
+	queueMutex[slaveidx].lock(); 
 	tostop[slaveidx] = stopInfo;
-	m_mutex.unlock();
+	queueMutex[slaveidx].unlock();
 }
 
 void RdWrManager::setBusy()

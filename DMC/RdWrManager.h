@@ -88,14 +88,13 @@ private:
 	typedef std::deque<Item> ItemQueue;
 	typedef bool		 	QueueFlag;
 
-	QueueFlag					queueFlags[DEF_MA_MAX];				//各队列当前状态，true正忙, false空闲
 	std::map<int, ItemQueue*> 	tosend;								//待发送	命令队列
 	std::map<int, DeclStopInfo*>	tostop;							//待减速停止
 	transData					lastSent[DEF_MA_MAX];				//记录上次发送命令
 	RdWrState					rdWrState;
 
-	Poco::FastMutex		coreMutex[DEF_MA_MAX];						//Main Core Mutext To Guard each queueMutex
-	Poco::FastMutex		queueMutex[DEF_MA_MAX];
+	Poco::Mutex		coreMutex;						//Main Core Mutext To Guard each queueMutex
+	Poco::Mutex		queueMutex[DEF_MA_MAX];
 };
 
 #endif
