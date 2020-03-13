@@ -12,6 +12,9 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "archl", "archl\archl.vcxproj", "{ABAE6A33-8815-4919-9F9B-48EC8624AB26}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NewTester", "NewTester\NewTester.vcxproj", "{4B395B15-9510-42FB-BF40-F8D1EEB17E88}"
+	ProjectSection(ProjectDependencies) = postProject
+		{73D297AF-BC95-445A-88BA-15C4BDA30B8E} = {73D297AF-BC95-445A-88BA-15C4BDA30B8E}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
