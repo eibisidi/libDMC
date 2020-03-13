@@ -158,6 +158,7 @@ private:
 
 	std::map<int, BaseRequest *> m_requests;			
 
+	Poco::Mutex			m_slaveMutexs[DEF_MA_MAX];		//每个从站状态的锁
 	std::map<int, DriverState>m_driverState;			//电机状态
 	std::map<int, IoState>	 m_ioState;				//IO状态
 

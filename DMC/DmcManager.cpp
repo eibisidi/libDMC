@@ -877,7 +877,10 @@ bool DmcManager::isServo(short slaveidx)
 void DmcManager::setMoveState(short slaveidx, MoveState ms)
 {
 	assert(m_driverState.count(slaveidx) > 0);
+
+	m_slaveMutexs[slaveidx].lock();
 	m_driverState[slaveidx].movestate = ms;
+	m_slaveMutexs[slaveidx].unlock();
 }
 
 void DmcManager::setIoRS(short slavidx, IoRequestState iors)
@@ -1355,10 +1358,11 @@ DONE:
 unsigned long DmcManager::check_done(short axis)
 {
 	MoveState ms = MOVESTATE_NONE;
-	m_mutex.lock();
+	m_slaveMutexs[axis].lock();
 	if (m_driverState.count(axis))
 		ms = m_driverState[axis].movestate;
-	m_mutex.unlock();
+	m_slaveMutexs[axis].unlock();
+
 	Poco::Thread::sleep(10);
 
 	return ms;
