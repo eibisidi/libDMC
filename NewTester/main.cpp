@@ -1,6 +1,7 @@
 #include "DMC.h"
 
 #include <stdio.h>
+#include <Windows.h>
 
 #define AXIS_R (1)
 #define AXIS_Y (2)
@@ -17,6 +18,13 @@
 					if (MOVESTATE_BUSY != ms)		\
 						break;						\
 				}									\
+
+#define NEG_ARRAY(array) 											\
+				{																	\
+						for(int i = 0; i < sizeof(array) / sizeof(array[0]); ++i)	\
+							array[i] = -array[i];									\
+				}
+
 
 DWORD all_go_home()
 {
@@ -53,7 +61,8 @@ DWORD all_go_home()
 			ret = -1;
 			break;
 		}
-		
+
+#if 1
 		ret = d1000_home_move(AXIS_LEFT, 2000, 1000, 10000);
 		if (ERR_NOERR != ret)
 			break;
@@ -75,10 +84,150 @@ DWORD all_go_home()
 			ret = -1;
 			break;
 		}
+#endif
 	}while(0);
 
 	return ret;
 }
+
+DWORD WINAPI LoaderThreadFunc(LPVOID p)
+{   
+	DWORD ret, ms;
+	printf("Start loading.\n");
+
+	while(true)
+    {
+    	//R->30000
+		ret  = d1000_start_ta_move(AXIS_RIGHT, 30000, 0, 20000, 0.2);
+		if (ERR_NOERR != ret)
+			return -1;
+		WAIT_DONE(AXIS_RIGHT, ms)
+		if (ms != MOVESTATE_STOP)
+			return -1;
+
+    	//L->20000
+		ret  = d1000_start_ta_move(AXIS_LEFT, 20000, 0, 20000, 0.2);
+		if (ERR_NOERR != ret)
+			return -1;
+		WAIT_DONE(AXIS_LEFT, ms)
+		if (ms != MOVESTATE_STOP)
+			return -1;
+
+    	//L->0
+		ret  = d1000_start_ta_move(AXIS_LEFT, 0, 0, 20000, 0.2);
+		if (ERR_NOERR != ret)
+			return -1;
+		WAIT_DONE(AXIS_LEFT, ms)
+		if (ms != MOVESTATE_STOP)
+			return -1;
+
+		//R->0
+		ret  = d1000_start_ta_move(AXIS_RIGHT, 0, 0, 20000, 0.2);
+		if (ERR_NOERR != ret)
+			return -1;
+		WAIT_DONE(AXIS_RIGHT, ms)
+		if (ms != MOVESTATE_STOP)
+			return -1;
+
+		
+	}
+	
+    return 0;
+}
+
+DWORD WINAPI RotatorThreadFunc(LPVOID p)
+{   
+	DWORD ret, ms;
+	printf("Start rotating.\n");
+
+	int dist = 3000;
+
+	while(true)
+    {
+		ret  = d1000_start_t_move(AXIS_R, dist, 0, 1000, 0.2);
+		if (ERR_NOERR != ret)
+			return -1;
+		WAIT_DONE(AXIS_R, ms)
+		if (ms != MOVESTATE_STOP)
+			return -1;
+
+		dist = -dist;
+
+		ret  = d1000_start_t_move(AXIS_R, dist, 0, 1000, 0.2);
+		if (ERR_NOERR != ret)
+			return -1;
+		WAIT_DONE(AXIS_R, ms)
+		if (ms != MOVESTATE_STOP)
+			return -1;
+
+		dist = -dist;
+	}
+	
+    return 0;
+}
+
+DWORD WINAPI MainThreadFunc(LPVOID p)
+{   
+	DWORD ret, ms;
+	printf("Start main.\n");
+
+	int dist = 10000;
+
+	while(true)
+    {
+		ret  = d1000_start_t_move(AXIS_MAIN, dist, 0, 10000, 0.2);
+		if (ERR_NOERR != ret)
+			return -1;
+		WAIT_DONE(AXIS_MAIN, ms)
+		if (ms != MOVESTATE_STOP)
+			return -1;
+
+		dist = -dist;
+
+		ret  = d1000_start_t_move(AXIS_MAIN, dist, 0, 10000, 0.2);
+		if (ERR_NOERR != ret)
+			return -1;
+		WAIT_DONE(AXIS_MAIN, ms)
+		if (ms != MOVESTATE_STOP)
+			return -1;
+
+		dist = -dist;
+	}
+	
+    return 0;
+}
+
+DWORD WINAPI TongueThreadFunc(LPVOID p)
+{   
+	DWORD ret, ms;
+	printf("Start main.\n");
+
+	int dist = 10000;
+
+	while(true)
+    {
+		ret  = d1000_start_t_move(AXIS_TON, dist, 0, 10000, 0.2);
+		if (ERR_NOERR != ret)
+			return -1;
+		WAIT_DONE(AXIS_TON, ms)
+		if (ms != MOVESTATE_STOP)
+			return -1;
+
+		dist = -dist;
+
+		ret  = d1000_start_t_move(AXIS_TON, dist, 0, 10000, 0.2);
+		if (ERR_NOERR != ret)
+			return -1;
+		WAIT_DONE(AXIS_TON, ms)
+		if (ms != MOVESTATE_STOP)
+			return -1;
+
+		dist = -dist;
+	}
+	
+    return 0;
+}
+
 
 
 int main()
@@ -89,11 +238,49 @@ int main()
 		return -1;
 	}
 
-	if (0 != all_go_home())
+	//if (0 != all_go_home())
+	if (0)
 	{
 		printf("all_go_home failed.\n");
 		return -1;
 	}
+
+	printf("All Homed.\n");
+
+	HANDLE hThread;
+	//hThread = CreateThread(NULL, 0, LoaderThreadFunc, 0, 0, NULL); // 创建线程
+	//hThread = CreateThread(NULL, 0, RotatorThreadFunc, 0, 0, NULL); // 创建线程
+	//hThread = CreateThread(NULL, 0, MainThreadFunc, 0, 0, NULL); // 创建线程
+	//hThread = CreateThread(NULL, 0, TongueThreadFunc, 0, 0, NULL); // 创建线程
+
+
+	MainThreadFunc(0);
+
+#if 0
+	short 	axisArray[] = {AXIS_X, AXIS_Y};
+	long	distArray[] = {50000, 50000};
+	DWORD   ret, ms;
+	while (true)
+	{
+		ret  = d1000_start_t_line(sizeof(axisArray)/sizeof(axisArray[0]), axisArray, distArray, 0, 100000, 0.2);
+		if (ERR_NOERR != ret)
+			break;
+		WAIT_DONE(axisArray[0], ms)
+		if (ms != MOVESTATE_STOP)
+			break;
+
+		NEG_ARRAY(distArray);
+
+		ret  = d1000_start_t_line(sizeof(axisArray)/sizeof(axisArray[0]), axisArray, distArray, 0, 100000, 0.2);
+		if (ERR_NOERR != ret)
+			break;
+		WAIT_DONE(axisArray[0], ms)
+		if (ms != MOVESTATE_STOP)
+			break;
+
+		NEG_ARRAY(distArray);
+	}
+#endif
 
 	d1000_board_close();
 	return 0;

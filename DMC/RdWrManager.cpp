@@ -332,6 +332,13 @@ void RdWrManager::run()
 		{
 			popItems(cmdData, DEF_MA_MAX);
 
+			if (cmdData[1].CMD == GO_HOME)
+				printf("1 GO_HOME\n");
+			else if (cmdData[2].CMD == GO_HOME)
+				printf("2 GO_HOME\n");
+			else if (cmdData[3].CMD == GO_HOME)
+				printf("3 GO_HOME\n");
+
 			do{
 				bRet =  ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData));
 				if (!bRet)
@@ -403,7 +410,7 @@ void RdWrManager::run()
 		}while(rdWrState.readCount < 300);	//防止出现死循环，连续读取之后跳出，todo?
 
 SEND:
-		printf("last_remain=%d, fifo_remain=%d, readcount = %d, flag1=%d.\n", rdWrState.lastRemain, FIFO_REMAIN(respData), rdWrState.readCount, rdWrState.flag1);
+		//printf("last_remain=%d, fifo_remain=%d, readcount = %d, flag1=%d.\n", rdWrState.lastRemain, FIFO_REMAIN(respData), rdWrState.readCount, rdWrState.flag1);
 		rdWrState.flag1 = 0;
 		towrite = BATCH_WRITE;
 	};
