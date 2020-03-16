@@ -329,13 +329,6 @@ void RdWrManager::run()
 		{
 			popItems(cmdData, DEF_MA_MAX);
 
-			if (cmdData[1].CMD == GO_HOME)
-				printf("1 GO_HOME\n");
-			else if (cmdData[2].CMD == GO_HOME)
-				printf("2 GO_HOME\n");
-			else if (cmdData[3].CMD == GO_HOME)
-				printf("3 GO_HOME\n");
-
 			do{
 				bRet =  ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData));
 				if (!bRet)

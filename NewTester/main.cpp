@@ -10,6 +10,8 @@
 #define AXIS_MAIN (5)
 #define AXIS_RIGHT (6)
 #define AXIS_LEFT (7)
+#define IO_1   (9)
+#define IO_2   (8)
 
 #define WAIT_DONE(axis, ms) 						\
 				while(true)							\
@@ -90,6 +92,41 @@ DWORD all_go_home()
 	return ret;
 }
 
+DWORD WINAPI IoThreadFunc(LPVOID p)
+{
+	DWORD ret;
+	DWORD in;
+	short out;
+
+	printf("Start IO.\n");
+	
+	while(true)
+	{
+		in = d1000_in_bit(IO_1, 10);
+		printf("current in=%d \n", in);
+
+		out = d1000_get_outbit(IO_1, 15);
+		printf("current out=%d \n", out);
+
+		out = out ? 0 : 1;
+		ret = d1000_out_bit(IO_1, 15, out);
+		if (ERR_NOERR != ret)
+			return -1;
+
+
+		out = d1000_get_outbit(IO_2, 8);
+		printf("current out=%d \n", out);
+
+		out = out ? 0 : 1;
+		ret = d1000_out_bit(IO_2, 8, out);
+		if (ERR_NOERR != ret)
+			return -1;
+
+		Sleep(2000);
+	}
+
+}
+
 DWORD WINAPI LoaderThreadFunc(LPVOID p)
 {   
 	DWORD ret, ms;
@@ -128,8 +165,6 @@ DWORD WINAPI LoaderThreadFunc(LPVOID p)
 		WAIT_DONE(AXIS_RIGHT, ms)
 		if (ms != MOVESTATE_STOP)
 			return -1;
-
-		
 	}
 	
     return 0;
@@ -228,8 +263,6 @@ DWORD WINAPI TongueThreadFunc(LPVOID p)
     return 0;
 }
 
-
-
 int main()
 {
 	if (0  != d1000_board_init())
@@ -238,8 +271,7 @@ int main()
 		return -1;
 	}
 
-	//if (0 != all_go_home())
-	if (0)
+	if (0 != all_go_home())
 	{
 		printf("all_go_home failed.\n");
 		return -1;
@@ -248,15 +280,13 @@ int main()
 	printf("All Homed.\n");
 
 	HANDLE hThread;
-	//hThread = CreateThread(NULL, 0, LoaderThreadFunc, 0, 0, NULL); // 创建线程
-	//hThread = CreateThread(NULL, 0, RotatorThreadFunc, 0, 0, NULL); // 创建线程
-	//hThread = CreateThread(NULL, 0, MainThreadFunc, 0, 0, NULL); // 创建线程
-	//hThread = CreateThread(NULL, 0, TongueThreadFunc, 0, 0, NULL); // 创建线程
+	hThread = CreateThread(NULL, 0, IoThreadFunc, 0, 0, NULL); // 创建线程
+	hThread = CreateThread(NULL, 0, LoaderThreadFunc, 0, 0, NULL); // 创建线程
+	hThread = CreateThread(NULL, 0, RotatorThreadFunc, 0, 0, NULL); // 创建线程
+	hThread = CreateThread(NULL, 0, MainThreadFunc, 0, 0, NULL); // 创建线程
+	hThread = CreateThread(NULL, 0, TongueThreadFunc, 0, 0, NULL); // 创建线程
 
-
-	MainThreadFunc(0);
-
-#if 0
+#if 1
 	short 	axisArray[] = {AXIS_X, AXIS_Y};
 	long	distArray[] = {50000, 50000};
 	DWORD   ret, ms;
