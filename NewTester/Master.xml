@@ -12,6 +12,7 @@
 		<Sdo desc="数字输入接脚 DI1 功能规划" index="0x220A" subindex="0x0000" size="2" value="0x0124" />
 		<Sdo desc="电子齿轮比分子(N1)" index="0x6093" subindex="0x0001" size="4" value="16777216" />
 		<Sdo desc="电子齿轮比分母(M)" index="0x6093" subindex="0x0002" size="4" value="10000" />
+		<Sdo desc="控制模式及控制命令输入源设定" index="0x2101" subindex="0x0000" size="2" value="0x000C" />
 	</Slave>
 	<Slave desc="台达伺服电机驱动器Y" index="2" type="Drive">
 		<Sdo desc="数字输入接脚 DI1 功能规划" index="0x220A" subindex="0x0000" size="2" value="0x0124" />
@@ -24,6 +25,7 @@
 		<Sdo desc="数字输入接脚 DI1 功能规划" index="0x220A" subindex="0x0000" size="2" value="0x0124" />
 		<Sdo desc="电子齿轮比分子(N1)" index="0x6093" subindex="0x0001" size="4" value="16777216" />
 		<Sdo desc="电子齿轮比分母(M)" index="0x6093" subindex="0x0002" size="4" value="10000" />
+		<Sdo desc="控制模式及控制命令输入源设定" index="0x2101" subindex="0x0000" size="2" value="0x000C" />
 	</Slave>
 
 	<Slave desc="舌头" index="4" type="Step">
@@ -42,7 +44,8 @@
 		<Sdo desc="驱动器峰值电流" index="0x2000" subindex="0x0000" size="2" value="30" />
 		<Sdo desc="电机每转脉冲数" index="0x2001" subindex="0x0000" size="2" value="10000" />
 	</Slave>
-
+	<Slave desc="IO模块" index="8" type="IO"/>
+	<Slave desc="IO模块" index="9" type="IO"/>
 <!--
 	<Slave desc="IO模块" index="1" type="IO"/>
 	<Slave desc="IO模块" index="2" type="IO"/>
