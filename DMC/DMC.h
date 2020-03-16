@@ -187,8 +187,7 @@ DMC1000_API DWORD WINAPI d1000_immediate_stop(short axis);
 功 能：输出通用输出信号。
 参 数： ioslave_idx：从站索引
 		BitNo：表示要输出的通用输出口的位号
-		BitData：输出信号： 0 - 表示低电平；
-				1 - 表示高电平。
+		BitData：输出信号：  1 On 0 Off
 返回值：正确：返回 ERR_NoError；
 错误：返回相关错误码。
 */
@@ -199,9 +198,7 @@ DMC1000_API DWORD WINAPI d1000_out_bit(short ioslave_idx, short BitNo, short Bit
 参 数： ioslave_idx：从站索引
 		BitNo：表示要输出的通用输出口的位号
 
-返回值：输出口状态： 0 - 表示低电平；
-1 - 表示高电平。
-
+返回值：输出口状态： 1 On 0 Off
 */
 DMC1000_API DWORD WINAPI d1000_get_outbit(short ioslave_idx, short BitNo);
 
@@ -209,10 +206,9 @@ DMC1000_API DWORD WINAPI d1000_get_outbit(short ioslave_idx, short BitNo);
 功 能：读取通用输入信号状态。
 参 数： ioslave_idx：从站索引
 输出参数：BitData：输入信号当前值
-返回值：正确：返回 ERR_NoError；
-错误：返回相关错误码。
+返回值：返回值：输入口状态： 1 On 0 Off
 */
-DMC1000_API DWORD WINAPI d1000_in_bit(short ioslave_idx, unsigned int *BitData);
+DMC1000_API DWORD WINAPI d1000_in_bit(short ioslave_idx, short BitNo);
 
 //////////////////线性插补函数//////////////////
 /*
