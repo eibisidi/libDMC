@@ -1845,6 +1845,7 @@ void WriteIoRequest::fsm_state_io_wr(WriteIoRequest *req)
 
 	req->fsmstate		= WriteIoRequest::fsm_state_done;
 	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->dmc->setIoOutput(req->slave_idx, req->output);		//输出成功，更新输出当前值
 	req->dmc->setIoRS(req->slave_idx, IORS_SUCCESS);
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;

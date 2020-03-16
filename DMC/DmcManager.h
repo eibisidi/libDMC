@@ -53,11 +53,13 @@ enum IoRequestState
 
 struct IoState
 {
-	unsigned int    input;			//开入值
+	unsigned int    input;			//输入值
+	unsigned int    output;			//输出值
 	IoRequestState	iors;
 	IoState()
 	{
 		input 	= 0;
+		output  = 0;
 		iors	= IORS_NONE;
 	}
 };
@@ -104,9 +106,11 @@ public:
 	int	getServoPosBias() const;
 
 	//IO
-	unsigned long out_bit(short ioslave_idx, unsigned int bitData);
+	unsigned long out_bit(short slave_idx, short bitNo, short bitData);
 	unsigned long in_bit(short ioslave_idx, unsigned int *bitData);
-	void setIoRS(short slavidx, IoRequestState iors);	//设置当前IO状态
+	void setIoRS(short slavidx, IoRequestState iors);	//设置当前IO请求状态
+	void setIoOutput(short slaveidx, unsigned int output);
+	unsigned int getIoOutput(short slaveidx);
 
 	//内部TransData命令
 	transData *getCmdData(short slaveidx);

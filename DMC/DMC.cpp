@@ -56,9 +56,15 @@ DWORD WINAPI d1000_immediate_stop(short axis)
 	return DmcManager::instance().immediate_stop(axis);
 }
 
-DWORD WINAPI d1000_out_bit(short ioslave_idx, unsigned int BitData)
+DWORD WINAPI d1000_out_bit(short ioslave_idx, short BitNo, short BitData)
 {
-	return DmcManager::instance().out_bit(ioslave_idx, BitData);
+	return DmcManager::instance().out_bit(ioslave_idx, BitNo, BitData);
+}
+
+DWORD WINAPI d1000_get_outbit(short ioslave_idx, short BitNo)
+{
+	unsigned int output = DmcManager::instance().getIoOutput(ioslave_idx);
+	return (output & (1 << BitNo));
 }
 
 DWORD WINAPI d1000_in_bit(short ioslave_idx, unsigned int *BitData)

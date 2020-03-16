@@ -883,10 +883,29 @@ void DmcManager::setMoveState(short slaveidx, MoveState ms)
 	m_slaveMutexs[slaveidx].unlock();
 }
 
-void DmcManager::setIoRS(short slavidx, IoRequestState iors)
+void DmcManager::setIoRS(short slaveidx, IoRequestState iors)
 {
-	assert(m_ioState.count(slavidx) > 0);
-	m_ioState[slavidx].iors = iors;
+	assert(m_ioState.count(slaveidx) > 0);
+	m_ioState[slaveidx].iors = iors;
+}
+
+void DmcManager::setIoOutput(short slaveidx, unsigned int output)
+{
+	assert(m_ioState.count(slaveidx) > 0);
+	m_slaveMutexs[slaveidx].lock();
+	m_ioState[slaveidx].output = output;
+	m_slaveMutexs[slaveidx].unlock();
+}
+
+unsigned int DmcManager::getIoOutput(short slaveidx)
+{
+	unsigned output;
+	assert(m_ioState.count(slaveidx) > 0);
+	m_slaveMutexs[slaveidx].lock();
+	output = m_ioState[slaveidx].output;
+	m_slaveMutexs[slaveidx].unlock();
+
+	return output;
 }
 
 void DmcManager::run()
@@ -1443,7 +1462,7 @@ unsigned long DmcManager::immediate_stop(short axis)
 	return decel_stop(axis, 0.1, true);
 }
 
-unsigned long DmcManager::out_bit(short slave_idx, unsigned int bitData)
+unsigned long DmcManager::out_bit(short slave_idx, short bitNo, short bitData)
 {
 	unsigned long retValue = ERR_NOERR;
 	WriteIoRequest *newReq = NULL;
@@ -1471,7 +1490,13 @@ unsigned long DmcManager::out_bit(short slave_idx, unsigned int bitData)
 
 		setIoRS(slave_idx, IORS_BUSY);
 		newReq->slave_idx = slave_idx;
-		newReq->output	  = bitData;
+
+		unsigned int cur_output = getIoOutput(slave_idx);	//获取当前IO模块输出值
+		if (bitData)	//Turn on
+			newReq->output = cur_output | (1 << bitNo);
+		else			//Turn off
+			newReq->output = cur_output &(~(1 << bitNo));
+		
 		addRequest(slave_idx, newReq);
 	}while(0);
 
