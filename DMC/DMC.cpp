@@ -64,14 +64,14 @@ DWORD WINAPI d1000_out_bit(short ioslave_idx, short BitNo, short BitData)
 DWORD WINAPI d1000_get_outbit(short ioslave_idx, short BitNo)
 {
 	unsigned int output = DmcManager::instance().getIoOutput(ioslave_idx);
-	return (output & (1 << BitNo));
+	return (output & (1 << BitNo)) ? 1 : 0;
 }
 
 DWORD WINAPI d1000_in_bit(short ioslave_idx, short BitNo)
 {
 	unsigned int input = 0;
 	DmcManager::instance().in_bit(ioslave_idx, &input);
-	return (input & (1 << BitNo));
+	return (input & (1 << BitNo)) ? 1 : 0;
 }
 
 DWORD WINAPI d1000_start_t_line(short TotalAxis,short *AxisArray,long *DistArray,long StrVel, long MaxVel, double Tacc)
