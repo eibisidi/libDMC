@@ -886,7 +886,9 @@ void DmcManager::setMoveState(short slaveidx, MoveState ms)
 void DmcManager::setIoRS(short slaveidx, IoRequestState iors)
 {
 	assert(m_ioState.count(slaveidx) > 0);
+	m_slaveMutexs[slaveidx].lock();
 	m_ioState[slaveidx].iors = iors;
+	m_slaveMutexs[slaveidx].unlock();
 }
 
 void DmcManager::setIoOutput(short slaveidx, unsigned int output)
@@ -899,7 +901,7 @@ void DmcManager::setIoOutput(short slaveidx, unsigned int output)
 
 unsigned int DmcManager::getIoOutput(short slaveidx)
 {
-	unsigned output;
+	unsigned int output;
 	assert(m_ioState.count(slaveidx) > 0);
 	m_slaveMutexs[slaveidx].lock();
 	output = m_ioState[slaveidx].output;
@@ -1508,21 +1510,21 @@ unsigned long DmcManager::out_bit(short slave_idx, short bitNo, short bitData)
 		//wait until done
 		while(true)
 		{
-			m_mutex.lock();
+			m_slaveMutexs[slave_idx].lock();
 			iors = m_ioState[slave_idx].iors;
 			if (IORS_SUCCESS == iors )
 			{
-				m_mutex.unlock();
+				m_slaveMutexs[slave_idx].unlock();
 				break;
 			}
 			else if (IORS_TIMEOUT  == iors)
 			{
 				retValue = ERR_IO_WRITE_TIMEOUT;
-				m_mutex.unlock();
+				m_slaveMutexs[slave_idx].unlock();
 				break;
 			}
 			
-			m_mutex.unlock();
+			m_slaveMutexs[slave_idx].unlock();
 			
 			Poco::Thread::sleep(10);
 		}
@@ -1570,22 +1572,22 @@ unsigned long DmcManager::in_bit(short slave_idx, unsigned int *bitData)
 		//wait until done
 		while(true)
 		{
-			m_mutex.lock();
+			m_slaveMutexs[slave_idx].lock();
 			iors = m_ioState[slave_idx].iors;
 			if (IORS_SUCCESS == iors )
 			{
 				*bitData = m_ioState[slave_idx].input;
-				m_mutex.unlock();
+				m_slaveMutexs[slave_idx].unlock();
 				break;
 			}
 			else if (IORS_TIMEOUT  == iors)
 			{
 				retValue = ERR_IO_READ_TIMEOUT;
-				m_mutex.unlock();
+				m_slaveMutexs[slave_idx].unlock();
 				break;
 			}
 			
-			m_mutex.unlock();
+			m_slaveMutexs[slave_idx].unlock();
 			
 			Poco::Thread::sleep(10);
 		}
