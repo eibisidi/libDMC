@@ -1252,7 +1252,7 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 	if (req->slave_idx != req->axispara->ref->last_slaveidx)
 		return;
 
-	//最后一个从站将所有的规划点假如发送队列
+	//最后一个从站将所有的规划点加入发送队列
 	const std::set<BaseMultiAxisPara *> &paras = req->axispara->ref->paras;
 
 	int cycles = req->axispara->totalCycles();

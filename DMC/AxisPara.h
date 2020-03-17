@@ -18,7 +18,7 @@ public:
 	int				error;						//错误标记, -1代表某个相关轴运动出现错误
 	int				planned;					//0尚未规划  -1规划失败 1规划成功
 
-	std::set<BaseMultiAxisPara *> paras;		//所有引用该Ref的运动对象
+	std::set<BaseMultiAxisPara *> paras;		//所有引用该Ref的运动对象 todo防止多轴运动加锁产生死锁，改成map<int, BaseMultiAxisPara*>类型，按照从站索引升序排列
 	
 	BaseRef();
 	virtual ~BaseRef();

@@ -432,16 +432,18 @@ void DmcManager::beforeWriteCmd()
 		int slave_idx = iter->first;
 		
 		BaseRequest *req = iter->second;
-		req->exec();
+		req->exec();//exec增加返回值
 
 		if (REQUEST_STATE_BUSY != req->reqState)
 		{
 			freeSdoCmdResp(req);
 			delete req;
 			iter = m_requests.erase(iter);
+			
 		}
 		else
 			iter++;
+		//todo set MOVE_STATE HERE
 
 		if (m_cmdData[slave_idx].CMD != GET_STATUS)
 		{
