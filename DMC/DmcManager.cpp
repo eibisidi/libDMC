@@ -1013,6 +1013,7 @@ void DmcManager::run()
 		if(!m_requests.empty())
 		{
 			beforeWriteCmd();
+			m_mutex.unlock();
 
 			for(i = 0, cols = 0; i < DEF_MA_MAX; ++i)
 			{
@@ -1028,7 +1029,9 @@ void DmcManager::run()
 				}
 				else if (m_cmdData[i].CMD != GET_STATUS)
 				{
-					if (m_cmdData[i].CMD == CSP && CSP_DATA2_DUMMY == m_cmdData[i].Data2)
+					if (m_cmdData[i].CMD == CSP && 0 == m_cmdData[i].Data2)
+						continue;
+					if (m_cmdData[i].CMD == CSP)
 						m_cmdData[i].Data2 = 0;			//CSP最后位置重发
 					m_items[cols].index = i;
 					m_items[cols].cmdData = m_cmdData[i];
@@ -1045,8 +1048,11 @@ void DmcManager::run()
 		else
 		{
 			m_rdWrManager.setIdle();
-			if (false == m_condition.tryWait(m_mutex, 10))	//休眠10ms，等待用户命令
+			bool wake = m_condition.tryWait(m_mutex, 10);
+			m_mutex.unlock();
+			if (false == wake)	//休眠10ms，等待用户命令
 			{//polls current inputs if idle
+
 				for(i = 0, cols = 0; i < DEF_MA_MAX; ++i)
 				{
 					if(isIoSlave(i))
@@ -1066,7 +1072,7 @@ void DmcManager::run()
 				copyRespData();//接收队列处理，刷新
 			}
 		}
-		m_mutex.unlock();
+
 	}
 
 	LOGSINGLE_INFORMATION("DmcManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));
