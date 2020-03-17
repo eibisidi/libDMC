@@ -99,6 +99,7 @@ public:
 
 	void setIoOutput(short slaveidx, unsigned int output);
 	unsigned int getIoOutput(short slaveidx);
+	unsigned int getIoInput(short slaveidx);
 
 	//内部TransData命令
 	transData *getCmdData(short slaveidx);
@@ -125,8 +126,7 @@ private:
 
 	bool isDriverSlave(short slaveidx) const;
 	bool isIoSlave(short slaveidx) const;
-	void setMoveState(short slaveidx, MoveState ms);	//设置电机当前状态
-	void setIoRS(short slavidx, IoRequestState iors);	//设置当前IO请求状态
+	void setSlaveState(short slavidx, unsigned int ss);
 	void addRequest(short slaveidx, BaseRequest *req);
 
 
@@ -154,10 +154,6 @@ private:
 	MasterConfig		m_masterConfig;			//主站配置信息
 
 	std::map<int, BaseRequest *> m_requests;			
-
-	Poco::Mutex			m_slaveMutexs[DEF_MA_MAX];		//每个从站状态的锁
-	std::map<int, IoState>	 m_ioState;				//IO状态
-
 	std::map<int, SlaveState *> m_slaveStates;
 
 	Item				m_items[DEF_MA_MAX];

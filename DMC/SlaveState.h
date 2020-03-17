@@ -22,13 +22,6 @@ enum IoRequestState
 	IORS_TIMEOUT,
 };
 
-enum SlaveType
-{
-	SLAVE_TYPE_NONE = -1,
-	SLAVE_TYPE_IO	= 0,
-	SLAVE_TYPE_DRIVER,
-};
-
 class SlaveState
 {
 private:

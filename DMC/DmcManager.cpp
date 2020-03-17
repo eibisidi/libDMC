@@ -747,16 +747,10 @@ bool DmcManager::isIoSlave(short slaveidx) const
 	return false;
 }
 
-void DmcManager::setMoveState(short slaveidx, MoveState ms)
+void DmcManager::setSlaveState(short slaveidx, unsigned int  ss)
 {
 	assert(m_slaveStates.count(slaveidx) > 0);
-	m_slaveStates[slaveidx]->setSlaveState(ms);
-}
-
-void DmcManager::setIoRS(short slaveidx, IoRequestState iors)
-{
-	assert(m_slaveStates.count(slaveidx) > 0);
-	m_slaveStates[slaveidx]->setSlaveState(iors);
+	m_slaveStates[slaveidx]->setSlaveState(ss);
 }
 
 void DmcManager::addRequest(short slaveidx, BaseRequest *req)
@@ -977,21 +971,37 @@ bool DmcManager::isServo(short slaveidx)
 
 void DmcManager::setIoOutput(short slaveidx, unsigned int output)
 {
-	assert(m_ioState.count(slaveidx) > 0);
-	m_slaveMutexs[slaveidx].lock();
-	m_ioState[slaveidx].output = output;
-	m_slaveMutexs[slaveidx].unlock();
+	IoSlaveState * iss = dynamic_cast<IoSlaveState *>(m_slaveStates[slaveidx]);
+	if (iss)
+		iss->setOutput(output);
+	else
+		LOGSINGLE_FATAL("slave %?d is not a io.", __FILE__, __LINE__, slaveidx);
 }
 
 unsigned int DmcManager::getIoOutput(short slaveidx)
 {
 	unsigned int output;
-	assert(m_ioState.count(slaveidx) > 0);
-	m_slaveMutexs[slaveidx].lock();
-	output = m_ioState[slaveidx].output;
-	m_slaveMutexs[slaveidx].unlock();
+
+	IoSlaveState * iss = dynamic_cast<IoSlaveState *>(m_slaveStates[slaveidx]);
+	if (iss)
+		output = iss->getOutput();
+	else
+		LOGSINGLE_FATAL("slave %?d is not a io.", __FILE__, __LINE__, slaveidx);
 
 	return output;
+}
+
+unsigned int DmcManager::getIoInput(short slaveidx)
+{
+	unsigned int input;
+
+	IoSlaveState * iss = dynamic_cast<IoSlaveState *>(m_slaveStates[slaveidx]);
+	if (iss)
+		input = iss->getInput();
+	else
+		LOGSINGLE_FATAL("slave %?d is not a io.", __FILE__, __LINE__, slaveidx);
+
+	return input;
 }
 
 void DmcManager::run()
@@ -1007,15 +1017,23 @@ void DmcManager::run()
 			for(i = 0, cols = 0; i < DEF_MA_MAX; ++i)
 			{
 				if (m_cmdData[i].CMD == GET_STATUS
-					|| (m_cmdData[i].CMD == CSP && m_cmdData[i].Data2 == 0))
-					continue;
-
-				if (m_cmdData[i].CMD == CSP)
-					m_cmdData[i].Data2 = 0;			//CSP最后位置重发
-			
-				m_items[cols].index = i;
-				m_items[cols].cmdData = m_cmdData[i];
-				++cols;
+					&& isIoSlave(i))
+				{//pigtails io_rd 
+					m_items[cols].index = i;
+					m_items[cols].cmdData.CMD 	= IO_RD;
+					m_items[cols].cmdData.Data1 = 0;
+					m_items[cols].cmdData.Data2	= 0;
+					m_lastCmdData[i] = m_items[cols].cmdData;
+					++cols;
+				}
+				else if (m_cmdData[i].CMD != GET_STATUS)
+				{
+					if (m_cmdData[i].CMD == CSP && CSP_DATA2_DUMMY == m_cmdData[i].Data2)
+						m_cmdData[i].Data2 = 0;			//CSP最后位置重发
+					m_items[cols].index = i;
+					m_items[cols].cmdData = m_cmdData[i];
+					++cols;
+				}		
 			}
 
 			if (cols > 0)
@@ -1027,7 +1045,26 @@ void DmcManager::run()
 		else
 		{
 			m_rdWrManager.setIdle();
-			m_condition.tryWait(m_mutex, 10);	//休眠10ms，等待用户命令
+			if (false == m_condition.tryWait(m_mutex, 10))	//休眠10ms，等待用户命令
+			{//polls current inputs if idle
+				for(i = 0, cols = 0; i < DEF_MA_MAX; ++i)
+				{
+					if(isIoSlave(i))
+					{
+						m_items[cols].index = i;
+						m_items[cols].cmdData.CMD 	= IO_RD;
+						m_items[cols].cmdData.Data1 = 0;
+						m_items[cols].cmdData.Data2	= 0;
+						m_lastCmdData[i] = m_items[cols].cmdData;
+						++cols;
+					}
+				}
+				if (cols > 0)
+					m_rdWrManager.pushItems(m_items, 1, cols);	//加入发送队列
+
+				m_rdWrManager.setBusy();
+				copyRespData();//接收队列处理，刷新
+			}
 		}
 		m_mutex.unlock();
 	}
@@ -1064,7 +1101,7 @@ unsigned long DmcManager::clr_alarm(short axis)
 
 		newReq->slave_idx = axis;
 
-		setMoveState(axis, MOVESTATE_BUSY);
+		setSlaveState(axis, MOVESTATE_BUSY);
 		addRequest(axis, newReq);		
 	}while(0);
 
@@ -1135,7 +1172,7 @@ unsigned long DmcManager::init_driver(short axis)
 			}
 		}
 		
-		setMoveState(axis, MOVESTATE_BUSY);
+		setSlaveState(axis, MOVESTATE_BUSY);
 		addRequest(axis, newReq);		
 	}while(0);
 
@@ -1194,7 +1231,7 @@ unsigned long DmcManager::servo_on(short axis)
 
 		newReq->slave_idx = axis;
 
-		setMoveState(axis, MOVESTATE_BUSY);
+		setSlaveState(axis, MOVESTATE_BUSY);
 		addRequest(axis, newReq);		
 	}while(0);
 
@@ -1253,13 +1290,13 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 		//判断目标位置是否已经到达
 		if (!abs && Dist == 0)
 		{
-			setMoveState(axis, MOVESTATE_STOP);
+			setSlaveState(axis, MOVESTATE_STOP);
 			break;						//相对模式，距离为0
 		}
 
 		if (abs && Dist == getDriverCmdPos(axis))
 		{
-			setMoveState(axis, MOVESTATE_STOP);
+			setSlaveState(axis, MOVESTATE_STOP);
 			break;						//绝对模式，位置已到达
 		}
 	
@@ -1270,7 +1307,7 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 			break;
 		}
 
-		setMoveState(axis, MOVESTATE_BUSY);
+		setSlaveState(axis, MOVESTATE_BUSY);
 		
 		newReq->slave_idx = axis;
 		newReq->abs 	  = abs;				//相对 绝对
@@ -1319,7 +1356,7 @@ unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,long acc
 			break;
 		}
 
-		setMoveState(axis, MOVESTATE_BUSY);
+		setSlaveState(axis, MOVESTATE_BUSY);
 		
 		newReq->slave_idx = axis;
 		newReq->home_method = m_masterConfig.home_method;
@@ -1385,7 +1422,7 @@ unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *dis
 		short axis = axisArray[i];
 		long dist = distArray[i];
 		newReq = new MultiAxisRequest(axis, newLinearRef, distArray[i], abs);
-		setMoveState(axis, MOVESTATE_BUSY);
+		setSlaveState(axis, MOVESTATE_BUSY);
 		m_requests[axis] = newReq;
 	}
 DONE:
@@ -1449,7 +1486,7 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 		short axis = axisArray[i];
 		long dist = distArray[i];
 		newReq = new MultiAxisRequest(axis, newArchlRef, distArray[i], abs, (i==0)/*是否为Z轴*/);
-		setMoveState(axis, MOVESTATE_BUSY);
+		setSlaveState(axis, MOVESTATE_BUSY);
 		m_requests[axis] = newReq;
 	}
 DONE:
@@ -1507,7 +1544,7 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 		if (NULL != moveReq)
 		{//单轴运动
 			newReq = new DStopRequest(axis, tDec, bServOff);
-			setMoveState(axis, MOVESTATE_BUSY);
+			setSlaveState(axis, MOVESTATE_BUSY);
 			addRequest(axis, newReq);
 		}
 		else
@@ -1524,7 +1561,7 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 
 					newReq = new DStopRequest(para->req->slave_idx, tDec, bServOff);
 					
-					setMoveState(para->req->slave_idx, MOVESTATE_BUSY);
+					setSlaveState(para->req->slave_idx, MOVESTATE_BUSY);
 					addRequest(para->req->slave_idx, newReq);
 					lineReq = NULL;				//no longer valid
 				}
@@ -1553,7 +1590,7 @@ unsigned long DmcManager::out_bit(short slave_idx, short bitNo, short bitData)
 	m_mutex.lock();
 	
 	do{
-		if ( 0 == m_ioState.count(slave_idx))
+		if ( false == isIoSlave(slave_idx))
 		{
 			retValue = ERR_IO_NO_SLAVE;
 			break;
@@ -1572,7 +1609,7 @@ unsigned long DmcManager::out_bit(short slave_idx, short bitNo, short bitData)
 			break;
 		}
 
-		setIoRS(slave_idx, IORS_BUSY);
+		setSlaveState(slave_idx, IORS_BUSY);
 		newReq->slave_idx = slave_idx;
 
 		unsigned int cur_output = getIoOutput(slave_idx);	//获取当前IO模块输出值
@@ -1586,94 +1623,42 @@ unsigned long DmcManager::out_bit(short slave_idx, short bitNo, short bitData)
 
 	m_mutex.unlock();
 
-	IoRequestState iors;
+	unsigned int  iors;
 	if (ERR_NOERR == retValue)
 	{
 		//wait until done
 		while(true)
 		{
-			m_slaveMutexs[slave_idx].lock();
-			iors = m_ioState[slave_idx].iors;
+			iors = check_done(slave_idx);
 			if (IORS_SUCCESS == iors )
 			{
-				m_slaveMutexs[slave_idx].unlock();
 				break;
 			}
 			else if (IORS_TIMEOUT  == iors)
 			{
 				retValue = ERR_IO_WRITE_TIMEOUT;
-				m_slaveMutexs[slave_idx].unlock();
 				break;
 			}
-			
-			m_slaveMutexs[slave_idx].unlock();
-			
-			Poco::Thread::sleep(10);
 		}
 	}
+	
 	return retValue;
 }
 
 unsigned long DmcManager::in_bit(short slave_idx, unsigned int *bitData)
 {
 	unsigned long retValue = ERR_NOERR;
-	ReadIoRequest *newReq = NULL;
-	m_mutex.lock();
 	
 	do{
-		if ( 0 == m_ioState.count(slave_idx))
+		if ( false == isIoSlave(slave_idx))
 		{
 			retValue = ERR_IO_NO_SLAVE;
 			break;
 		}
 
-		if (m_requests.count(slave_idx) > 0)
-		{
-			retValue = ERR_IO_BUSY;
-			break;
-		}
-		
-		newReq = new ReadIoRequest;
-		if (NULL == newReq)
-		{
-			retValue = ERR_MEM;
-			break;
-		}
-
-		setIoRS(slave_idx, IORS_BUSY);
-		newReq->slave_idx = slave_idx;
-		addRequest(slave_idx, newReq);
-
+		*bitData = getIoInput(slave_idx);
 	}while(0);
 
-	m_mutex.unlock();
-
-	IoRequestState iors;
-	if (ERR_NOERR == retValue)
-	{
-		//wait until done
-		while(true)
-		{
-			m_slaveMutexs[slave_idx].lock();
-			iors = m_ioState[slave_idx].iors;
-			if (IORS_SUCCESS == iors )
-			{
-				*bitData = m_ioState[slave_idx].input;
-				m_slaveMutexs[slave_idx].unlock();
-				break;
-			}
-			else if (IORS_TIMEOUT  == iors)
-			{
-				retValue = ERR_IO_READ_TIMEOUT;
-				m_slaveMutexs[slave_idx].unlock();
-				break;
-			}
-			
-			m_slaveMutexs[slave_idx].unlock();
-			
-			Poco::Thread::sleep(10);
-		}
-	}
 	return retValue;
 }
 

@@ -6,7 +6,7 @@
 #define MAX_ATTEMPTS (5)				
 #define MAKE_DWORD(h,l) ((h << 16) | (l))
 
-#define CSP_DATA2_DUMMY (0xFF)
+
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
 BaseRequest::BaseRequest()
@@ -2000,7 +2000,7 @@ FsmRetType WriteIoRequest::fsm_state_io_wr(WriteIoRequest *req)
 
 	req->fsmstate		= WriteIoRequest::fsm_state_done;
 	req->reqState		= REQUEST_STATE_SUCCESS;
-	req->dmc->setIoOutput(req->slave_idx, req->output);		//输出成功，更新输出当前值
+	req->dmc->setIoOutput(req->slave_idx, req->output);	
 	retval				= IORS_SUCCESS;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
