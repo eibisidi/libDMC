@@ -298,6 +298,9 @@ int main()
 		WAIT_DONE(axisArray[0], ms)
 		if (ms != MOVESTATE_STOP)
 			break;
+		WAIT_DONE(axisArray[1], ms)
+		if (ms != MOVESTATE_STOP)
+			break;
 
 		NEG_ARRAY(distArray);
 
@@ -305,6 +308,9 @@ int main()
 		if (ERR_NOERR != ret)
 			break;
 		WAIT_DONE(axisArray[0], ms)
+		if (ms != MOVESTATE_STOP)
+			break;
+		WAIT_DONE(axisArray[1], ms)
 		if (ms != MOVESTATE_STOP)
 			break;
 
