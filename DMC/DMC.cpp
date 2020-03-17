@@ -110,5 +110,5 @@ DWORD WINAPI d1000_start_ta_archl(short TotalAxis,short *AxisArray,long *PosArra
 
 long WINAPI d1000_get_command_pos(short axis)
 {
-	return DmcManager::instance().get_command_pos(axis);
+	return DmcManager::instance().getDriverCmdPos(axis);
 }

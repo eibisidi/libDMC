@@ -19,24 +19,26 @@ BaseRequest::BaseRequest()
 	cmdData   = respData = NULL;
 }
 
-void DStopRequest::fsm_state_done(DStopRequest *req)
+FsmRetType DStopRequest::fsm_state_done(DStopRequest *req)
 {
 	//shall not be called
+	return MOVESTATE_NONE;
 }
 
-void DStopRequest::fsm_state_svoff(DStopRequest *req)
+FsmRetType DStopRequest::fsm_state_svoff(DStopRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
 	if(SV_OFF != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if (req->dmc->isDriverOn(req->slave_idx)
 			&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 	
 	if (req->rechecks <= 0)
@@ -44,8 +46,8 @@ void DStopRequest::fsm_state_svoff(DStopRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{			
 			LOGSINGLE_ERROR("DStopRequest::fsm_state_svoff timeouts. axis=%d, status=0x%?x.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx));
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
 			req->reqState = REQUEST_STATE_FAIL;
+			retval = MOVESTATE_TIMEOUT;
 		} 
 		else
 		{
@@ -53,21 +55,23 @@ void DStopRequest::fsm_state_svoff(DStopRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= DStopRequest::fsm_state_done;
-	req->dmc->setMoveState(req->slave_idx, MOVESTATE_CMD_STOP);
 	req->reqState		= REQUEST_STATE_SUCCESS;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+	retval = MOVESTATE_CMD_STOP;
+	return MOVESTATE_CMD_STOP;
 }
 
-void DStopRequest::fsm_state_csp(DStopRequest *req)
+FsmRetType DStopRequest::fsm_state_csp(DStopRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
 	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
 	{//尚未发送完毕
-		return;
+		return retval;
 	}
 
 	//发送已经完成
@@ -77,7 +81,7 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 			&& GET_STATUS != RESP_CMD_CODE(req->respData )
 			&& req->rechecks--)
 		{
-			return;
+			return retval;
 		}
 
 		int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
@@ -85,7 +89,7 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 		if ( !req->positionReached(req->respData->Data1, posBias) 
 			&& req->rechecks--)
 		{
-			return;
+			return retval;
 		}
 
 		if (req->rechecks <= 0)						//等待位置到达超时
@@ -93,8 +97,8 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 			if (++req->attempts > MAX_ATTEMPTS)
 			{	
 				LOGSINGLE_ERROR("DStopRequest::fsm_state_csp timeout. nowpos=%d, endpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->stopInfo.endpos);
-				req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
 				req->reqState = REQUEST_STATE_FAIL;
+				retval = MOVESTATE_TIMEOUT;
 			}
 			else
 			{
@@ -104,7 +108,7 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 				req->cmdData->Data1 = req->stopInfo.endpos;	//重发最终位置
 				req->cmdData->Data2 = CSP_DATA2_DUMMY;		//特殊处理让充发位置可以进入待发送队列				
 			}
-			return;
+			return retval;
 		}
 	}
 
@@ -124,15 +128,18 @@ void DStopRequest::fsm_state_csp(DStopRequest *req)
 	else
 	{//不需关闭电机使能
 		req->fsmstate		= fsm_state_done;
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_CMD_STOP);
+		retval = MOVESTATE_CMD_STOP;
 		req->reqState		= REQUEST_STATE_SUCCESS;
 	}
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+	return retval;
 }
 
-void DStopRequest::fsm_state_start(DStopRequest *req)
+FsmRetType DStopRequest::fsm_state_start(DStopRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	req->cmdData	= req->dmc->getCmdData(req->slave_idx);
 	req->respData	= req->dmc->getRespData(req->slave_idx);
 	req->fsmstate	 	= fsm_state_csp;
@@ -140,6 +147,8 @@ void DStopRequest::fsm_state_start(DStopRequest *req)
 	
 	//将减速命令加入到队列中
 	req->dmc->m_rdWrManager.declStop(req->slave_idx, &req->stopInfo);
+
+	return retval;
 }
 
 bool  DStopRequest::positionReached(int q , int bias) const
@@ -150,28 +159,31 @@ bool  DStopRequest::positionReached(int q , int bias) const
 		return q == this->stopInfo.endpos;
 }
 
-void DStopRequest::exec()
+FsmRetType DStopRequest::exec()
 {
-	fsmstate(this);
+	return fsmstate(this);
 }
 
-void MoveRequest::fsm_state_done(MoveRequest *req)
+FsmRetType MoveRequest::fsm_state_done(MoveRequest *req)
 {
 	//shall not be called
+	return MOVESTATE_NONE;
 }
 
-void MoveRequest::fsm_state_csp(MoveRequest *req)
+FsmRetType MoveRequest::fsm_state_csp(MoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
 	{//尚未发送完毕
-		return;
+		return retval;
 	}
 
 	if(CSP != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData )
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 		
 	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
@@ -179,7 +191,7 @@ void MoveRequest::fsm_state_csp(MoveRequest *req)
 	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 		
 	if (req->rechecks <= 0)						//等待位置到达超时
@@ -187,7 +199,7 @@ void MoveRequest::fsm_state_csp(MoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{	
 			LOGSINGLE_ERROR("MoveRequest::fsm_state_csp timeout. axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__,req->slave_idx, (int)req->respData->Data1, req->dstpos);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -198,32 +210,36 @@ void MoveRequest::fsm_state_csp(MoveRequest *req)
 			req->cmdData->Data2 = CSP_DATA2_DUMMY;	//特殊处理让充发位置可以进入待发送队列
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	//目标位置已到达,更新新的绝对位置
 	req->dmc->setDriverCmdPos(req->slave_idx,req->dstpos);
 	
 	req->fsmstate	 	= fsm_state_done;
-	req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
+	retval 				= MOVESTATE_STOP;
 	req->reqState		= REQUEST_STATE_SUCCESS;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void MoveRequest::fsm_state_svon(MoveRequest *req)
+FsmRetType MoveRequest::fsm_state_svon(MoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SV_ON != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if (!req->dmc->isDriverOn(req->slave_idx)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 			
 	if (req->rechecks <= 0)
@@ -231,7 +247,7 @@ void MoveRequest::fsm_state_svon(MoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{	
 			LOGSINGLE_ERROR("MoveRequest::fsm_state_svon timeouts. axis=%d, status=0x%?x.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx));
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -240,14 +256,13 @@ void MoveRequest::fsm_state_svon(MoveRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	if (!req->startPlan())
 	{
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
 		req->reqState = REQUEST_STATE_FAIL;
-		return;
+		return MOVESTATE_ERR;
 	}
 
 	req->fsmstate	 	= fsm_state_csp;
@@ -256,21 +271,25 @@ void MoveRequest::fsm_state_svon(MoveRequest *req)
 	req->attempts		= 0;
 
 	pushCspPoints(req);
+
+	return retval;
 }
 
-void MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
+FsmRetType MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SDO_WR != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if ((req->slave_idx != req->respData->Parm ||  0x60600000 != req->respData->Data1 || CSP_MODE != req->respData->Data2)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 	
 	if (req->rechecks <= 0)
@@ -278,7 +297,7 @@ void MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{	
 			LOGSINGLE_ERROR("MoveRequest::fsm_state_sdowr_cspmode timeouts. axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -287,7 +306,7 @@ void MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	//free sdo
@@ -300,9 +319,8 @@ void MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
 	{//电机已经励磁
 		if (!req->startPlan())
 		{
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
 			req->reqState = REQUEST_STATE_FAIL;
-			return;
+			return MOVESTATE_ERR;
 		}
 		req->fsmstate	 	= MoveRequest::fsm_state_csp;
 		req->cmdData->CMD 	= CSP;	
@@ -315,14 +333,18 @@ void MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
 	}
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void MoveRequest::fsm_state_wait_sdowr_cspmode(MoveRequest *req)
+FsmRetType MoveRequest::fsm_state_wait_sdowr_cspmode(MoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if (!req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData)
 		&& req->rechecks --)
 	{
-		return;
+		return retval;
 	}
 
 	if (req->rechecks <= 0)
@@ -330,7 +352,7 @@ void MoveRequest::fsm_state_wait_sdowr_cspmode(MoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{	
 			LOGSINGLE_ERROR("MoveRequest::fsm_state_wait_sdowr_cspmode timeouts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -338,7 +360,7 @@ void MoveRequest::fsm_state_wait_sdowr_cspmode(MoveRequest *req)
 			LOGSINGLE_INFORMATION("MoveRequest::fsm_state_wait_sdowr_cspmode reattempts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= MoveRequest::fsm_state_sdowr_cspmode;
@@ -348,10 +370,14 @@ void MoveRequest::fsm_state_wait_sdowr_cspmode(MoveRequest *req)
 	req->cmdData->Data2 = CSP_MODE;	
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void MoveRequest::fsm_state_start(MoveRequest *req)
+FsmRetType MoveRequest::fsm_state_start(MoveRequest *req)
 {	
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	req->startpos = req->dmc->getDriverCmdPos(req->slave_idx);//获得起始位置
 	if (req->abs)
 		req->dstpos = req->dist;
@@ -368,9 +394,8 @@ void MoveRequest::fsm_state_start(MoveRequest *req)
 		{//电机已经励磁
 			if (!req->startPlan())
 			{
-				req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
 				req->reqState = REQUEST_STATE_FAIL;
-				return;
+				return MOVESTATE_ERR;
 			}
 		
 			req->fsmstate	 	= MoveRequest::fsm_state_csp;
@@ -396,6 +421,8 @@ void MoveRequest::fsm_state_start(MoveRequest *req)
 		else
 			req->fsmstate		= MoveRequest::fsm_state_wait_sdowr_cspmode;		
 	}
+
+	return retval;
 }
 
 bool MoveRequest::startPlan()
@@ -465,29 +492,31 @@ void MoveRequest::pushCspPoints(MoveRequest *req)
 	
 }
 
-void MoveRequest::exec()
+FsmRetType MoveRequest::exec()
 {
-	fsmstate(this);
+	return fsmstate(this);
 }
 
-void ClrAlarmRequest::fsm_state_done(ClrAlarmRequest *req)
+FsmRetType ClrAlarmRequest::fsm_state_done(ClrAlarmRequest *req)
 {
-	//shall not be called
+	return MOVESTATE_NONE;
 }
 
-void ClrAlarmRequest::fsm_state_sdord_errcode(ClrAlarmRequest *req)
+FsmRetType ClrAlarmRequest::fsm_state_sdord_errcode(ClrAlarmRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SDO_RD != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if ((req->slave_idx != req->respData->Parm ||  0x603F0000 != req->respData->Data1 || 0x00 != req->respData->Data2)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 	
 	if (req->rechecks <= 0)
@@ -495,7 +524,7 @@ void ClrAlarmRequest::fsm_state_sdord_errcode(ClrAlarmRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{	
 			LOGSINGLE_ERROR("ClrAlarmRequest::fsm_state_sdord_errcode timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -504,7 +533,7 @@ void ClrAlarmRequest::fsm_state_sdord_errcode(ClrAlarmRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	//free sdo
@@ -513,18 +542,22 @@ void ClrAlarmRequest::fsm_state_sdord_errcode(ClrAlarmRequest *req)
 	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
 	req->respData		= req->dmc->getRespData(req->slave_idx);
 	req->fsmstate		= ClrAlarmRequest::fsm_state_done;
-	req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
+	retval				= MOVESTATE_STOP; 
 	req->reqState		= REQUEST_STATE_SUCCESS;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void ClrAlarmRequest::fsm_state_wait_sdord_errcode(ClrAlarmRequest *req)
+FsmRetType ClrAlarmRequest::fsm_state_wait_sdord_errcode(ClrAlarmRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if (!req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData)
 		&& req->rechecks --)
 	{
-		return;
+		return retval;
 	}
 
 	if (req->rechecks <= 0)
@@ -532,7 +565,7 @@ void ClrAlarmRequest::fsm_state_wait_sdord_errcode(ClrAlarmRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{	
 			LOGSINGLE_ERROR("ClrAlarmRequest::fsm_state_wait_sdord_errcode timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -540,7 +573,7 @@ void ClrAlarmRequest::fsm_state_wait_sdord_errcode(ClrAlarmRequest *req)
 			LOGSINGLE_INFORMATION("ClrAlarmRequest::fsm_state_wait_sdord_errcode reattempts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= ClrAlarmRequest::fsm_state_sdord_errcode;
@@ -549,15 +582,19 @@ void ClrAlarmRequest::fsm_state_wait_sdord_errcode(ClrAlarmRequest *req)
 	req->cmdData->Data1 = 0x603F0000;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void ClrAlarmRequest::fsm_state_alm_clr(ClrAlarmRequest *req)
+FsmRetType ClrAlarmRequest::fsm_state_alm_clr(ClrAlarmRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(ALM_CLR != RESP_CMD_CODE(req->respData)
 			&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if (req->rechecks <= 0)
@@ -565,7 +602,7 @@ void ClrAlarmRequest::fsm_state_alm_clr(ClrAlarmRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{	
 			LOGSINGLE_ERROR("ClrAlarmRequest::fsm_state_alm_clr timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -574,7 +611,7 @@ void ClrAlarmRequest::fsm_state_alm_clr(ClrAlarmRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	if (req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData))
@@ -588,39 +625,48 @@ void ClrAlarmRequest::fsm_state_alm_clr(ClrAlarmRequest *req)
 		req->fsmstate  = ClrAlarmRequest::fsm_state_wait_sdord_errcode;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void ClrAlarmRequest::fsm_state_start(ClrAlarmRequest *req)
+FsmRetType ClrAlarmRequest::fsm_state_start(ClrAlarmRequest *req)
 {	
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
 	req->respData		= req->dmc->getRespData(req->slave_idx);
 	req->fsmstate		= ClrAlarmRequest::fsm_state_wait_sdord_errcode;
 	req->cmdData->CMD	= ALM_CLR;
+
+	return retval;
 }
 
-void ClrAlarmRequest::exec()
+FsmRetType ClrAlarmRequest::exec()
 {
-	fsmstate(this);
+	return fsmstate(this);
 }
 
-void InitSlaveRequest::fsm_state_done(InitSlaveRequest *req)
+FsmRetType InitSlaveRequest::fsm_state_done(InitSlaveRequest *req)
 {
 	//shall not be called
+	return MOVESTATE_NONE;
 }
 
-void InitSlaveRequest::fsm_state_sdowr(InitSlaveRequest *req)
+FsmRetType InitSlaveRequest::fsm_state_sdowr(InitSlaveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SDO_WR != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if ((req->slave_idx != req->respData->Parm ||  MAKE_DWORD(req->iter->sdo_index,req->iter->sdo_subindex) != req->respData->Data1 || req->iter->sdo_value != req->respData->Data2)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 	
 	if (req->rechecks <= 0)
@@ -628,7 +674,7 @@ void InitSlaveRequest::fsm_state_sdowr(InitSlaveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{	
 			LOGSINGLE_ERROR("InitSlaveRequest::fsm_state_sdowr timeout, axis=%d, sdo=0x%?x.", __FILE__, __LINE__, req->slave_idx, MAKE_DWORD(req->iter->sdo_index, req->iter->sdo_subindex));
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -637,7 +683,7 @@ void InitSlaveRequest::fsm_state_sdowr(InitSlaveRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	LOGSINGLE_INFORMATION("InitSlaveRequest::fsm_state_sdowr succeed, axis=%d, sdo=0x%?x, value=%?d.", __FILE__, __LINE__, req->slave_idx, MAKE_DWORD(req->iter->sdo_index, req->iter->sdo_subindex), req->iter->sdo_value);
@@ -649,7 +695,7 @@ void InitSlaveRequest::fsm_state_sdowr(InitSlaveRequest *req)
 		req->cmdData		= req->dmc->getCmdData(req->slave_idx);
 		req->respData		= req->dmc->getRespData(req->slave_idx);
 		req->fsmstate		= InitSlaveRequest::fsm_state_done;
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
+		retval = MOVESTATE_STOP;
 		req->reqState		= REQUEST_STATE_SUCCESS;
 	}
 	else
@@ -657,19 +703,23 @@ void InitSlaveRequest::fsm_state_sdowr(InitSlaveRequest *req)
 		req->fsmstate		= InitSlaveRequest::fsm_state_sdowr;
 		req->cmdData->CMD	= SDO_WR;
 		req->cmdData->Parm	= (req->iter->sdo_size << 8) | (req->slave_idx & 0xFF); 			//size | slaveidx
-		req->cmdData->Data1 = MAKE_DWORD(req->iter->sdo_index,req->iter->sdo_subindex); 		//index 0x6091 subindex 0x0001
-		req->cmdData->Data2 = (req->iter->sdo_value);										//分辨率比值	
+		req->cmdData->Data1 = MAKE_DWORD(req->iter->sdo_index,req->iter->sdo_subindex); 	
+		req->cmdData->Data2 = (req->iter->sdo_value);										
 	}
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void InitSlaveRequest::fsm_state_wait_sdowr(InitSlaveRequest *req)
+FsmRetType InitSlaveRequest::fsm_state_wait_sdowr(InitSlaveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if (!req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData)
 		&& req->rechecks --)
 	{
-		return;
+		return retval;
 	}
 
 	if (req->rechecks <= 0)
@@ -677,7 +727,7 @@ void InitSlaveRequest::fsm_state_wait_sdowr(InitSlaveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{		
 			LOGSINGLE_ERROR("InitSlaveRequest::fsm_state_wait_sdowr timeouts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -685,7 +735,7 @@ void InitSlaveRequest::fsm_state_wait_sdowr(InitSlaveRequest *req)
 			LOGSINGLE_INFORMATION("InitSlaveRequest::fsm_state_wait_sdowr reattempts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= InitSlaveRequest::fsm_state_sdowr;
@@ -695,16 +745,20 @@ void InitSlaveRequest::fsm_state_wait_sdowr(InitSlaveRequest *req)
 	req->cmdData->Data2 = (req->iter->sdo_value);
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void InitSlaveRequest::fsm_state_start(InitSlaveRequest *req)
+FsmRetType InitSlaveRequest::fsm_state_start(InitSlaveRequest *req)
 {	
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if (req->iter == req->iterEnd)
 	{
 		req->fsmstate		= InitSlaveRequest::fsm_state_done;
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
+		retval 				= MOVESTATE_STOP;
 		req->reqState		= REQUEST_STATE_SUCCESS;
-		return;
+		return retval;
 	}
 		
 	if (req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData))
@@ -717,31 +771,36 @@ void InitSlaveRequest::fsm_state_start(InitSlaveRequest *req)
 	}
 	else
 		req->fsmstate		= InitSlaveRequest::fsm_state_wait_sdowr;		
+
+	return retval;
 }
 
-void InitSlaveRequest::exec()
+FsmRetType InitSlaveRequest::exec()
 {
-	fsmstate(this);
+	return fsmstate(this);
 }
 
-void ServoOnRequest::fsm_state_done(ServoOnRequest *req)
+FsmRetType ServoOnRequest::fsm_state_done(ServoOnRequest *req)
 {
 	//shall not be called
+	return MOVESTATE_NONE;
 }
 
-void ServoOnRequest::fsm_state_svon(ServoOnRequest *req)
+FsmRetType ServoOnRequest::fsm_state_svon(ServoOnRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SV_ON != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if (!req->dmc->isDriverOn(req->slave_idx)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 			
 	if (req->rechecks <= 0)
@@ -749,8 +808,8 @@ void ServoOnRequest::fsm_state_svon(ServoOnRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("ServoOnRequest::fsm_state_svon timeouts, axis=%d, status=0x%?x.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx));
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-			req->reqState = REQUEST_STATE_FAIL;
+			retval 			= MOVESTATE_TIMEOUT;
+			req->reqState 	= REQUEST_STATE_FAIL;
 		}
 		else
 		{
@@ -758,32 +817,36 @@ void ServoOnRequest::fsm_state_svon(ServoOnRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	//初始化电机位置
 	req->dmc->setDriverCmdPos(req->slave_idx, (long)req->respData->Data1);
 
 	req->fsmstate	 	= ServoOnRequest::fsm_state_done;
-	req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
+	retval 				= MOVESTATE_STOP;
 	req->reqState		= REQUEST_STATE_SUCCESS;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void ServoOnRequest::fsm_state_svoff(ServoOnRequest *req)
+FsmRetType ServoOnRequest::fsm_state_svoff(ServoOnRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SV_OFF != RESP_CMD_CODE(req->respData)
 			&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if (!req->dmc->isDriverOff(req->slave_idx)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 			
 	if (req->rechecks <= 0)
@@ -791,8 +854,8 @@ void ServoOnRequest::fsm_state_svoff(ServoOnRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("ServoOnRequest::fsm_state_svoff timeout, axis=%d, status=0x%?x.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx));
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-			req->reqState = REQUEST_STATE_FAIL;
+			retval 			= MOVESTATE_TIMEOUT;
+			req->reqState 	= REQUEST_STATE_FAIL;
 		}
 		else
 		{
@@ -800,28 +863,32 @@ void ServoOnRequest::fsm_state_svoff(ServoOnRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= ServoOnRequest::fsm_state_svon;
 	req->cmdData->CMD	= SV_ON;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void ServoOnRequest::fsm_state_sdowr_cspmode(ServoOnRequest *req)
+FsmRetType ServoOnRequest::fsm_state_sdowr_cspmode(ServoOnRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SDO_WR != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if ((req->slave_idx != req->respData->Parm ||  0x60600000 != req->respData->Data1 || CSP_MODE != req->respData->Data2)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 	
 	if (req->rechecks <= 0)
@@ -829,8 +896,8 @@ void ServoOnRequest::fsm_state_sdowr_cspmode(ServoOnRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("ServoOnRequest::fsm_state_sdowr_cspmode timeouts. axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
-			req->reqState = REQUEST_STATE_FAIL;
+			retval 			= MOVESTATE_TIMEOUT;
+			req->reqState 	= REQUEST_STATE_FAIL;
 		}
 		else
 		{
@@ -838,7 +905,7 @@ void ServoOnRequest::fsm_state_sdowr_cspmode(ServoOnRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	//free sdo
@@ -850,14 +917,18 @@ void ServoOnRequest::fsm_state_sdowr_cspmode(ServoOnRequest *req)
 	req->cmdData->CMD	= SV_OFF;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void ServoOnRequest::fsm_state_wait_sdowr_cspmode(ServoOnRequest *req)
+FsmRetType ServoOnRequest::fsm_state_wait_sdowr_cspmode(ServoOnRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if (!req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData)
 		&& req->rechecks --)
 	{
-		return;
+		return retval;
 	}
 
 	if (req->rechecks <= 0)
@@ -865,7 +936,7 @@ void ServoOnRequest::fsm_state_wait_sdowr_cspmode(ServoOnRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("ServoOnRequest::fsm_state_wait_sdowr_cspmode timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -873,7 +944,7 @@ void ServoOnRequest::fsm_state_wait_sdowr_cspmode(ServoOnRequest *req)
 			LOGSINGLE_INFORMATION("ServoOnRequest::fsm_state_wait_sdowr_cspmode reattempts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= ServoOnRequest::fsm_state_sdowr_cspmode;
@@ -883,10 +954,14 @@ void ServoOnRequest::fsm_state_wait_sdowr_cspmode(ServoOnRequest *req)
 	req->cmdData->Data2 = CSP_MODE;	
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void ServoOnRequest::fsm_state_start(ServoOnRequest *req)
+FsmRetType ServoOnRequest::fsm_state_start(ServoOnRequest *req)
 {	
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(req->dmc->isDriverOpCsp(req->slave_idx))
 	{//已经处于CSP模式
 		req->cmdData 	= req->dmc->getCmdData(req->slave_idx);
@@ -908,31 +983,35 @@ void ServoOnRequest::fsm_state_start(ServoOnRequest *req)
 		else
 			req->fsmstate		= ServoOnRequest::fsm_state_wait_sdowr_cspmode;		
 	}
+
+	return retval;
 }
 
-void ServoOnRequest::exec()
+FsmRetType ServoOnRequest::exec()
 {
-	fsmstate(this);
+	return fsmstate(this);
 }
 
-void MultiAxisRequest::fsm_state_done(MultiAxisRequest *req)
+FsmRetType MultiAxisRequest::fsm_state_done(MultiAxisRequest *req)
 {
 	//shall not be called
+	return MOVESTATE_NONE;
 }
 
-void  MultiAxisRequest::fsm_state_wait_all_pos_reached(MultiAxisRequest *req)
+FsmRetType  MultiAxisRequest::fsm_state_wait_all_pos_reached(MultiAxisRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(0 != req->axispara->getError())
 	{
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
 		req->reqState = REQUEST_STATE_FAIL;
-		return;
+		return MOVESTATE_ERR;
 	}
 
 	if ( !req->axispara->pos_allreached() 
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 		
 	if (req->rechecks <= 0)
@@ -941,7 +1020,7 @@ void  MultiAxisRequest::fsm_state_wait_all_pos_reached(MultiAxisRequest *req)
 		{
 			LOGSINGLE_ERROR("LineRequest::fsm_state_wait_all_pos_reached timeouts, axis=%d, svoncount(%d) != posreach(%d).", __FILE__, __LINE__,
 						req->slave_idx, req->axispara->getSvonCount(), req->axispara->getPosReachedCount());
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->axispara->setError();
 			req->reqState = REQUEST_STATE_FAIL;
 		}
@@ -951,35 +1030,38 @@ void  MultiAxisRequest::fsm_state_wait_all_pos_reached(MultiAxisRequest *req)
 				req->slave_idx, req->axispara->getSvonCount(), req->axispara->getPosReachedCount());
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= MultiAxisRequest::fsm_state_done;
-	req->dmc->setMoveState(req->slave_idx, MOVESTATE_STOP);
+	retval 				= MOVESTATE_STOP;
 	req->reqState		= REQUEST_STATE_SUCCESS;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
+FsmRetType  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(0 != req->axispara->getError())
 	{
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
 		req->reqState = REQUEST_STATE_FAIL;
-		return;
+		return MOVESTATE_ERR;
 	}
 
 	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
 	{//尚未发送完毕
-		return;
+		return retval;
 	}
 
 	if(CSP != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData )
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
@@ -987,7 +1069,7 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 	
 	if (req->rechecks <= 0)						//等待位置到达超时
@@ -995,7 +1077,7 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("MultiAxisRequest::fsm_state_csp, axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->axispara->setError();
 			req->reqState = REQUEST_STATE_FAIL;
 		}
@@ -1007,7 +1089,7 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 			req->cmdData->Data2 = CSP_DATA2_DUMMY;	//特殊处理让充发位置可以进入待发送队列
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	//目标位置已到达,更新新的绝对位置
@@ -1017,21 +1099,24 @@ void  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 	req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_pos_reached;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
+FsmRetType  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(0 != req->axispara->getError())
 	{
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
 		req->reqState = REQUEST_STATE_FAIL;
-		return;
+		return MOVESTATE_ERR;
 	}
 
 	if (!req->axispara->sv_allon()
 		&& req->rechecks --)
 	{
-		return;
+		return retval;
 	}
 
 	if (req->rechecks <= 0)
@@ -1039,7 +1124,7 @@ void  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("MultiAxisRequest::fsm_state_wait_all_svon timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->axispara->setError();
 			req->reqState = REQUEST_STATE_FAIL;
 		}
@@ -1048,16 +1133,15 @@ void  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 			LOGSINGLE_INFORMATION("MultiAxisRequest::fsm_state_wait_all_svon reattempts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	//所有电机均已经励磁
 	if (!req->startPlan())
 	{//规划失败
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
 		req->axispara->setError();
 		req->reqState = REQUEST_STATE_FAIL;
-		return;
+		return MOVESTATE_ERR;
 	}
 
 	req->fsmstate	 	= MultiAxisRequest::fsm_state_csp;
@@ -1067,28 +1151,31 @@ void  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 
 	//多轴插入CSP规划点
 	pushCspPoints(req);
+
+	return retval;
 }
 
-void  MultiAxisRequest::fsm_state_svon(MultiAxisRequest *req)
+FsmRetType  MultiAxisRequest::fsm_state_svon(MultiAxisRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(0 != req->axispara->getError())
 	{//其它电机已经出现错误
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
 		req->reqState = REQUEST_STATE_FAIL;
-		return;
+		return MOVESTATE_ERR;
 	}
 
 	if(SV_ON != RESP_CMD_CODE(req->respData)
 			&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if (!req->dmc->isDriverOn(req->slave_idx)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 			
 	if (req->rechecks <= 0)
@@ -1096,7 +1183,7 @@ void  MultiAxisRequest::fsm_state_svon(MultiAxisRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("MultiAxisRequest::fsm_state_svon timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->axispara->setError();
 			req->reqState = REQUEST_STATE_FAIL;
 		}
@@ -1106,35 +1193,38 @@ void  MultiAxisRequest::fsm_state_svon(MultiAxisRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->axispara->reg_sv_on(req->slave_idx);
 	req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_svon;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void  MultiAxisRequest::fsm_state_sdowr_cspmode(MultiAxisRequest *req)
+FsmRetType  MultiAxisRequest::fsm_state_sdowr_cspmode(MultiAxisRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(0 != req->axispara->getError())
 	{//其它电机已经出现错误
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
 		req->reqState = REQUEST_STATE_FAIL;
-		return;
+		return MOVESTATE_ERR;
 	}
 
 	if(SDO_WR != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if ((req->slave_idx != req->respData->Parm ||  0x60600000 != req->respData->Data1 || CSP_MODE != req->respData->Data2)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 	
 	if (req->rechecks <= 0)
@@ -1142,7 +1232,7 @@ void  MultiAxisRequest::fsm_state_sdowr_cspmode(MultiAxisRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("MultiAxisRequest::fsm_state_sdowr_cspmode timeouts, axis=%d\n", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->axispara->setError();		
 			req->reqState = REQUEST_STATE_FAIL;
 		}
@@ -1152,7 +1242,7 @@ void  MultiAxisRequest::fsm_state_sdowr_cspmode(MultiAxisRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	//free sdo
@@ -1164,21 +1254,24 @@ void  MultiAxisRequest::fsm_state_sdowr_cspmode(MultiAxisRequest *req)
 	req->cmdData->CMD	= SV_ON;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void  MultiAxisRequest::fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req)
+FsmRetType  MultiAxisRequest::fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(0 != req->axispara->getError())
 	{//其它电机已经出现错误
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
 		req->reqState = REQUEST_STATE_FAIL;
-		return;
+		return MOVESTATE_ERR;
 	}
 
 	if (!req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData)
 		&& req->rechecks --)
 	{
-		return;
+		return retval;
 	}
 
 	if (req->rechecks <= 0)
@@ -1186,7 +1279,7 @@ void  MultiAxisRequest::fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("MultiAxisRequest::fsm_state_wait_sdowr_cspmode timeouts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->axispara->setError();					
 			req->reqState = REQUEST_STATE_FAIL;
 		}
@@ -1195,7 +1288,7 @@ void  MultiAxisRequest::fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req)
 			LOGSINGLE_INFORMATION("MultiAxisRequest::fsm_state_wait_sdowr_cspmode reattempts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= MultiAxisRequest::fsm_state_sdowr_cspmode;
@@ -1205,15 +1298,18 @@ void  MultiAxisRequest::fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req)
 	req->cmdData->Data2 = CSP_MODE; 
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void  MultiAxisRequest::fsm_state_start(MultiAxisRequest *req)
+FsmRetType  MultiAxisRequest::fsm_state_start(MultiAxisRequest *req)
 {	
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(0 != req->axispara->getError())
 	{//其它电机已经出现错误
-		req->dmc->setMoveState(req->slave_idx, MOVESTATE_ERR);
 		req->reqState = REQUEST_STATE_FAIL;
-		return;
+		return MOVESTATE_ERR;
 	}
 
 	//起始终止位置赋初值
@@ -1245,6 +1341,8 @@ void  MultiAxisRequest::fsm_state_start(MultiAxisRequest *req)
 		else
 			req->fsmstate		= MultiAxisRequest::fsm_state_wait_sdowr_cspmode;		
 	}
+
+	return retval;
 }
 
 void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
@@ -1291,9 +1389,9 @@ bool  MultiAxisRequest::positionReached(int q , int bias) const
 	return reached;
 }
 
-void MultiAxisRequest::exec()
+FsmRetType MultiAxisRequest::exec()
 {
-	fsmstate(this);
+	return fsmstate(this);
 }
 
 MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, bool abs)
@@ -1342,34 +1440,41 @@ MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, boo
 	}
 }
 
-void HomeMoveRequest::fsm_state_done(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_done(HomeMoveRequest *req)
 {
 	//shall not be called
+	return MOVESTATE_NONE;
 }
 
-void HomeMoveRequest::fsm_state_aborthome(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_aborthome(HomeMoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(ABORT_HOME != RESP_CMD_CODE(req->respData)
 			&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	long curpos =  req->dmc->getCurpos(req->slave_idx);
 	req->dmc->setDriverCmdPos(req->slave_idx, curpos);			//回失败，将命令位置置为当前位置
 
-	req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+	retval =  MOVESTATE_TIMEOUT;
 	req->reqState = REQUEST_STATE_FAIL;
+	
+	return retval;
 }
 
-void HomeMoveRequest::fsm_state_gohome(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_gohome(HomeMoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(GO_HOME != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval; 
 	}
 
 	bool timeout = req->homeTimeout();				//当前是否超时
@@ -1377,7 +1482,7 @@ void HomeMoveRequest::fsm_state_gohome(HomeMoveRequest *req)
 	if (!req->dmc->isDriverHomed(req->slave_idx)
 		&& !timeout)		
 	{
-		return;
+		return retval;
 	}
 
 	if (req->rechecks <= 0
@@ -1387,32 +1492,36 @@ void HomeMoveRequest::fsm_state_gohome(HomeMoveRequest *req)
 		req->fsmstate		= HomeMoveRequest::fsm_state_aborthome;
 		req->cmdData->CMD	= ABORT_HOME;
 		req->rechecks		= RETRIES;
-		return;
+		return retval;
 	}
 
 	LOGSINGLE_INFORMATION("Homed, axis=%d.", __FILE__, __LINE__, req->slave_idx);
 	req->dmc->setDriverCmdPos(req->slave_idx, 0);			//回原点后，将命令位置置为0
 
 	req->fsmstate		= HomeMoveRequest::fsm_state_done;
-	req->dmc->setMoveState(req->slave_idx, MOVESTATE_O_STOP);
+	retval				= MOVESTATE_O_STOP;
 	req->reqState		= REQUEST_STATE_SUCCESS;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void HomeMoveRequest::fsm_state_sdowr_acc(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_sdowr_acc(HomeMoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SDO_WR != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if ((req->slave_idx != req->respData->Parm || 0x609A0000 != req->respData->Data1 ||  req->acc != req->respData->Data2)
 		&& req->rechecks-- )
 	{
-		return;
+		return retval;
 	}
 		
 	if (req->rechecks <= 0)
@@ -1420,7 +1529,7 @@ void HomeMoveRequest::fsm_state_sdowr_acc(HomeMoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("HomeMoveRequest::fsm_state_sdowr_acc timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -1429,7 +1538,7 @@ void HomeMoveRequest::fsm_state_sdowr_acc(HomeMoveRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	//free sdo
@@ -1441,21 +1550,25 @@ void HomeMoveRequest::fsm_state_sdowr_acc(HomeMoveRequest *req)
 	req->cmdData->CMD	= GO_HOME;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void HomeMoveRequest::fsm_state_sdowr_lowspeed(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_sdowr_lowspeed(HomeMoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SDO_WR != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if ((req->slave_idx != req->respData->Parm || 0x60990002 != req->respData->Data1 ||  req->low_speed != req->respData->Data2)
 		&& req->rechecks-- )
 	{
-		return;
+		return retval;
 	}
 		
 	if (req->rechecks <= 0)
@@ -1463,7 +1576,7 @@ void HomeMoveRequest::fsm_state_sdowr_lowspeed(HomeMoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("HomeMoveRequest::fsm_state_sdowr_lowspeed timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -1472,7 +1585,7 @@ void HomeMoveRequest::fsm_state_sdowr_lowspeed(HomeMoveRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= HomeMoveRequest::fsm_state_sdowr_acc;
@@ -1482,21 +1595,25 @@ void HomeMoveRequest::fsm_state_sdowr_lowspeed(HomeMoveRequest *req)
 	req->cmdData->Data2 = req->acc; 						//加速度		
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void HomeMoveRequest::fsm_state_sdowr_highspeed(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_sdowr_highspeed(HomeMoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SDO_WR != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if ((req->slave_idx != req->respData->Parm || 0x60990001 != req->respData->Data1 ||  req->high_speed != req->respData->Data2)
 		&& req->rechecks-- )
 	{
-		return;
+		return retval;
 	}
 		
 	if (req->rechecks <= 0)
@@ -1504,7 +1621,7 @@ void HomeMoveRequest::fsm_state_sdowr_highspeed(HomeMoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("HomeMoveRequest::fsm_state_sdowr_highspeed timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -1513,7 +1630,7 @@ void HomeMoveRequest::fsm_state_sdowr_highspeed(HomeMoveRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= HomeMoveRequest::fsm_state_sdowr_lowspeed;
@@ -1523,21 +1640,25 @@ void HomeMoveRequest::fsm_state_sdowr_highspeed(HomeMoveRequest *req)
 	req->cmdData->Data2 = req->low_speed; 					//低速				
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void HomeMoveRequest::fsm_state_sdowr_homemethod(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_sdowr_homemethod(HomeMoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SDO_WR != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if ((req->slave_idx != req->respData->Parm || 0x60980000 != req->respData->Data1 ||  req->home_method != req->respData->Data2)
 		&& req->rechecks-- )
 	{
-		return;
+		return retval;
 	}
 		
 	if (req->rechecks <= 0)
@@ -1545,7 +1666,7 @@ void HomeMoveRequest::fsm_state_sdowr_homemethod(HomeMoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("HomeMoveRequest::fsm_state_sdowr_homemethod timeouts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -1554,7 +1675,7 @@ void HomeMoveRequest::fsm_state_sdowr_homemethod(HomeMoveRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= HomeMoveRequest::fsm_state_sdowr_highspeed;
@@ -1564,21 +1685,25 @@ void HomeMoveRequest::fsm_state_sdowr_homemethod(HomeMoveRequest *req)
 	req->cmdData->Data2 = req->high_speed; 					//高速		
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void HomeMoveRequest::fsm_state_sdowr_homeoffset(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_sdowr_homeoffset(HomeMoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SDO_WR != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if ((req->slave_idx != req->respData->Parm ||  0x607C0000 != req->respData->Data1 || 0 != req->respData->Data2)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 	
 	if (req->rechecks <= 0)
@@ -1586,7 +1711,7 @@ void HomeMoveRequest::fsm_state_sdowr_homeoffset(HomeMoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("HomeMoveRequest::fsm_state_sdowr_homeoffset timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -1595,7 +1720,7 @@ void HomeMoveRequest::fsm_state_sdowr_homeoffset(HomeMoveRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= HomeMoveRequest::fsm_state_sdowr_homemethod;
@@ -1605,21 +1730,25 @@ void HomeMoveRequest::fsm_state_sdowr_homeoffset(HomeMoveRequest *req)
 	req->cmdData->Data2 = req->home_method; 				//回原点方式
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void HomeMoveRequest::fsm_state_sdowr_homemode(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_sdowr_homemode(HomeMoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SDO_WR != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if ((req->slave_idx != req->respData->Parm ||  0x60600000 != req->respData->Data1 || HOMING_MODE != req->respData->Data2)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 	
 	if (req->rechecks <= 0)
@@ -1627,7 +1756,7 @@ void HomeMoveRequest::fsm_state_sdowr_homemode(HomeMoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("HomeMoveRequest::fsm_state_sdowr_homemode timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -1636,7 +1765,7 @@ void HomeMoveRequest::fsm_state_sdowr_homemode(HomeMoveRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= HomeMoveRequest::fsm_state_sdowr_homeoffset;
@@ -1646,14 +1775,18 @@ void HomeMoveRequest::fsm_state_sdowr_homemode(HomeMoveRequest *req)
 	req->cmdData->Data2 = 0; 								//原点偏移
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void HomeMoveRequest::fsm_state_wait_sdowr_homemode(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_wait_sdowr_homemode(HomeMoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if (!req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData)
 		&& req->rechecks --)
 	{
-		return;
+		return retval;
 	}
 
 	if (req->rechecks <= 0)
@@ -1661,7 +1794,7 @@ void HomeMoveRequest::fsm_state_wait_sdowr_homemode(HomeMoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("HomeMoveRequest::fsm_state_wait_sdowr_homemode timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval		= MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -1669,7 +1802,7 @@ void HomeMoveRequest::fsm_state_wait_sdowr_homemode(HomeMoveRequest *req)
 			LOGSINGLE_INFORMATION("HomeMoveRequest::fsm_state_wait_sdowr_homemode reattempts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= HomeMoveRequest::fsm_state_sdowr_homemode;
@@ -1679,21 +1812,25 @@ void HomeMoveRequest::fsm_state_wait_sdowr_homemode(HomeMoveRequest *req)
 	req->cmdData->Data2 = HOMING_MODE;					
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void HomeMoveRequest::fsm_state_svon(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_svon(HomeMoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if(SV_ON != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 
 	if (!req->dmc->isDriverOn(req->slave_idx)
 		&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 			
 	if (req->rechecks <= 0)
@@ -1701,7 +1838,7 @@ void HomeMoveRequest::fsm_state_svon(HomeMoveRequest *req)
 		if (++req->attempts > MAX_ATTEMPTS)
 		{
 			LOGSINGLE_ERROR("HomeMoveRequest::fsm_state_svon timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
-			req->dmc->setMoveState(req->slave_idx, MOVESTATE_TIMEOUT);
+			retval = MOVESTATE_TIMEOUT;
 			req->reqState = REQUEST_STATE_FAIL;
 		}
 		else
@@ -1710,7 +1847,7 @@ void HomeMoveRequest::fsm_state_svon(HomeMoveRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	if (req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData))
@@ -1725,10 +1862,14 @@ void HomeMoveRequest::fsm_state_svon(HomeMoveRequest *req)
 		req->fsmstate		= HomeMoveRequest::fsm_state_wait_sdowr_homemode;		
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void HomeMoveRequest::fsm_state_start(HomeMoveRequest *req)
+FsmRetType HomeMoveRequest::fsm_state_start(HomeMoveRequest *req)
 {
+	FsmRetType retval = MOVESTATE_BUSY;
+
 	if (req->dmc->isDriverOn(req->slave_idx))
 	{//电机已经励磁
 		if (req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData))
@@ -1749,6 +1890,8 @@ void HomeMoveRequest::fsm_state_start(HomeMoveRequest *req)
 		req->respData 		= req->dmc->getRespData(req->slave_idx);
 		req->cmdData->CMD		= SV_ON;
 	}
+
+	return retval;
 }
 
 bool HomeMoveRequest::homeTimeout() const
@@ -1756,23 +1899,26 @@ bool HomeMoveRequest::homeTimeout() const
 	return (starttime.elapsed() > (home_timeout * 1000000));
 }
 
-void HomeMoveRequest::exec()
+FsmRetType HomeMoveRequest::exec()
 {
-	fsmstate(this);
+	return fsmstate(this);
 }
 
-void ReadIoRequest::fsm_state_done(ReadIoRequest *req)
+FsmRetType ReadIoRequest::fsm_state_done(ReadIoRequest *req)
 {
 	//shall not be called
+	return IORS_NONE;
 }
 
-void ReadIoRequest::fsm_state_io_rd(ReadIoRequest *req)
+FsmRetType ReadIoRequest::fsm_state_io_rd(ReadIoRequest *req)
 {
+	FsmRetType retval = IORS_BUSY;
+
 	if(IO_RD != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 	
 	if (req->rechecks <= 0)
@@ -1781,7 +1927,7 @@ void ReadIoRequest::fsm_state_io_rd(ReadIoRequest *req)
 		{
 			LOGSINGLE_ERROR("ReadIoRequest::fsm_state_io_rd timeouts, slave = %d.", __FILE__, __LINE__, req->slave_idx);
 			req->reqState = REQUEST_STATE_FAIL;
-			req->dmc->setIoRS(req->slave_idx, IORS_TIMEOUT);
+			retval		  = IORS_TIMEOUT;
 		}
 		else
 		{
@@ -1789,41 +1935,50 @@ void ReadIoRequest::fsm_state_io_rd(ReadIoRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= ReadIoRequest::fsm_state_done;
 	req->reqState		= REQUEST_STATE_SUCCESS;
-	req->dmc->setIoRS(req->slave_idx, IORS_SUCCESS);
+	retval				= IORS_SUCCESS;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void ReadIoRequest::fsm_state_start(ReadIoRequest *req)
+FsmRetType ReadIoRequest::fsm_state_start(ReadIoRequest *req)
 {
+	FsmRetType retval = IORS_BUSY;
+
 	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
 	req->respData		= req->dmc->getRespData(req->slave_idx);
 	req->fsmstate 		= ReadIoRequest::fsm_state_io_rd;
 	req->cmdData->CMD 	= IO_RD;
+
+	return retval;
 }
 
-void ReadIoRequest::exec()
+FsmRetType ReadIoRequest::exec()
 {
-	fsmstate(this);
+	return fsmstate(this);
 }
 
-void WriteIoRequest::fsm_state_done(WriteIoRequest *req)
+FsmRetType WriteIoRequest::fsm_state_done(WriteIoRequest *req)
 {
 	//shall not be called
+	return IORS_NONE;
 }
 
-void WriteIoRequest::fsm_state_io_wr(WriteIoRequest *req)
+FsmRetType WriteIoRequest::fsm_state_io_wr(WriteIoRequest *req)
 {
+	FsmRetType retval = IORS_BUSY;
+
 	if(IO_WR != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData)
 			&& req->rechecks--)
 	{
-		return;
+		return retval;
 	}
 	
 	if (req->rechecks <= 0)
@@ -1832,7 +1987,7 @@ void WriteIoRequest::fsm_state_io_wr(WriteIoRequest *req)
 		{
 			LOGSINGLE_ERROR("WriteIoRequest::fsm_state_io_wr timeouts, slave = %d.", __FILE__, __LINE__, req->slave_idx);
 			req->reqState = REQUEST_STATE_FAIL;
-			req->dmc->setIoRS(req->slave_idx, IORS_TIMEOUT);
+			retval 			= IORS_TIMEOUT;
 		}
 		else
 		{
@@ -1840,27 +1995,33 @@ void WriteIoRequest::fsm_state_io_wr(WriteIoRequest *req)
 			req->dmc->restoreLastCmd(req->cmdData);
 			req->rechecks = RETRIES;
 		}
-		return;
+		return retval;
 	}
 
 	req->fsmstate		= WriteIoRequest::fsm_state_done;
 	req->reqState		= REQUEST_STATE_SUCCESS;
 	req->dmc->setIoOutput(req->slave_idx, req->output);		//输出成功，更新输出当前值
-	req->dmc->setIoRS(req->slave_idx, IORS_SUCCESS);
+	retval				= IORS_SUCCESS;
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
+
+	return retval;
 }
 
-void WriteIoRequest::fsm_state_start(WriteIoRequest *req)
+FsmRetType WriteIoRequest::fsm_state_start(WriteIoRequest *req)
 {
+	FsmRetType retval = IORS_BUSY;
+
 	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
 	req->respData		= req->dmc->getRespData(req->slave_idx);
 	req->fsmstate 		= WriteIoRequest::fsm_state_io_wr;
 	req->cmdData->CMD 	= IO_WR;
 	req->cmdData->Data1 = req->output;
+
+	return retval;
 }
 
-void WriteIoRequest::exec()
+FsmRetType WriteIoRequest::exec()
 {
-	fsmstate(this);
+	return fsmstate(this);
 }

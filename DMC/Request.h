@@ -15,6 +15,8 @@
 
 class DmcManager;
 
+typedef unsigned int FsmRetType;
+
 //配置信息
 class SDO
 {
@@ -85,24 +87,24 @@ public:
 	transData		*cmdData;
 	transData		*respData;
 	virtual ~BaseRequest(){}
-	virtual void exec() = 0;
+	virtual FsmRetType exec() = 0;
 	BaseRequest();
 };
 
 class DStopRequest: public BaseRequest
 {
 private:
-	static void fsm_state_done(DStopRequest *req);
-	static void fsm_state_svoff(DStopRequest *req);
-	static void fsm_state_csp(DStopRequest *req);
-	static void fsm_state_start(DStopRequest *req);
+	static FsmRetType fsm_state_done(DStopRequest *req);
+	static FsmRetType fsm_state_svoff(DStopRequest *req);
+	static FsmRetType fsm_state_csp(DStopRequest *req);
+	static FsmRetType fsm_state_start(DStopRequest *req);
 
 	bool 	positionReached(int q , int bias = 0) const;
 public:
-	void (* fsmstate)(DStopRequest *);	
+	FsmRetType (* fsmstate)(DStopRequest *);	
 	
 	virtual ~DStopRequest() {}
-	virtual void exec();
+	virtual FsmRetType exec();
 
 
 	bool		serveOff;				//停止后是否关闭使能
@@ -120,12 +122,12 @@ public:
 class MoveRequest: public BaseRequest
 {
 private:
-	static void fsm_state_done(MoveRequest *req);
-	static void fsm_state_csp(MoveRequest *req);
-	static void fsm_state_svon(MoveRequest *req);
-	static void fsm_state_sdowr_cspmode(MoveRequest *req);
-	static void fsm_state_wait_sdowr_cspmode(MoveRequest *req);
-	static void fsm_state_start(MoveRequest *req);
+	static FsmRetType fsm_state_done(MoveRequest *req);
+	static FsmRetType fsm_state_csp(MoveRequest *req);
+	static FsmRetType fsm_state_svon(MoveRequest *req);
+	static FsmRetType fsm_state_sdowr_cspmode(MoveRequest *req);
+	static FsmRetType fsm_state_wait_sdowr_cspmode(MoveRequest *req);
+	static FsmRetType fsm_state_start(MoveRequest *req);
 	static void pushCspPoints(MoveRequest *req);
 
 	bool startPlan();
@@ -146,7 +148,7 @@ public:
 	int 			startpos;
 	int 			dstpos;
 	
-	void (* fsmstate)(MoveRequest *);	
+	FsmRetType (* fsmstate)(MoveRequest *);	
 	
 	virtual ~MoveRequest() 
 	{
@@ -156,7 +158,7 @@ public:
 		}
 	}
 	
-	virtual void exec();
+	virtual FsmRetType exec();
 	MoveRequest()
 	{
 		abs = false;
@@ -175,20 +177,20 @@ public:
 class ClrAlarmRequest: public BaseRequest
 {
 private:
-	static void fsm_state_done(ClrAlarmRequest *req);
-	static void fsm_state_sdord_errcode(ClrAlarmRequest *req);
-	static void fsm_state_wait_sdord_errcode(ClrAlarmRequest *req);
-	static void fsm_state_alm_clr(ClrAlarmRequest *req);
-	static void fsm_state_start(ClrAlarmRequest *req);
+	static FsmRetType fsm_state_done(ClrAlarmRequest *req);
+	static FsmRetType fsm_state_sdord_errcode(ClrAlarmRequest *req);
+	static FsmRetType fsm_state_wait_sdord_errcode(ClrAlarmRequest *req);
+	static FsmRetType fsm_state_alm_clr(ClrAlarmRequest *req);
+	static FsmRetType fsm_state_start(ClrAlarmRequest *req);
 
 public:	
-	void (* fsmstate)(ClrAlarmRequest *);	
+	FsmRetType (* fsmstate)(ClrAlarmRequest *);	
 	
 	virtual ~ClrAlarmRequest() 
 	{
 	}
 	
-	virtual void exec();
+	virtual FsmRetType exec();
 	ClrAlarmRequest()
 	{
 		fsmstate = fsm_state_start;
@@ -198,22 +200,22 @@ public:
 class InitSlaveRequest: public BaseRequest
 {
 private:
-	static void fsm_state_done(InitSlaveRequest *req);
-	static void fsm_state_sdowr(InitSlaveRequest *req);
-	static void fsm_state_wait_sdowr(InitSlaveRequest *req);
-	static void fsm_state_start(InitSlaveRequest *req);
+	static FsmRetType fsm_state_done(InitSlaveRequest *req);
+	static FsmRetType fsm_state_sdowr(InitSlaveRequest *req);
+	static FsmRetType fsm_state_wait_sdowr(InitSlaveRequest *req);
+	static FsmRetType fsm_state_start(InitSlaveRequest *req);
 
 public:
 	std::vector<SDO>::const_iterator iter;
 	std::vector<SDO>::const_iterator iterEnd;
 
-	void (* fsmstate)(InitSlaveRequest *);	
+	FsmRetType (* fsmstate)(InitSlaveRequest *);	
 	
 	virtual ~InitSlaveRequest() 
 	{
 	}
 	
-	virtual void exec();
+	virtual FsmRetType exec();
 	InitSlaveRequest()
 	{
 		fsmstate = fsm_state_start;
@@ -224,21 +226,21 @@ public:
 class ServoOnRequest: public BaseRequest
 {
 private:
-	static void fsm_state_done(ServoOnRequest *req);
-	static void fsm_state_svon(ServoOnRequest *req);
-	static void fsm_state_svoff(ServoOnRequest *req);
-	static void fsm_state_sdowr_cspmode(ServoOnRequest *req);
-	static void fsm_state_wait_sdowr_cspmode(ServoOnRequest *req);
-	static void fsm_state_start(ServoOnRequest *req);
+	static FsmRetType fsm_state_done(ServoOnRequest *req);
+	static FsmRetType fsm_state_svon(ServoOnRequest *req);
+	static FsmRetType fsm_state_svoff(ServoOnRequest *req);
+	static FsmRetType fsm_state_sdowr_cspmode(ServoOnRequest *req);
+	static FsmRetType fsm_state_wait_sdowr_cspmode(ServoOnRequest *req);
+	static FsmRetType fsm_state_start(ServoOnRequest *req);
 
 public:	
-	void (* fsmstate)(ServoOnRequest *);	
+	FsmRetType (* fsmstate)(ServoOnRequest *);	
 	
 	virtual ~ServoOnRequest() 
 	{
 	}
 	
-	virtual void exec();
+	virtual FsmRetType exec();
 	ServoOnRequest()
 	{
 		fsmstate = fsm_state_start;
@@ -248,14 +250,14 @@ public:
 class MultiAxisRequest : public BaseRequest
 {
 private:
-	static void fsm_state_done(MultiAxisRequest *req);
-	static void  fsm_state_wait_all_pos_reached(MultiAxisRequest *req);
-	static void  fsm_state_csp(MultiAxisRequest *req);
-	static void  fsm_state_svon(MultiAxisRequest *req);
-	static void  fsm_state_wait_all_svon(MultiAxisRequest *req);
-	static void  fsm_state_sdowr_cspmode(MultiAxisRequest *req);
-	static void  fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req);
-	static void fsm_state_start(MultiAxisRequest *req);
+	static FsmRetType fsm_state_done(MultiAxisRequest *req);
+	static FsmRetType  fsm_state_wait_all_pos_reached(MultiAxisRequest *req);
+	static FsmRetType  fsm_state_csp(MultiAxisRequest *req);
+	static FsmRetType  fsm_state_svon(MultiAxisRequest *req);
+	static FsmRetType  fsm_state_wait_all_svon(MultiAxisRequest *req);
+	static FsmRetType  fsm_state_sdowr_cspmode(MultiAxisRequest *req);
+	static FsmRetType  fsm_state_wait_sdowr_cspmode(MultiAxisRequest *req);
+	static FsmRetType fsm_state_start(MultiAxisRequest *req);
 	static void pushCspPoints(MultiAxisRequest *req);
 
 	bool	startPlan();
@@ -264,7 +266,7 @@ private:
 public:
 	BaseMultiAxisPara 	*axispara;
 
-	void (* fsmstate)(MultiAxisRequest *);	
+	FsmRetType (* fsmstate)(MultiAxisRequest *);	
 	
 	virtual ~MultiAxisRequest() 
 	{
@@ -272,7 +274,7 @@ public:
 			delete  axispara;
 	}
 	
-	virtual void exec();
+	virtual FsmRetType exec();
 
 	MultiAxisRequest(int axis, LinearRef *newLinearRef, int dist, bool abs);				//直线插补
 	MultiAxisRequest(int axis, ArchlRef *newArchlRef, int dist, bool abs, bool z);			//Z轴拱门插补
@@ -281,18 +283,18 @@ public:
 class HomeMoveRequest: public BaseRequest
 {
 private:
-	static void fsm_state_done(HomeMoveRequest *req);
-	static void fsm_state_aborthome(HomeMoveRequest *req);
-	static void fsm_state_gohome(HomeMoveRequest *req);
-	static void fsm_state_sdowr_acc(HomeMoveRequest *req);
-	static void fsm_state_sdowr_lowspeed(HomeMoveRequest *req);
-	static void fsm_state_sdowr_highspeed(HomeMoveRequest *req);
-	static void fsm_state_sdowr_homemethod(HomeMoveRequest *req);
-	static void fsm_state_sdowr_homeoffset(HomeMoveRequest *req);
-	static void fsm_state_sdowr_homemode(HomeMoveRequest *req);
-	static void fsm_state_wait_sdowr_homemode(HomeMoveRequest *req);
-	static void fsm_state_svon(HomeMoveRequest *req);
-	static void fsm_state_start(HomeMoveRequest *req);
+	static FsmRetType fsm_state_done(HomeMoveRequest *req);
+	static FsmRetType fsm_state_aborthome(HomeMoveRequest *req);
+	static FsmRetType fsm_state_gohome(HomeMoveRequest *req);
+	static FsmRetType fsm_state_sdowr_acc(HomeMoveRequest *req);
+	static FsmRetType fsm_state_sdowr_lowspeed(HomeMoveRequest *req);
+	static FsmRetType fsm_state_sdowr_highspeed(HomeMoveRequest *req);
+	static FsmRetType fsm_state_sdowr_homemethod(HomeMoveRequest *req);
+	static FsmRetType fsm_state_sdowr_homeoffset(HomeMoveRequest *req);
+	static FsmRetType fsm_state_sdowr_homemode(HomeMoveRequest *req);
+	static FsmRetType fsm_state_wait_sdowr_homemode(HomeMoveRequest *req);
+	static FsmRetType fsm_state_svon(HomeMoveRequest *req);
+	static FsmRetType fsm_state_start(HomeMoveRequest *req);
 
 	bool homeTimeout() const;
 public:
@@ -303,10 +305,10 @@ public:
 	Poco::Timestamp	starttime;			//用于回原点超时判断
 	int				home_timeout;		//回原点超时时间,单位s
 	
-	void (* fsmstate)(HomeMoveRequest *);	 
+	FsmRetType (* fsmstate)(HomeMoveRequest *);	 
 	
 	virtual ~HomeMoveRequest() {}
-	virtual void exec();
+	virtual FsmRetType exec();
 	HomeMoveRequest()
 	{
 		home_method = 0;
@@ -321,15 +323,15 @@ public:
 class ReadIoRequest: public BaseRequest
 {
 private:
-	static void fsm_state_done(ReadIoRequest *req);
-	static void fsm_state_io_rd(ReadIoRequest *req);
-	static void fsm_state_start(ReadIoRequest *req);
+	static FsmRetType fsm_state_done(ReadIoRequest *req);
+	static FsmRetType fsm_state_io_rd(ReadIoRequest *req);
+	static FsmRetType fsm_state_start(ReadIoRequest *req);
 
 public:
-	void (* fsmstate)(ReadIoRequest *);	
+	FsmRetType (* fsmstate)(ReadIoRequest *);	
 	
 	virtual ~ReadIoRequest() {}
-	virtual void exec();
+	virtual FsmRetType exec();
 	ReadIoRequest()
 	{
 		fsmstate = fsm_state_start;
@@ -340,17 +342,17 @@ public:
 class WriteIoRequest: public BaseRequest
 {
 private:
-	static void fsm_state_done(WriteIoRequest *req);
-	static void fsm_state_io_wr(WriteIoRequest *req);
-	static void fsm_state_start(WriteIoRequest *req);
+	static FsmRetType fsm_state_done(WriteIoRequest *req);
+	static FsmRetType fsm_state_io_wr(WriteIoRequest *req);
+	static FsmRetType fsm_state_start(WriteIoRequest *req);
 
 public:
 
 	unsigned int	output;
-	void (* fsmstate)(WriteIoRequest *);	
+	FsmRetType (* fsmstate)(WriteIoRequest *);	
 	
 	virtual ~WriteIoRequest() {}
-	virtual void exec();
+	virtual FsmRetType exec();
 	WriteIoRequest()
 	{
 		output	  = 0;

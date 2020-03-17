@@ -162,8 +162,16 @@ void	DmcManager::clear()
 	m_requests.clear();
 
 	m_masterConfig.clear();
-	m_driverState.clear();
-	m_ioState.clear();
+
+
+	for(std::map<int, SlaveState *>::iterator iter = m_slaveStates.begin();
+					iter != m_slaveStates.end();
+					++iter)
+	{
+		delete (iter->second);
+		iter->second = NULL;
+	}
+	m_slaveStates.clear();
 }
 
 unsigned long DmcManager::init()
@@ -431,19 +439,19 @@ void DmcManager::beforeWriteCmd()
 	{
 		int slave_idx = iter->first;
 		
-		BaseRequest *req = iter->second;
-		req->exec();//exec增加返回值
-
+		BaseRequest *req 	= iter->second;
+		FsmRetType retval 	= req->exec();
+		
 		if (REQUEST_STATE_BUSY != req->reqState)
 		{
 			freeSdoCmdResp(req);
 			delete req;
 			iter = m_requests.erase(iter);
-			
 		}
 		else
 			iter++;
-		//todo set MOVE_STATE HERE
+
+		m_slaveStates[slave_idx]->setSlaveState(retval);	//按照状态机返回值设置请求当前状态
 
 		if (m_cmdData[slave_idx].CMD != GET_STATUS)
 		{
@@ -461,13 +469,12 @@ void DmcManager::beforeWriteCmd()
 
 void  DmcManager::initSlaveState()
 {
-	m_driverState.clear();
 	for (int i = 1; i < DEF_MA_MAX - 1; i++)
 	{
 		if (m_slaveType[i - 1] == DRIVE || m_slaveType[i - 1] == STEP)  
-			m_driverState[i] = DriverState();
+			m_slaveStates[i] = new DriverSlaveState;
 		else if (m_slaveType[i - 1] == IO)
-			m_ioState[i] = IoState();
+			m_slaveStates[i] = new IoSlaveState;
 	}
 }
 
@@ -636,15 +643,30 @@ bool DmcManager::loadXmlConfig()
 
 long DmcManager::getDriverCmdPos(short slaveidx)
 {
-	assert(m_driverState.count(slaveidx) > 0);
+	long cmdpos = 0;
 
-	return m_driverState[slaveidx].cmdpos;
+	DriverSlaveState * dss = dynamic_cast<DriverSlaveState *>(m_slaveStates[slaveidx]);
+	if (dss)
+		cmdpos = dss->getCmdPos();
+	else
+		LOGSINGLE_FATAL("slave %?d is not a driver.", __FILE__, __LINE__, slaveidx);
+
+	assert(dss != NULL);
+
+	return cmdpos;
 }
 
 void DmcManager::setDriverCmdPos(short slaveidx, long val)
 {
-	assert(m_driverState.count(slaveidx) > 0);
-	m_driverState[slaveidx].cmdpos = val;
+	long cmdpos = 0;
+
+	DriverSlaveState * dss = dynamic_cast<DriverSlaveState *>(m_slaveStates[slaveidx]);
+	if (dss)
+		dss->setCmdPos(val);
+	else
+		LOGSINGLE_FATAL("slave %?d is not a driver.", __FILE__, __LINE__, slaveidx);
+
+	assert(dss != NULL);
 }
 
 int DmcManager::getServoPosBias() const
@@ -656,60 +678,85 @@ void DmcManager::updateState()
 {
 	//更新驱动器状态
 	unsigned CMD;
-	for (map<int, DriverState>::iterator iter = m_driverState.begin();
-					iter != m_driverState.end();
-					++iter)
+	for(std::map<int, SlaveState *>::iterator iter = m_slaveStates.begin();
+				iter != m_slaveStates.end();
+				++iter)
 	{
 		int		slaveidx = iter->first;
+		
 		CMD =((m_respData[slaveidx].CMD & 0xFF));
-
+		
 		if (GET_STATUS == CMD)
 			CMD = m_lastCmdData[slaveidx].CMD;
 
-		switch(CMD)
+		DriverSlaveState *dss = dynamic_cast<DriverSlaveState*>(iter->second);
+		if (dss)
+		{//Driver
+			switch(CMD)
+			{
+				case ALM_CLR:
+					dss->setStatus(m_respData[slaveidx].Parm);
+					break;
+				case CSP:
+				case SV_ON:
+				case GO_HOME:
+				case ABORT_HOME:
+					dss->setStatus(m_respData[slaveidx].Parm);
+					dss->setCurPos(m_respData[slaveidx].Data1);
+					break;
+				case SV_OFF:
+					dss->setStatus(m_respData[slaveidx].Parm);
+					break;
+				case DRIVE_MODE:
+					break;
+				default:
+					;
+			}
+		}
+		else //IO
 		{
-			case ALM_CLR:
-				(iter->second).status = m_respData[slaveidx].Parm;
-				break;
-			case CSP:
-			case SV_ON:
-			case GO_HOME:
-			case ABORT_HOME:
-				//(iter->second).opmode = (OpMode)(m_respData[slaveidx].CMD >> 8);
-				(iter->second).status = m_respData[slaveidx].Parm;
-				(iter->second).curpos = m_respData[slaveidx].Data1;
-				break;
-			case SV_OFF:
-				//(iter->second).opmode = (OpMode)(m_respData[slaveidx].CMD >> 8);
-				(iter->second).status = m_respData[slaveidx].Parm;
-				break;
-			case DRIVE_MODE:
-				//(iter->second).opmode = (OpMode)(m_respData[slaveidx].CMD >> 8);
-				break;
-			default:
-				;
+			IoSlaveState *iss = dynamic_cast<IoSlaveState*>(iter->second);
+			switch(CMD)
+			{
+				case IO_RD:
+					iss->setInput(m_respData[slaveidx].Data1);
+					break;
+				default:
+					;
+			}
 		}
 	}
 
-	//更新IO状态
-	for (map<int, IoState>::iterator iter = m_ioState.begin();
-					iter != m_ioState.end();
-					++iter)
+}
+
+bool DmcManager::isDriverSlave(short slaveidx) const
+{
+	if (slaveidx > 0 && slaveidx < DEF_MA_MAX - 1)
 	{
-		int		slaveidx = iter->first;
-		CMD =((m_respData[slaveidx].CMD & 0xFF));
-
-		if (GET_STATUS == CMD)
-			CMD = m_lastCmdData[slaveidx].CMD;
-		switch(CMD)
-		{
-			case IO_RD:
-				(iter->second).input = m_respData[slaveidx].Data1;
-				break;
-			default:
-				;
-		}
+		return (DRIVE == m_slaveType[slaveidx - 1] || STEP == m_slaveType[slaveidx - 1]);
 	}
+	return false;
+}
+
+bool DmcManager::isIoSlave(short slaveidx) const
+{
+	if (slaveidx > 0 && slaveidx < DEF_MA_MAX - 1)
+	{
+		return (IO == m_slaveType[slaveidx - 1]);
+	}
+	return false;
+}
+
+void DmcManager::setMoveState(short slaveidx, MoveState ms)
+{
+	assert(m_slaveStates.count(slaveidx) > 0);
+	m_slaveStates[slaveidx]->setSlaveState(ms);
+}
+
+void DmcManager::setIoRS(short slaveidx, IoRequestState iors)
+{
+	assert(m_slaveStates.count(slaveidx) > 0);
+	m_slaveStates[slaveidx]->setSlaveState(iors);
 }
 
 void DmcManager::addRequest(short slaveidx, BaseRequest *req)
@@ -723,8 +770,17 @@ void DmcManager::addRequest(short slaveidx, BaseRequest *req)
 
 long DmcManager::getCurpos(short slaveidx)
 {
-	assert(m_driverState.count(slaveidx) > 0);
-	return m_driverState[slaveidx].curpos;
+	long curpos = 0;
+
+	DriverSlaveState * dss = dynamic_cast<DriverSlaveState *>(m_slaveStates[slaveidx]);
+	if (dss)
+		curpos = dss->getCurPos();
+	else
+		LOGSINGLE_FATAL("slave %?d is not a driver.", __FILE__, __LINE__, slaveidx);
+
+	assert(dss != NULL);
+
+	return curpos;
 }
 
 transData * DmcManager::getCmdData(short slaveidx)
@@ -838,59 +894,85 @@ void DmcManager::copyRespData()
 
 bool DmcManager::isDriverOpCsp(short slaveidx)
 {
-	assert (m_driverState.count(slaveidx) > 0);
-	return (OPMODE_CSP == m_driverState[slaveidx].opmode);
+	OpMode op = OPMODE_NONE;
+
+	DriverSlaveState * dss = dynamic_cast<DriverSlaveState *>(m_slaveStates[slaveidx]);
+	if (dss)
+		op = dss->getOpMode();
+	else
+		LOGSINGLE_FATAL("slave %?d is not a driver.", __FILE__, __LINE__, slaveidx);
+
+	assert(dss != NULL);
+
+	return (OPMODE_CSP == op);
 }
 
 bool DmcManager::isDriverOn(short slaveidx)
 {
-	assert (m_driverState.count(slaveidx) > 0);
-	
-	return (0x1637 == m_driverState[slaveidx].status
-		|| 0x9637 == m_driverState[slaveidx].status);		//原点已找到
+	unsigned short status = 0;
+	DriverSlaveState * dss = dynamic_cast<DriverSlaveState *>(m_slaveStates[slaveidx]);
+	if (dss)
+		status = dss->getStatus();
+	else
+		LOGSINGLE_FATAL("slave %?d is not a driver.", __FILE__, __LINE__, slaveidx);
+
+	assert(dss != NULL);
+
+	return (0x1637 == status
+		|| 0x9637 == status);		//原点已找到
 }
 
 bool DmcManager::isDriverOff(short slaveidx)
 {
-	assert (m_driverState.count(slaveidx) > 0);
+	unsigned short status = 0;
+	DriverSlaveState * dss = dynamic_cast<DriverSlaveState *>(m_slaveStates[slaveidx]);
+	if (dss)
+		status = dss->getStatus();
+	else
+		LOGSINGLE_FATAL("slave %?d is not a driver.", __FILE__, __LINE__, slaveidx);
+
+	assert(dss != NULL);
 	//最低比特置1，代表电机已准备好。
-	return (0 == (0x01 & m_driverState[slaveidx].status ));
+	return (0 == (0x01 & status ));
 }
 
 unsigned short DmcManager::getDriverStatus(short slaveidx)
 {
-	assert (m_driverState.count(slaveidx) > 0);
-	return m_driverState[slaveidx].status;
+	unsigned short status = 0;
+	DriverSlaveState * dss = dynamic_cast<DriverSlaveState *>(m_slaveStates[slaveidx]);
+	if (dss)
+		status = dss->getStatus();
+	else
+		LOGSINGLE_FATAL("slave %?d is not a driver.", __FILE__, __LINE__, slaveidx);
+
+	assert(dss != NULL);
+	//最低比特置1，代表电机已准备好。
+	return (status);
 }
 
 bool DmcManager::isDriverHomed(short slaveidx)
 {
-	assert (m_driverState.count(slaveidx) > 0);
-	return ( (0x9637 == m_driverState[slaveidx].status || 0x1637 == m_driverState[slaveidx].status)
-		&& 0 == m_driverState[slaveidx].curpos);
+	unsigned short status = 0;
+	long 			curpos = 0;
+	DriverSlaveState * dss = dynamic_cast<DriverSlaveState *>(m_slaveStates[slaveidx]);
+	if (dss)
+	{
+		status = dss->getStatus();
+		curpos = dss->getCurPos();
+	}
+	else
+		LOGSINGLE_FATAL("slave %?d is not a driver.", __FILE__, __LINE__, slaveidx);
+
+	assert(dss != NULL);
+	//最低比特置1，代表电机已准备好。
+	return ( (0x9637 == status || 0x1637 == status)
+		&& 0 == curpos);
 }
 
 bool DmcManager::isServo(short slaveidx)
 {
 	assert (slaveidx > 0 && slaveidx < DEF_MA_MAX - 1);
 	return DRIVE == m_slaveType[slaveidx - 1];				//伺服电机
-}
-
-void DmcManager::setMoveState(short slaveidx, MoveState ms)
-{
-	assert(m_driverState.count(slaveidx) > 0);
-
-	m_slaveMutexs[slaveidx].lock();
-	m_driverState[slaveidx].movestate = ms;
-	m_slaveMutexs[slaveidx].unlock();
-}
-
-void DmcManager::setIoRS(short slaveidx, IoRequestState iors)
-{
-	assert(m_ioState.count(slaveidx) > 0);
-	m_slaveMutexs[slaveidx].lock();
-	m_ioState[slaveidx].iors = iors;
-	m_slaveMutexs[slaveidx].unlock();
 }
 
 void DmcManager::setIoOutput(short slaveidx, unsigned int output)
@@ -961,7 +1043,7 @@ unsigned long DmcManager::clr_alarm(short axis)
 	m_mutex.lock();
 
 	do{
-		if ( 0 == m_driverState.count(axis))
+		if (false == isDriverSlave(axis))
 		{
 			retValue = ERR_NO_AXIS;
 			break;
@@ -1022,7 +1104,7 @@ unsigned long DmcManager::init_driver(short axis)
 	m_mutex.lock();
 
 	do{
-		if ( 0 == m_driverState.count(axis))
+		if ( false == isDriverSlave(axis))
 		{
 			retValue = ERR_NO_AXIS;
 			break;
@@ -1091,7 +1173,7 @@ unsigned long DmcManager::servo_on(short axis)
 	m_mutex.lock();
 
 	do{
-		if ( 0 == m_driverState.count(axis))
+		if (false == isDriverSlave(axis))
 		{
 			retValue = ERR_NO_AXIS;
 			break;
@@ -1156,7 +1238,7 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 	m_mutex.lock();
 
 	do{
-		if ( 0 == m_driverState.count(axis))
+		if (false == isDriverSlave(axis))
 		{
 			retValue = ERR_NO_AXIS;
 			break;
@@ -1218,7 +1300,7 @@ unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,long acc
 	m_mutex.lock();
 
 	do{
-		if ( 0 == m_driverState.count(axis))
+		if ( false == isDriverSlave(axis))
 		{
 			retValue = ERR_NO_AXIS;
 			break;
@@ -1271,7 +1353,7 @@ unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *dis
 	{
 		short axis = axisArray[i];
 		long dist = distArray[i];
-		if ( 0 == m_driverState.count(axis))
+		if ( false == isDriverSlave(axis))
 		{
 			retValue = ERR_NO_AXIS;
 			goto DONE;
@@ -1335,7 +1417,7 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 	{
 		short axis = axisArray[i];
 		long dist = distArray[i];
-		if ( 0 == m_driverState.count(axis))
+		if ( false == isDriverSlave(axis))
 		{
 			retValue = ERR_NO_AXIS;
 			goto DONE;
@@ -1380,11 +1462,10 @@ DONE:
 
 unsigned long DmcManager::check_done(short axis)
 {
-	MoveState ms = MOVESTATE_NONE;
-	m_slaveMutexs[axis].lock();
-	if (m_driverState.count(axis))
-		ms = m_driverState[axis].movestate;
-	m_slaveMutexs[axis].unlock();
+	unsigned int ms = MOVESTATE_NONE;
+
+	assert(m_slaveStates.count(axis) > 0);
+	ms = m_slaveStates[axis]->getSlaveState();
 
 	Poco::Thread::sleep(10);
 
@@ -1394,12 +1475,11 @@ unsigned long DmcManager::check_done(short axis)
 long DmcManager::get_command_pos(short axis)
 {
 	long retpos = 0;
-	m_mutex.lock();
+	if (isDriverSlave(axis))
+	{
+		retpos = getDriverCmdPos(axis);
+	}
 
-	if (m_driverState.count(axis))
-		retpos = m_driverState[axis].cmdpos;
-
-	m_mutex.unlock();
 	return retpos;
 }
 
@@ -1411,7 +1491,7 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 
 	m_mutex.lock();
 	do{
-		if ( 0 == m_driverState.count(axis))
+		if ( false == isDriverSlave(axis))
 		{
 			retValue = ERR_NO_AXIS;
 			break;

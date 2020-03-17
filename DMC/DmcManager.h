@@ -3,6 +3,7 @@
 #include "DMC.h"
 #include "RdWrManager.h"
 #include "Request.h"
+#include "SlaveState.h"
 
 #include "NEXTWUSBLib_12B.h"
 #include "Poco/Mutex.h"
@@ -15,14 +16,7 @@
 
 using std::map;
 
-enum OpMode						//控制模式
-{
-	OPMODE_NONE	  = -1,
-	OPMODE_HOMING = HOMING_MODE,
-	OPMODE_CSP	  = CSP_MODE,
-	OPMODE_CSV	  = CSV_MODE,
-	OPMODE_CST	  = CST_MODE,
-};
+
 
 //电机状态
 struct DriverState
@@ -43,13 +37,7 @@ struct DriverState
 	}
 };
 
-enum IoRequestState
-{
-	IORS_NONE 	= -1,
-	IORS_BUSY 	= 0,
-	IORS_SUCCESS,
-	IORS_TIMEOUT,
-};
+
 
 struct IoState
 {
@@ -100,7 +88,7 @@ public:
 	unsigned short getDriverStatus(short slaveidx);
 	bool isDriverHomed(short slaveidx); //判断电机是否已经回原点
 	bool isServo(short slaveidx);			 //判断电机是否属于伺服
-	void setMoveState(short slaveidx, MoveState ms);//设置电机当前状态
+
 	long getDriverCmdPos(short slaveidx);									//获得起始位置
 	void setDriverCmdPos(short slaveidx, long val); 						//更新起始位置
 	int	getServoPosBias() const;
@@ -108,7 +96,7 @@ public:
 	//IO
 	unsigned long out_bit(short slave_idx, short bitNo, short bitData);
 	unsigned long in_bit(short ioslave_idx, unsigned int *bitData);
-	void setIoRS(short slavidx, IoRequestState iors);	//设置当前IO请求状态
+
 	void setIoOutput(short slaveidx, unsigned int output);
 	unsigned int getIoOutput(short slaveidx);
 
@@ -135,7 +123,12 @@ private:
 	void initSlaveState();
 	void updateState();					//每次调用ECMUSBRead后，更新所有从站状态
 
+	bool isDriverSlave(short slaveidx) const;
+	bool isIoSlave(short slaveidx) const;
+	void setMoveState(short slaveidx, MoveState ms);	//设置电机当前状态
+	void setIoRS(short slavidx, IoRequestState iors);	//设置当前IO请求状态
 	void addRequest(short slaveidx, BaseRequest *req);
+
 
 	Poco::Thread		m_thread;
 	Poco::Mutex  		m_mutex;				//互斥量
@@ -163,8 +156,9 @@ private:
 	std::map<int, BaseRequest *> m_requests;			
 
 	Poco::Mutex			m_slaveMutexs[DEF_MA_MAX];		//每个从站状态的锁
-	std::map<int, DriverState>m_driverState;			//电机状态
 	std::map<int, IoState>	 m_ioState;				//IO状态
+
+	std::map<int, SlaveState *> m_slaveStates;
 
 	Item				m_items[DEF_MA_MAX];
 };
