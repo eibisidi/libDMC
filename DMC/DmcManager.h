@@ -131,7 +131,7 @@ private:
 
 
 	Poco::Thread		m_thread;
-	Poco::Mutex  		m_mutex;				//互斥量
+	Poco::Mutex  		m_mutex;				//互斥量，保护m_requests
 	Poco::Condition		m_condition;			//条件变量
 
 	bool				m_init;

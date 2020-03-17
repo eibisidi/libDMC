@@ -81,18 +81,12 @@ public:
 
 	inline long getCmdPos () const
 	{
-		long cp;
-		//mutex.lock();
-		cp = cmdpos;
-		//mutex.unlock();
-		return cp;
+		return cmdpos;
 	}
 	
 	inline void setCmdPos(long cp) 
 	{
-		//mutex.lock();
 		cmdpos = cp;
-		//mutex.unlock();
 	}
 };
 

@@ -689,9 +689,9 @@ void DmcManager::updateState()
 		if (GET_STATUS == CMD)
 			CMD = m_lastCmdData[slaveidx].CMD;
 
-		DriverSlaveState *dss = dynamic_cast<DriverSlaveState*>(iter->second);
-		if (dss)
+		if (isDriverSlave(slaveidx))
 		{//Driver
+			DriverSlaveState *dss = dynamic_cast<DriverSlaveState*>(iter->second);
 			switch(CMD)
 			{
 				case ALM_CLR:
@@ -713,7 +713,7 @@ void DmcManager::updateState()
 					;
 			}
 		}
-		else //IO
+		else if(isIoSlave(slaveidx))
 		{
 			IoSlaveState *iss = dynamic_cast<IoSlaveState*>(iter->second);
 			switch(CMD)
@@ -980,7 +980,7 @@ void DmcManager::setIoOutput(short slaveidx, unsigned int output)
 
 unsigned int DmcManager::getIoOutput(short slaveidx)
 {
-	unsigned int output;
+	unsigned int output = 0;
 
 	IoSlaveState * iss = dynamic_cast<IoSlaveState *>(m_slaveStates[slaveidx]);
 	if (iss)
@@ -993,7 +993,7 @@ unsigned int DmcManager::getIoOutput(short slaveidx)
 
 unsigned int DmcManager::getIoInput(short slaveidx)
 {
-	unsigned int input;
+	unsigned int input = 0;
 
 	IoSlaveState * iss = dynamic_cast<IoSlaveState *>(m_slaveStates[slaveidx]);
 	if (iss)
