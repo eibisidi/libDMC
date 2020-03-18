@@ -404,7 +404,7 @@ void RdWrManager::run()
 SEND:
 		//printf("last_remain=%d, fifo_remain=%d, readcount = %d, flag1=%d.\n", rdWrState.lastRemain, FIFO_REMAIN(respData), rdWrState.readCount, rdWrState.flag1);
 		rdWrState.flag1 = 0;
-		towrite = BATCH_WRITE;
+		towrite = BATCH_WRITE;			//todo，是否修改为根据FIFO Remain增加的数量动态调整下一次写入量，而不是采用固定值？
 	};
 
 	LOGSINGLE_INFORMATION("RdWrManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));

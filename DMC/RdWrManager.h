@@ -46,8 +46,8 @@ public:
 class RdWrState
 {
 public:
-	unsigned int lastRemain;
-	unsigned int lastFifoFull;
+	unsigned int lastRemain;	//上一次调用ECMUSBRead，返回的FIFO空闲数，每次调用ECMUSBRead后更新
+	unsigned int lastFifoFull;	//ECM返回的fifofull记录数，如检测到发生改变，代表写入速度过快
 	int 		 readCount;
 	int			 flag1;			//1 空闲数正在下降  2:空闲数正在上升
 
