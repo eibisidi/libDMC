@@ -185,6 +185,8 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 }
 
 //每行代表一个周期，每列代表一个从站
+//为保证多轴插补命令队列一致性，按照轴号升序获得锁
+//要求items中列的轴号必须为升序，避免死锁
 void RdWrManager::pushItems(Item *items, int rows, size_t cols)
 {
 	if (cols == 1)

@@ -2,7 +2,7 @@
 #define AXISPARA_H
 
 #include "plan.h"
-#include <set>
+#include <map>
 
 class BaseMultiAxisPara;
 
@@ -18,8 +18,7 @@ public:
 	int				error;						//错误标记, -1代表某个相关轴运动出现错误
 	int				planned;					//0尚未规划  -1规划失败 1规划成功
 
-	std::set<BaseMultiAxisPara *> paras;		//所有引用该Ref的运动对象 todo防止多轴运动加锁产生死锁，改成map<int, BaseMultiAxisPara*>类型，按照从站索引升序排列
-	
+	std::map<int, BaseMultiAxisPara *> paras;	//所有引用该Ref的运动对象，按轴号索引
 	BaseRef();
 	virtual ~BaseRef();
 
@@ -36,9 +35,8 @@ public:
 	bool sv_allon() const;
 	void reg_pos_reached();
 	bool pos_allreached() const;
-	void duplicate(BaseMultiAxisPara *);
+	void duplicate(BaseMultiAxisPara *para, int slaveidx);
 	void release();
-	void insert_para(BaseMultiAxisPara *);
 };
 
 class LinearRef: public BaseRef
@@ -77,7 +75,7 @@ public:
 	int				dstpos;				//终止位置
 	
 
-	BaseMultiAxisPara(BaseRef *baseref, MultiAxisRequest *req, int sp, int dp);
+	BaseMultiAxisPara(BaseRef *baseref, MultiAxisRequest * mar, int axis, int sp, int dp);
 	virtual ~BaseMultiAxisPara() ;
 	
 	virtual bool startPlan() = 0;
@@ -102,7 +100,7 @@ public:
 class LinearPara : public BaseMultiAxisPara
 {
 public:
-	LinearPara(LinearRef *newLineRef, MultiAxisRequest *mar, int sp, int dp);
+	LinearPara(LinearRef *newLineRef, MultiAxisRequest *mar, int axis, int sp, int dp);
 	virtual ~LinearPara();
 
 	virtual bool startPlan();
@@ -154,7 +152,7 @@ private:
 class ArchlMultiAxisPara : public BaseMultiAxisPara
 {
 public:
-	ArchlMultiAxisPara(ArchlRef *newArchlRef, MultiAxisRequest *mar, int sp, int dp, bool z);
+	ArchlMultiAxisPara(ArchlRef *newArchlRef, MultiAxisRequest *mar, int axis, int sp, int dp, bool z);
 	virtual ~ArchlMultiAxisPara();
 
 	virtual bool startPlan();

@@ -1351,7 +1351,7 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 		return;
 
 	//最后一个从站将所有的规划点加入发送队列
-	const std::set<BaseMultiAxisPara *> &paras = req->axispara->ref->paras;
+	const std::map<int, BaseMultiAxisPara *> &paras = req->axispara->ref->paras;
 
 	int cycles = req->axispara->totalCycles();
 	size_t axises = paras.size();
@@ -1360,11 +1360,11 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 	for (int row = 0; row < cycles; ++row)
 	{
 		int col = 0;
-		for (std::set<BaseMultiAxisPara *>::const_iterator iter = paras.begin();
+		for (std::map<int, BaseMultiAxisPara *>::const_iterator iter = paras.begin();
 				iter != paras.end();
 				++iter, ++col)
 		{
-			BaseMultiAxisPara *para = *iter;
+			BaseMultiAxisPara *para = iter->second;
 			items[row * axises + col].index    		= para->req->slave_idx;							//从站地址
 			items[row * axises + col].cmdData.CMD  	= CSP;
 			items[row * axises + col].cmdData.Data1  = para->nextPosition(para->req->slave_idx);	//CSP目的位置
@@ -1406,7 +1406,7 @@ MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, b
 	
 	this->slave_idx = axis;
 	this->fsmstate = fsm_state_start;
-	this->axispara = new LinearPara(newLinearRef, this, startpos, dstpos);
+	this->axispara = new LinearPara(newLinearRef, this, axis, startpos, dstpos);
 
 	double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);	
 	if (dist > newLinearRef->max_dist)
@@ -1425,7 +1425,7 @@ MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, boo
 	
 	this->slave_idx = axis;
 	this->fsmstate = fsm_state_start;
-	this->axispara = new ArchlMultiAxisPara(newArchlRef, this, startpos, dstpos, z);
+	this->axispara = new ArchlMultiAxisPara(newArchlRef, this, axis, startpos, dstpos, z);
 
 	if (z)
 	{

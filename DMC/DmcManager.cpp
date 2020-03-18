@@ -1555,21 +1555,21 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 		}
 		else
 		{
-			MultiAxisRequest *lineReq = dynamic_cast<MultiAxisRequest * >(m_requests[axis]);
-			if (NULL != lineReq)
+			MultiAxisRequest *maReq = dynamic_cast<MultiAxisRequest * >(m_requests[axis]);
+			if (NULL != maReq)
 			{//∂‡÷·‘À∂Ø
-				const std::set<BaseMultiAxisPara *> paras = lineReq->axispara->ref->paras;	//makes a copy
-				for (std::set<BaseMultiAxisPara *>::const_iterator iter = paras.begin();
+				const std::map<int, BaseMultiAxisPara *> paras = maReq->axispara->ref->paras;	//makes a copy
+				for (std::map<int, BaseMultiAxisPara *>::const_iterator iter = paras.begin();
 							iter != paras.end();
 							++iter)
 				{
-					BaseMultiAxisPara *para = *iter;
+					BaseMultiAxisPara *para = iter->second;
 
 					newReq = new DStopRequest(para->req->slave_idx, tDec, bServOff);
 					
 					setSlaveState(para->req->slave_idx, MOVESTATE_BUSY);
 					addRequest(para->req->slave_idx, newReq);
-					lineReq = NULL;				//no longer valid
+					maReq = NULL;				//no longer valid
 				}
 				
 			}

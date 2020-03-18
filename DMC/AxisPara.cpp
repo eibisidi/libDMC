@@ -59,10 +59,10 @@ bool  BaseRef::pos_allreached() const
 	return pos_reached_count == svon_count;
 }
 
-void  BaseRef::duplicate(BaseMultiAxisPara *para)
+void  BaseRef::duplicate(BaseMultiAxisPara *para, int slaveidx)
 {
 	++rc;
-	paras.insert(para);
+	paras[slaveidx] = para;
 }
 
 void  BaseRef::release()
@@ -169,10 +169,10 @@ double  LinearRef::getMaxDist() const
 	return this->max_dist;
 }
 
-BaseMultiAxisPara::BaseMultiAxisPara(BaseRef *baseref, MultiAxisRequest * mar, int sp, int dp)
+BaseMultiAxisPara::BaseMultiAxisPara(BaseRef *baseref, MultiAxisRequest * mar, int axis, int sp, int dp)
 {
 	ref = baseref;
-	ref->duplicate(this);
+	ref->duplicate(this, axis);
 	req		= mar;
 	startpos = sp;
 	dstpos	 = dp;
@@ -249,8 +249,8 @@ bool BaseMultiAxisPara::pos_allreached() const
 	return allreached;
 }
 
-LinearPara::LinearPara(LinearRef *newLineRef, MultiAxisRequest *mar, int sp, int dp)
-	:BaseMultiAxisPara(newLineRef,mar, sp, dp)
+LinearPara::LinearPara(LinearRef *newLineRef, MultiAxisRequest *mar, int axis, int sp, int dp)
+	:BaseMultiAxisPara(newLineRef,mar, axis, sp, dp)
 {
 }
 
@@ -485,8 +485,8 @@ int   ArchlRef::getZPosition(int slave_index)
 	return pos;
 }
 
-ArchlMultiAxisPara::ArchlMultiAxisPara(ArchlRef *newArchlRef, MultiAxisRequest *mar, int sp, int dp, bool z)
-	:BaseMultiAxisPara(newArchlRef, mar, sp, dp)
+ArchlMultiAxisPara::ArchlMultiAxisPara(ArchlRef *newArchlRef, MultiAxisRequest *mar, int axis, int sp, int dp, bool z)
+	:BaseMultiAxisPara(newArchlRef, mar,axis, sp, dp)
 {
 	is_zaxis = z;
 }
