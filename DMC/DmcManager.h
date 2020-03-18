@@ -100,6 +100,7 @@ public:
 	void setIoOutput(short slaveidx, unsigned int output);
 	unsigned int getIoOutput(short slaveidx);
 	unsigned int getIoInput(short slaveidx);
+	void flipread(short slaveidx);
 
 	//ÄÚ²¿TransDataÃüÁî
 	transData *getCmdData(short slaveidx);
@@ -157,6 +158,7 @@ private:
 	std::map<int, SlaveState *> m_slaveStates;
 
 	Item				m_items[DEF_MA_MAX];
+	int					m_cols;
 };
 
 #endif

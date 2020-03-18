@@ -1004,9 +1004,41 @@ unsigned int DmcManager::getIoInput(short slaveidx)
 	return input;
 }
 
+void  DmcManager::flipread(short slaveidx)
+{
+	bool shouldread = false;
+	IoSlaveState * iss = dynamic_cast<IoSlaveState *>(m_slaveStates[slaveidx]);
+	if (iss)
+		shouldread = iss->flip();
+	else
+	{
+		LOGSINGLE_FATAL("slave %?d is not a io.", __FILE__, __LINE__, slaveidx);
+		return;
+	}
+
+	if (shouldread)
+	{
+		m_items[m_cols].index = slaveidx;
+		m_items[m_cols].cmdData.CMD	= IO_RD;
+		m_items[m_cols].cmdData.Data1 = 0;
+		m_items[m_cols].cmdData.Data2 = 0;
+	}
+	else
+	{
+		m_items[m_cols].index = slaveidx;
+		m_items[m_cols].cmdData.CMD	= IO_WR;
+		m_items[m_cols].cmdData.Data1 = getIoOutput(slaveidx);
+		m_items[m_cols].cmdData.Data2 = 0;
+	}
+
+	m_lastCmdData[slaveidx] = m_items[m_cols].cmdData;
+	++m_cols;
+} 
+
 void DmcManager::run()
 {	
-	int i, cols;
+	int i;
+
 	while(!m_canceled)
 	{		
 		m_mutex.lock();
@@ -1015,17 +1047,11 @@ void DmcManager::run()
 			beforeWriteCmd();
 			m_mutex.unlock();
 
-			for(i = 0, cols = 0; i < DEF_MA_MAX; ++i)
+			for(i = 0, m_cols = 0; i < DEF_MA_MAX; ++i)
 			{
-				if (m_cmdData[i].CMD == GET_STATUS
-					&& isIoSlave(i))
+				if (isIoSlave(i))
 				{//pigtails io_rd 
-					m_items[cols].index = i;
-					m_items[cols].cmdData.CMD 	= IO_RD;
-					m_items[cols].cmdData.Data1 = 0;
-					m_items[cols].cmdData.Data2	= 0;
-					m_lastCmdData[i] = m_items[cols].cmdData;
-					++cols;
+					flipread(i);
 				}
 				else if (m_cmdData[i].CMD != GET_STATUS)
 				{
@@ -1033,14 +1059,14 @@ void DmcManager::run()
 						continue;
 					if (m_cmdData[i].CMD == CSP)
 						m_cmdData[i].Data2 = 0;			//CSP最后位置重发
-					m_items[cols].index = i;
-					m_items[cols].cmdData = m_cmdData[i];
-					++cols;
+					m_items[m_cols].index = i;
+					m_items[m_cols].cmdData = m_cmdData[i];
+					++m_cols;
 				}		
 			}
 
-			if (cols > 0)
-				m_rdWrManager.pushItems(m_items, 1, cols);	//加入发送队列
+			if (m_cols > 0)
+				m_rdWrManager.pushItems(m_items, 1, m_cols);	//加入发送队列
 
 			m_rdWrManager.setBusy();
 			copyRespData();//接收队列处理，刷新
@@ -1053,20 +1079,15 @@ void DmcManager::run()
 			if (false == wake)	//休眠10ms，等待用户命令
 			{//polls current inputs if idle
 
-				for(i = 0, cols = 0; i < DEF_MA_MAX; ++i)
+				for(i = 0, m_cols = 0; i < DEF_MA_MAX; ++i)
 				{
 					if(isIoSlave(i))
 					{
-						m_items[cols].index = i;
-						m_items[cols].cmdData.CMD 	= IO_RD;
-						m_items[cols].cmdData.Data1 = 0;
-						m_items[cols].cmdData.Data2	= 0;
-						m_lastCmdData[i] = m_items[cols].cmdData;
-						++cols;
+						flipread(i);
 					}
 				}
-				if (cols > 0)
-					m_rdWrManager.pushItems(m_items, 1, cols);	//加入发送队列
+				if (m_cols > 0)
+					m_rdWrManager.pushItems(m_items, 1, m_cols);	//加入发送队列
 
 				m_rdWrManager.setBusy();
 				copyRespData();//接收队列处理，刷新
@@ -1592,8 +1613,6 @@ unsigned long DmcManager::immediate_stop(short axis)
 unsigned long DmcManager::out_bit(short slave_idx, short bitNo, short bitData)
 {
 	unsigned long retValue = ERR_NOERR;
-	WriteIoRequest *newReq = NULL;
-	m_mutex.lock();
 	
 	do{
 		if ( false == isIoSlave(slave_idx))
@@ -1602,52 +1621,15 @@ unsigned long DmcManager::out_bit(short slave_idx, short bitNo, short bitData)
 			break;
 		}
 
-		if (m_requests.count(slave_idx) > 0)
-		{
-			retValue = ERR_IO_BUSY;
-			break;
-		}
-		
-		newReq = new WriteIoRequest;
-		if (NULL == newReq)
-		{
-			retValue = ERR_MEM;
-			break;
-		}
+		unsigned int cur_output = getIoOutput(slave_idx);
 
-		setSlaveState(slave_idx, IORS_BUSY);
-		newReq->slave_idx = slave_idx;
-
-		unsigned int cur_output = getIoOutput(slave_idx);	//获取当前IO模块输出值
 		if (bitData)	//Turn on
-			newReq->output = cur_output | (1 << bitNo);
+			cur_output = cur_output | (1 << bitNo);
 		else			//Turn off
-			newReq->output = cur_output &(~(1 << bitNo));
-		
-		addRequest(slave_idx, newReq);
+			cur_output = cur_output &(~(1 << bitNo));
+
+		setIoOutput(slave_idx, cur_output);
 	}while(0);
-
-	m_mutex.unlock();
-
-	unsigned int  iors;
-	if (ERR_NOERR == retValue)
-	{
-		//wait until done
-		while(true)
-		{
-			iors = check_done(slave_idx);
-			if (IORS_SUCCESS == iors )
-			{
-				break;
-			}
-			else if (IORS_TIMEOUT  == iors)
-			{
-				retValue = ERR_IO_WRITE_TIMEOUT;
-				break;
-			}
-		}
-	}
-	
 	return retValue;
 }
 
