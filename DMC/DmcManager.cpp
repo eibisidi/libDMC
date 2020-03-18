@@ -698,9 +698,15 @@ void DmcManager::updateState()
 					dss->setStatus(m_respData[slaveidx].Parm);
 					break;
 				case CSP:
-				case SV_ON:
 				case GO_HOME:
 				case ABORT_HOME:
+					dss->setStatus(m_respData[slaveidx].Parm);
+					dss->setCurPos(m_respData[slaveidx].Data1);
+					dss->setAlarmCode(m_respData[slaveidx].Data2 >> 16);	//¸ß×ÖÎª¸æ¾¯Âë
+					if (dss->getAlarmCode())
+						dss->setSlaveState(MOVESTATE_ERR);
+					break;
+				case SV_ON:
 					dss->setStatus(m_respData[slaveidx].Parm);
 					dss->setCurPos(m_respData[slaveidx].Data1);
 					break;

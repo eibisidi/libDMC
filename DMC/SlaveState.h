@@ -63,6 +63,7 @@ private:
 	unsigned short	status;		//状态字
 	OpMode			opmode;		//操作模式
 	long			cmdpos;		//绝对位置,第一次电机使能后赋初值,回零后更新
+	unsigned short 	alarmcode;	//报警码
 public:
 	DriverSlaveState()
 	{
@@ -70,6 +71,7 @@ public:
 		status = 0;
 		opmode = OPMODE_CSP;//OPMODE_NONE;
 		cmdpos = 0;
+		alarmcode = 0;
 	}
 
 	inline long getCurPos() const {return curpos;}
@@ -78,16 +80,10 @@ public:
 	inline void setStatus(unsigned short s) {status  = s;}
 	inline OpMode getOpMode() const {return opmode;}
 	inline void setOpMode(OpMode op) {opmode  = op;}
-
-	inline long getCmdPos () const
-	{
-		return cmdpos;
-	}
-	
-	inline void setCmdPos(long cp) 
-	{
-		cmdpos = cp;
-	}
+	inline long getCmdPos () const{return cmdpos;}
+	inline void setCmdPos(long cp) {cmdpos = cp;}
+	inline unsigned short getAlarmCode () const{return alarmcode;}
+	inline void setAlarmCode(unsigned short ac) {alarmcode = ac;}
 };
 
 class IoSlaveState : public SlaveState
