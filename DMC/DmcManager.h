@@ -71,6 +71,7 @@ public:
 	unsigned long servo_on(short axis);
 	unsigned long start_move(short axis,long Dist,double MaxVel,double Tacc, bool abs, MoveType movetype);
 	unsigned long home_move(short axis,long highVel,long lowVel,long acc);
+	unsigned long multi_home_move(short totalAxis, short * axisArray);
 	unsigned long start_line(short totalAxis, short *axisArray,long *distArray, double maxvel, double Tacc, bool abs,  MoveType movetype);
 	unsigned long start_archl(short totalAxis, short *axisArray,long *distArray, double maxvel, double Tacc, bool abs,  long hh, long hu, long hd);
 	unsigned long check_done(short axis);

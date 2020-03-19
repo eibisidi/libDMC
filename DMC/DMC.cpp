@@ -41,6 +41,11 @@ DWORD WINAPI d1000_home_move(short axis,long highVel,long lowVel,long acc)
 	return DmcManager::instance().home_move(axis, highVel, lowVel, acc);
 }
 
+DWORD WINAPI d1000_multi_home_move(short TotalAxis,short *AxisArray)
+{
+	return DmcManager::instance().multi_home_move(TotalAxis, AxisArray);
+}
+
 DWORD WINAPI d1000_check_done(short axis)
 {
 	return DmcManager::instance().check_done(axis);

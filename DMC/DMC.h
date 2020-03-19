@@ -150,8 +150,19 @@ DMC1000_API DWORD WINAPI d1000_start_sa_move(short axis,long Pos, long StrVel, l
 注意：		不同电机的参数意义不同，应参考驱动器手册。
 		例如台达驱动器电机highVel，lowVel的单位为rpm，acc的单位为s
 		而汇川驱动器highVel，lowVel的单位为p/s, acc单位为p/s^2
+
+		由于ECM底层原因，只有当某个轴回零完成后，另一个轴才能启动回零
 */
 DMC1000_API DWORD WINAPI d1000_home_move(short axis,long highVel,long lowVel,long acc);
+
+/*功 能：多轴同时回零
+参 数： TotalAxis： 回零轴数
+		*AxisArray， AxisArray：电机从站索引列表；
+返回值：正确：返回 ERR_NoError；
+错误：返回相关错误码。
+注意：		回零方式、高速、低速、零点偏移均采用驱动器当前设定值
+*/
+DMC1000_API DWORD WINAPI d1000_multi_home_move(short TotalAxis,short *AxisArray);
 
 /*
 功 能：检测指定轴的运动状态。

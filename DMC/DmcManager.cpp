@@ -1405,6 +1405,59 @@ unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,long acc
 	return retValue;
 }
 
+unsigned long DmcManager::multi_home_move(short totalAxis, short * axisArray)
+{
+	if (totalAxis <= 0
+		|| NULL ==  axisArray)
+		return ERR_INVALID_ARG;
+
+	unsigned long					retValue = ERR_NOERR;
+	MultiHomeRequest 				*newReq = NULL;
+	MultiHomeRequest::MultiHomeRef	*newRef = NULL;
+	
+	m_mutex.lock();
+	
+	//先进行容错检查
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short axis = axisArray[i];
+		if ( false == isDriverSlave(axis))
+		{
+			retValue = ERR_NO_AXIS;
+			goto DONE;
+		}
+
+		if (m_requests.count(axis))
+		{
+			LOGSINGLE_ERROR("Axis %?d is busy.", __FILE__, __LINE__, axis);
+			retValue = ERR_AXIS_BUSY;
+			goto DONE;
+		}
+	}
+
+	newRef = new MultiHomeRequest::MultiHomeRef;
+	if(NULL == newRef)
+	{
+		retValue = ERR_MEM;
+		goto DONE;
+	}
+
+//新建请求
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short axis = axisArray[i];
+		newReq = new MultiHomeRequest(axis, newRef, m_masterConfig.home_timeout);
+		setSlaveState(axis, MOVESTATE_BUSY);
+		m_requests[axis] = newReq;
+	}
+DONE:
+	m_condition.signal();
+
+	m_mutex.unlock();
+
+	return retValue;
+}
+
 unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *distArray, double maxvel, double Tacc, bool abs, MoveType movetype)
 {
 	if (totalAxis <= 0

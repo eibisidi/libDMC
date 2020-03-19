@@ -323,6 +323,97 @@ public:
 	}
 };
 
+class MultiHomeRequest : public BaseRequest
+{
+private:
+	static FsmRetType fsm_state_done(MultiHomeRequest *req);
+	static FsmRetType fsm_state_gohome(MultiHomeRequest *req);
+	static FsmRetType fsm_state_wait_all_sync(MultiHomeRequest *req);
+	static FsmRetType fsm_state_wait_1s(MultiHomeRequest *req);
+	static FsmRetType fsm_state_sdowr_homemode(MultiHomeRequest *req);
+	static FsmRetType fsm_state_wait_sdowr_homemode(MultiHomeRequest *req);
+	static FsmRetType fsm_state_svon(MultiHomeRequest *req);
+	static FsmRetType fsm_state_start(MultiHomeRequest *req);
+	static void pushMultiHome(MultiHomeRequest *req);
+
+	bool homeTimeout() const;
+
+public:
+	class MultiHomeRef
+	{
+	private:
+		int rc;
+		int sync_count;
+		int last_slaveidx;
+		int error;
+		std::set<int> axises;
+	public:
+		MultiHomeRef():rc(0), sync_count(0),last_slaveidx(0),error(0) {}
+		virtual ~MultiHomeRef() {}
+		void duplicate()
+		{
+			++rc;
+		}
+		void release() 
+		{
+			if (--rc == 0)
+			{
+				delete this;
+			}
+		}
+
+		void reg_sync(int slaveidx)
+		{
+			++sync_count;
+			if (slaveidx > this->last_slaveidx)
+				this->last_slaveidx = slaveidx;
+			axises.insert(slaveidx);
+		}
+
+		bool all_sync() const
+		{
+			return sync_count == rc;
+		}
+
+		int getError() const
+		{
+			return error;
+		}
+
+		void setError()
+		{
+			error  = 1;
+		}
+
+		bool isLast(int i) const
+		{
+			return i == last_slaveidx;
+		}
+
+		const std::set<int>& getAxises() const
+		{
+			return axises;
+		}
+	};
+
+	MultiHomeRef * 	ref;
+	Poco::Timestamp	starttime;			//用于回原点超时判断
+	int				home_timeout;		//回原点超时时间,单位s
+
+	FsmRetType (* fsmstate)(MultiHomeRequest *);	
+	
+	virtual ~MultiHomeRequest() 
+	{
+		if (ref)
+			ref->release();
+	}
+	
+
+	virtual FsmRetType exec();
+
+	MultiHomeRequest(int axis, MultiHomeRef *newRef, int to);
+};
+
 class ReadIoRequest: public BaseRequest
 {
 private:

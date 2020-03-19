@@ -1904,6 +1904,359 @@ FsmRetType HomeMoveRequest::exec()
 	return fsmstate(this);
 }
 
+FsmRetType MultiHomeRequest::fsm_state_done(MultiHomeRequest *req)
+{
+	//shall not be called
+	return MOVESTATE_NONE;
+}
+
+FsmRetType MultiHomeRequest::fsm_state_gohome(MultiHomeRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	if(0 != req->ref->getError())
+	{
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if(GO_HOME != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData)
+		&& req->rechecks--)
+	{
+		return retval; 
+	}
+
+	bool timeout = req->homeTimeout();				//当前是否超时
+		
+	if (!req->dmc->isDriverHomed(req->slave_idx)
+		&& !timeout)		
+	{
+		return retval;
+	}
+
+	if (req->rechecks <= 0
+		|| timeout)
+	{
+		LOGSINGLE_ERROR("MultiHomeRequest::fsm_state_gohome timeouts, axis=%d, status=0x%?x, curpos=%?d.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx), req->dmc->getCurpos(req->slave_idx));
+		retval = MOVESTATE_TIMEOUT;
+		req->ref->setError();
+		req->reqState = REQUEST_STATE_FAIL;
+		return retval;
+	}
+
+	LOGSINGLE_INFORMATION("Homed, axis=%d.", __FILE__, __LINE__, req->slave_idx);
+	req->dmc->setDriverCmdPos(req->slave_idx, 0);			//回原点后，将命令位置置为0
+
+	req->fsmstate		= MultiHomeRequest::fsm_state_done;
+	retval				= MOVESTATE_O_STOP;
+	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+
+	return retval;
+}
+
+FsmRetType  MultiHomeRequest::fsm_state_wait_all_sync(MultiHomeRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	if(0 != req->ref->getError())
+	{
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if (!req->ref->all_sync()
+		&& req->rechecks --)
+	{
+		return retval;
+	}
+
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			LOGSINGLE_ERROR("MultiHomeRequest::fsm_state_wait_all_svon timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
+			retval = MOVESTATE_TIMEOUT;
+			req->ref->setError();
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			LOGSINGLE_INFORMATION("MultiHomeRequest::fsm_state_wait_all_svon reattempts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
+			req->rechecks = RETRIES;
+		}
+		return retval;
+	}
+
+	req->fsmstate		= MultiHomeRequest::fsm_state_gohome;
+	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
+	req->respData		= req->dmc->getRespData(req->slave_idx);
+	req->cmdData->CMD	= GET_STATUS;							/*同步命令*/
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+
+	pushMultiHome(req);
+
+	return retval;
+}
+
+FsmRetType MultiHomeRequest::fsm_state_wait_1s(MultiHomeRequest *req)
+{//等待0x6060运动模式修改生效
+
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	if(0 != req->ref->getError())
+	{//其它电机已经出现错误
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if (req->starttime.elapsed() < 1000000)
+	{
+		return retval;
+	}
+
+	req->ref->reg_sync(req->slave_idx);
+	req->fsmstate		= MultiHomeRequest::fsm_state_wait_all_sync;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+	return retval;
+}
+
+FsmRetType MultiHomeRequest::fsm_state_sdowr_homemode(MultiHomeRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	if(0 != req->ref->getError())
+	{//其它电机已经出现错误
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if(SDO_WR != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData)
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+
+	if ((req->slave_idx != req->respData->Parm ||  0x60600000 != req->respData->Data1 || HOMING_MODE != req->respData->Data2)
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+	
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			LOGSINGLE_ERROR("HomeMoveRequest::fsm_state_sdowr_homemode timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
+			retval = MOVESTATE_TIMEOUT;
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			LOGSINGLE_INFORMATION("HomeMoveRequest::fsm_state_sdowr_homemode reattempts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
+			req->dmc->restoreLastCmd(req->cmdData);
+			req->rechecks = RETRIES;
+		}
+		return retval;
+	}
+
+	//free sdo
+	req->dmc->freeSdoCmdResp(req);
+
+	req->starttime.update();									//刷新时间
+	req->fsmstate		= MultiHomeRequest::fsm_state_wait_1s;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+
+	return retval;
+}
+
+FsmRetType MultiHomeRequest::fsm_state_wait_sdowr_homemode(MultiHomeRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	if(0 != req->ref->getError())
+	{//其它电机已经出现错误
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if (!req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData)
+		&& req->rechecks --)
+	{
+		return retval;
+	}
+
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			LOGSINGLE_ERROR("MultiHomeRequest::fsm_state_wait_sdowr_homemode timeouts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
+			retval		= MOVESTATE_TIMEOUT;
+			req->ref->setError();
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			LOGSINGLE_INFORMATION("MultiHomeRequest::fsm_state_wait_sdowr_homemode reattempts, axis = %d.", __FILE__, __LINE__, req->slave_idx);
+			req->rechecks = RETRIES;
+		}
+		return retval;
+	}
+
+	req->fsmstate		= MultiHomeRequest::fsm_state_sdowr_homemode;
+	req->cmdData->CMD	= SDO_WR;
+	req->cmdData->Parm  = 0x0100 | (req->slave_idx & 0xFF); 			//size | slaveidx
+	req->cmdData->Data1 = 0x60600000;									//index 0x6060 subindex 0x0000
+	req->cmdData->Data2 = HOMING_MODE;					
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+
+	return retval;
+}
+
+FsmRetType  MultiHomeRequest::fsm_state_svon(MultiHomeRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	if(0 != req->ref->getError())
+	{//其它电机已经出现错误
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if(SV_ON != RESP_CMD_CODE(req->respData)
+			&& GET_STATUS != RESP_CMD_CODE(req->respData)
+			&& req->rechecks--)
+	{
+		return retval;
+	}
+
+	if (!req->dmc->isDriverOn(req->slave_idx)
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+			
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			LOGSINGLE_ERROR("MultiHomeRequest::fsm_state_svon timeout, axis=%d.", __FILE__, __LINE__, req->slave_idx);
+			retval = MOVESTATE_TIMEOUT;
+			req->ref->setError();
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			LOGSINGLE_INFORMATION("MultiHomeRequest::fsm_state_svon reattempts, axis=%d.", __FILE__, __LINE__, req->slave_idx);
+			req->dmc->restoreLastCmd(req->cmdData);
+			req->rechecks = RETRIES;
+		}
+		return retval;
+	}
+
+	if (req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData))
+	{
+		req->fsmstate		= MultiHomeRequest::fsm_state_sdowr_homemode;
+		req->cmdData->CMD	= SDO_WR;
+		req->cmdData->Parm	= 0x0100 | (req->slave_idx & 0xFF); 			//size | slaveidx
+		req->cmdData->Data1 = 0x60600000;									//index 0x6060 subindex 0x0000
+		req->cmdData->Data2 = HOMING_MODE;						
+	}
+	else
+		req->fsmstate		= MultiHomeRequest::fsm_state_wait_sdowr_homemode;		
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+
+	return retval;
+}
+
+FsmRetType MultiHomeRequest::fsm_state_start(MultiHomeRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+	
+	if(0 != req->ref->getError())
+	{//其它电机已经出现错误
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if (req->dmc->isDriverOn(req->slave_idx))
+	{//电机已经励磁
+		if (req->dmc->getSdoCmdResp(req, &req->cmdData, &req->respData))
+		{
+			req->fsmstate		= MultiHomeRequest::fsm_state_sdowr_homemode;
+			req->cmdData->CMD	= SDO_WR;
+			req->cmdData->Parm	= 0x0100 | (req->slave_idx & 0xFF); 			//size | slaveidx
+			req->cmdData->Data1 = 0x60600000;									//index 0x6060 subindex 0x0000
+			req->cmdData->Data2 = HOMING_MODE;						
+		}
+		else
+			req->fsmstate		= MultiHomeRequest::fsm_state_wait_sdowr_homemode;
+	}
+	else
+	{
+		req->fsmstate		= MultiHomeRequest::fsm_state_svon;
+		req->cmdData		= req->dmc->getCmdData(req->slave_idx);
+		req->respData		= req->dmc->getRespData(req->slave_idx);
+		req->cmdData->CMD		= SV_ON;
+	}
+
+	return retval;
+}
+
+
+bool MultiHomeRequest::homeTimeout() const
+{
+	return (starttime.elapsed() > (home_timeout * 1000000));
+}
+
+void MultiHomeRequest::pushMultiHome(MultiHomeRequest *req)
+{
+	if (!req->ref->isLast(req->slave_idx))
+		return;
+
+	const std::set<int>& axises = req->ref->getAxises();
+	size_t count = axises.size();
+
+	Item *items = new Item[count];
+
+	int col = 0;
+	for (std::set<int>::const_iterator iter = axises.begin();
+			iter != axises.end();
+			++iter, ++col)
+	{
+		items[col].index    		= *iter;							//从站地址
+		items[col].cmdData.CMD  	= GO_HOME;
+		items[col].cmdData.Data1 	= 0;
+		items[col].cmdData.Data2 	= 0;
+	}
+
+	req->dmc->m_rdWrManager.pushItems(items, 1, count);
+
+	delete [] items;
+}
+
+FsmRetType MultiHomeRequest::exec()
+{
+	return fsmstate(this);
+}
+
+MultiHomeRequest::MultiHomeRequest(int axis, MultiHomeRef *newRef, int to)
+{
+	this->slave_idx = axis;
+	this->fsmstate = fsm_state_start;
+	this->ref = newRef;
+	ref->duplicate();
+	this->home_timeout = to;
+}
+
 FsmRetType ReadIoRequest::fsm_state_done(ReadIoRequest *req)
 {
 	//shall not be called
