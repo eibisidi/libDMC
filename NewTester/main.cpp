@@ -33,6 +33,7 @@ DWORD all_go_home()
 	DWORD ret;
 	DWORD ms;
 	do {
+#if 0
 		ret = d1000_home_move(AXIS_R);
 		if (ERR_NOERR != ret)
 			break;
@@ -42,11 +43,17 @@ DWORD all_go_home()
 			ret = -1;
 			break;
 		}
-
+#endif
 		//同时回零
 		short	AxisArray[]={AXIS_Y, AXIS_X, AXIS_LEFT, AXIS_RIGHT};
 		short	TotalAxis = sizeof(AxisArray)/ sizeof(AxisArray[0]);
 		ret = d1000_multi_home_move(TotalAxis, AxisArray);
+
+		Sleep(3000);
+		d1000_immediate_stop(AXIS_Y);
+
+		Sleep(50000);
+
 
 		if (ERR_NOERR != ret)
 			break;
@@ -270,6 +277,7 @@ int main()
 
 	printf("All Homed.\n");
 
+#if 0
 	HANDLE hThread;
 	hThread = CreateThread(NULL, 0, IoThreadFunc, 0, 0, NULL); // 创建线程
 	hThread = CreateThread(NULL, 0, LoaderThreadFunc, 0, 0, NULL); // 创建线程
@@ -307,7 +315,7 @@ int main()
 
 		NEG_ARRAY(distArray);
 	}
-
+#endif
 	d1000_board_close();
 	return 0;
 }

@@ -142,7 +142,7 @@ private:
 	BaseRequest			*m_sdoOwner;			//SDO当前所属请求
 	
 	transData			m_cmdData[DEF_MA_MAX];
-	transData			m_lastCmdData[DEF_MA_MAX];
+	transData			m_lastCmdData[DEF_MA_MAX];//todo核实同步命令，该变量是否更新
 	transData			m_respData[DEF_MA_MAX];
 	
 	unsigned char		m_slaveType[DEF_MA_MAX - 2]; //从站类型, DRIVER/IO
