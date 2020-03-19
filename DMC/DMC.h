@@ -142,18 +142,12 @@ DMC1000_API DWORD WINAPI d1000_start_sa_move(short axis,long Pos, long StrVel, l
 
 /*功 能：启动指定轴进行回原点运动。
 参 数： axis：电机从站索引
-		highVel: 高速搜索减速点，索引0x6099 子索引0x0001 实际意义见电机驱动器参考手册
-		lowVel：低速搜索原点，索引0x6099 子索引0x0002 实际意义见电机驱动器参考手册
-		acc： 减速度 ，索引0x609A 子索引0x0000 实际意义见电机驱动器参考手册
+		
 返回值：正确：返回 ERR_NoError；
 错误：返回相关错误码。
-注意：		不同电机的参数意义不同，应参考驱动器手册。
-		例如台达驱动器电机highVel，lowVel的单位为0.1rpm，acc的单位为ms
-		而汇川驱动器highVel，lowVel的单位为p/s, acc单位为p/s^2
-
-		由于ECM底层原因，只有当某个轴回零完成后，另一个轴才能启动回零
+注意：由于ECM底层原因，只有当某个轴回零完成后，另一个轴才能启动回零
 */
-DMC1000_API DWORD WINAPI d1000_home_move(short axis,long highVel,long lowVel,long acc);
+DMC1000_API DWORD WINAPI d1000_home_move(short axis);
 
 /*功 能：多轴同时回零
 参 数： TotalAxis： 回零轴数

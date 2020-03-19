@@ -36,9 +36,9 @@ DWORD WINAPI d1000_start_sa_move(short axis,long Pos, long StrVel, long MaxVel,d
 	return DmcManager::instance().start_move(axis, Pos, MaxVel, Tacc, true, MOVETYPE_S);
 }
 
-DWORD WINAPI d1000_home_move(short axis,long highVel,long lowVel,long acc)
+DWORD WINAPI d1000_home_move(short axis)
 {
-	return DmcManager::instance().home_move(axis, highVel, lowVel, acc);
+	return DmcManager::instance().multi_home_move(1, &axis);
 }
 
 DWORD WINAPI d1000_multi_home_move(short TotalAxis,short *AxisArray)

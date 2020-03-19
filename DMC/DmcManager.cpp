@@ -1357,6 +1357,12 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 	return retValue;
 }
 
+/*
+	已废弃不用
+	highVel: 高速搜索减速点，索引0x6099 子索引0x0001 实际意义见电机驱动器参考手册
+	lowVel：低速搜索原点，索引0x6099 子索引0x0002 实际意义见电机驱动器参考手册
+	acc： 减速度 ，索引0x609A 子索引0x0000 实际意义见电机驱动器参考手册
+*/
 unsigned long DmcManager::home_move(short axis,long highVel,long lowVel,long acc)
 {
 	if (acc <= 0

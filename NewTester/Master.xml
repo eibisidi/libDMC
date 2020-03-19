@@ -11,7 +11,8 @@
 	<Slave desc="台达伺服电机驱动器R" index="1" type="Drive">
 		<Sdo desc="数字输入接脚 DI1 功能规划" index="0x220A" subindex="0x0000" size="2" value="0x0124" />
 		<Sdo desc="电子齿轮比分子(N1)" index="0x6093" subindex="0x0001" size="4" value="16777216" />
-		<Sdo desc="电子齿轮比分母(M)" index="0x6093" subindex="0x0002" size="4" value="10000" />
+		<Sdo desc="电子齿轮比分母(M)" index="0x6093" subindex="0x0002" size="4" value="3600000" />
+		<Sdo desc="带宽响应层级" index="0x221F" subindex="0x0000" size="2" value="19" />
 		<Sdo desc="控制模式及控制命令输入源设定" index="0x2101" subindex="0x0000" size="2" value="0x000C" />
 		<Sdo desc="原点复归模式" index="0x6098" subindex="0x0000" size="1" value="21" />
 		<Sdo desc="寻找原点开关速度(单位:0.1 rpm)" index="0x6099" subindex="0x0001" size="4" value="100" />
@@ -21,7 +22,7 @@
 	<Slave desc="台达伺服电机驱动器Y" index="2" type="Drive">
 		<Sdo desc="数字输入接脚 DI1 功能规划" index="0x220A" subindex="0x0000" size="2" value="0x0124" />
 		<Sdo desc="电子齿轮比分子(N1)" index="0x6093" subindex="0x0001" size="4" value="16777216" />
-		<Sdo desc="电子齿轮比分母(M)" index="0x6093" subindex="0x0002" size="4" value="10000" />
+		<Sdo desc="电子齿轮比分母(M)" index="0x6093" subindex="0x0002" size="4" value="20000" />
 		<Sdo desc="带宽响应层级" index="0x221F" subindex="0x0000" size="2" value="13" />
 		<Sdo desc="控制模式及控制命令输入源设定" index="0x2101" subindex="0x0000" size="2" value="0x010C" />
 		<Sdo desc="原点复归模式" index="0x6098" subindex="0x0000" size="1" value="21" />
@@ -33,6 +34,7 @@
 		<Sdo desc="数字输入接脚 DI1 功能规划" index="0x220A" subindex="0x0000" size="2" value="0x0124" />
 		<Sdo desc="电子齿轮比分子(N1)" index="0x6093" subindex="0x0001" size="4" value="16777216" />
 		<Sdo desc="电子齿轮比分母(M)" index="0x6093" subindex="0x0002" size="4" value="10000" />
+		<Sdo desc="带宽响应层级" index="0x221F" subindex="0x0000" size="2" value="19" />
 		<Sdo desc="控制模式及控制命令输入源设定" index="0x2101" subindex="0x0000" size="2" value="0x000C" />
 		<Sdo desc="原点复归模式" index="0x6098" subindex="0x0000" size="1" value="21" />
 		<Sdo desc="寻找原点开关速度(单位:0.1 rpm)" index="0x6099" subindex="0x0001" size="4" value="1000" />

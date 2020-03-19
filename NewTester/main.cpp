@@ -33,7 +33,7 @@ DWORD all_go_home()
 	DWORD ret;
 	DWORD ms;
 	do {
-		ret = d1000_home_move(AXIS_R, 100, 50, 100/*ms*/);
+		ret = d1000_home_move(AXIS_R);
 		if (ERR_NOERR != ret)
 			break;
 		WAIT_DONE(AXIS_R, ms)
