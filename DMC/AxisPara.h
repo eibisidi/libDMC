@@ -1,6 +1,8 @@
 #ifndef AXISPARA_H
 #define AXISPARA_H
 
+//∂‡÷·≤Â≤π‘À∂Ø
+
 #include "plan.h"
 #include <map>
 
