@@ -1657,12 +1657,46 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 					addRequest(para->req->slave_idx, newReq);
 					maReq = NULL;				//no longer valid
 				}
-				
 			}
 			else
-			{//当前未在运动
-				retValue = ERR_AXIS_NOT_MOVING;
-				break;
+			{
+				MultiHomeRequest *mhReq = dynamic_cast<MultiHomeRequest * >(m_requests[axis]);
+				if (NULL != mhReq
+					&& mhReq->ref->getStarted())		//已经启动GO_HOME
+				{//多轴回原点
+					std::set<int> toAbort = mhReq->ref->getAxises();	//makes a copy
+					for (std::set<int>::iterator iter = toAbort.begin();
+								iter != toAbort.end();
+						)
+					{
+						if(MOVESTATE_BUSY != check_done(*iter)) 
+							toAbort.erase(iter++);		//该轴回零命令已经处理完毕
+						else
+							iter++;
+					}
+
+					if (!toAbort.empty())
+					{//仍然有轴回零未成功
+						MultiAbortHomeRequest::MultiAbortHomeRef *newRef = NULL;
+						MultiAbortHomeRequest *newAhReq = NULL;
+						newRef = new MultiAbortHomeRequest::MultiAbortHomeRef;
+						for (std::set<int>::iterator iter = toAbort.begin();
+								iter != toAbort.end();
+								++iter)
+						{
+							newAhReq = new MultiAbortHomeRequest(*iter, newRef);
+							setSlaveState(*iter, MOVESTATE_BUSY);
+							addRequest(*iter, newAhReq);
+							mhReq = NULL;
+						}
+						
+					}
+				}
+				else
+				{//当前未在运动
+					retValue = ERR_AXIS_NOT_MOVING;
+					break;
+				}
 			}
 		}
 	}while(0);

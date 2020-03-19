@@ -347,8 +347,9 @@ public:
 		int last_slaveidx;
 		int error;
 		std::set<int> axises;
+		bool started;
 	public:
-		MultiHomeRef():rc(0), sync_count(0),last_slaveidx(0),error(0) {}
+		MultiHomeRef():rc(0), sync_count(0),last_slaveidx(0),error(0),started(false){}
 		virtual ~MultiHomeRef() {}
 		void duplicate()
 		{
@@ -394,6 +395,9 @@ public:
 		{
 			return axises;
 		}
+
+		void setStarted() {started = true;}
+		bool getStarted()const {return started;}
 	};
 
 	MultiHomeRef * 	ref;
@@ -408,10 +412,93 @@ public:
 			ref->release();
 	}
 	
-
 	virtual FsmRetType exec();
 
 	MultiHomeRequest(int axis, MultiHomeRef *newRef, int to);
+};
+
+class MultiAbortHomeRequest : public BaseRequest
+{
+private:
+	static FsmRetType fsm_state_done(MultiAbortHomeRequest *req);
+	static FsmRetType fsm_state_svoff(MultiAbortHomeRequest *req);
+	static FsmRetType fsm_state_aborthome(MultiAbortHomeRequest *req);	
+	static FsmRetType fsm_state_start(MultiAbortHomeRequest *req);
+	static void pushMultiAbortHome(MultiAbortHomeRequest *req);
+
+public:
+	class MultiAbortHomeRef
+	{
+	private:
+		int rc;
+		int sync_count;
+		int first_slave;
+		int error;
+		std::set<int> axises;
+	public:
+		MultiAbortHomeRef():rc(0), sync_count(0),first_slave(0),error(0) {}
+		virtual ~MultiAbortHomeRef() {}
+		void duplicate(int axis)
+		{
+			++rc;
+			axises.insert(axis);
+		}
+		void release() 
+		{
+			if (--rc == 0)
+			{
+				delete this;
+			}
+		}
+
+		void reg_sync(int slaveidx)
+		{
+			++sync_count;
+		}
+
+		bool all_sync() const
+		{
+			return sync_count == rc;
+		}
+
+		int getError() const
+		{
+			return error;
+		}
+
+		void setError()
+		{
+			error  = 1;
+		}
+
+		bool isFirst(int i) const
+		{
+			if (!axises.empty())
+				return (i == *axises.begin());
+			return false;
+		}
+
+		const std::set<int>& getAxises() const
+		{
+			return axises;
+		}
+	};
+
+	MultiAbortHomeRef * 	ref;
+	Poco::Timestamp	starttime;			//用于回原点超时判断
+	int				home_timeout;		//回原点超时时间,单位s
+
+	FsmRetType (* fsmstate)(MultiAbortHomeRequest *);	
+	
+	virtual ~MultiAbortHomeRequest() 
+	{
+		if (ref)
+			ref->release();
+	}
+	
+	virtual FsmRetType exec();
+
+	MultiAbortHomeRequest(int axis, MultiAbortHomeRef *newRef );
 };
 
 class ReadIoRequest: public BaseRequest

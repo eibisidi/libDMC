@@ -2238,6 +2238,8 @@ void MultiHomeRequest::pushMultiHome(MultiHomeRequest *req)
 
 	req->dmc->m_rdWrManager.pushItems(items, 1, count);
 
+	req->ref->setStarted();//已经开始回零
+
 	delete [] items;
 }
 
@@ -2251,8 +2253,168 @@ MultiHomeRequest::MultiHomeRequest(int axis, MultiHomeRef *newRef, int to)
 	this->slave_idx = axis;
 	this->fsmstate = fsm_state_start;
 	this->ref = newRef;
-	ref->duplicate();
+	this->ref->duplicate();
 	this->home_timeout = to;
+}
+
+FsmRetType MultiAbortHomeRequest::fsm_state_done(MultiAbortHomeRequest *req)
+{
+	//shall not be called
+	return MOVESTATE_NONE;
+}
+
+FsmRetType MultiAbortHomeRequest::fsm_state_svoff(MultiAbortHomeRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	if(0 != req->ref->getError())
+	{
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+		
+	if(SV_OFF != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData)
+			&& req->rechecks--)
+	{
+		return retval;
+	}
+
+	if (req->dmc->isDriverOn(req->slave_idx)
+			&& req->rechecks--)
+	{
+		return retval;
+	}
+	
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{			
+			LOGSINGLE_ERROR("MultiAbortHomeRequest::fsm_state_svoff timeouts. axis=%d, status=0x%?x.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx));
+			req->ref->setError();
+			req->reqState = REQUEST_STATE_FAIL;
+			retval = MOVESTATE_TIMEOUT;
+		} 
+		else
+		{
+			LOGSINGLE_INFORMATION("MultiAbortHomeRequest::fsm_state_svoff reattempts. axis=%d, status=0x%?x.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx));
+			req->dmc->restoreLastCmd(req->cmdData);
+			req->rechecks = RETRIES;
+		}
+		return retval;
+	}
+
+	req->fsmstate		= MultiAbortHomeRequest::fsm_state_done;
+	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+	retval = MOVESTATE_CMD_STOP;
+	return MOVESTATE_CMD_STOP;
+}
+
+FsmRetType MultiAbortHomeRequest::fsm_state_aborthome(MultiAbortHomeRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	if(0 != req->ref->getError())
+	{
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if(ABORT_HOME != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData )
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+	
+	if (req->rechecks <= 0) 
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{
+			LOGSINGLE_ERROR("MultiAbortHomeRequest::fsm_state_aborthome, axis=%d.", __FILE__, __LINE__, req->slave_idx);
+			retval = MOVESTATE_TIMEOUT;
+			req->ref->setError();
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			LOGSINGLE_INFORMATION("MultiAbortHomeRequest::fsm_state_aborthome reattempts. attemps=%d, axis=%d.", __FILE__, __LINE__, req->attempts, req->slave_idx);
+			req->cmdData->CMD = ABORT_HOME;
+			req->rechecks = RETRIES;
+		}
+		return retval;
+	}
+
+	req->fsmstate		= MultiAbortHomeRequest::fsm_state_svoff;
+	req->cmdData->CMD	= SV_OFF;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+
+	return retval;
+}
+
+FsmRetType MultiAbortHomeRequest::fsm_state_start(MultiAbortHomeRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+	
+	if(0 != req->ref->getError())
+	{//其它电机已经出现错误
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if (req->ref->isFirst(req->slave_idx))
+	{
+		pushMultiAbortHome(req);
+	}
+
+	req->fsmstate		= MultiAbortHomeRequest::fsm_state_aborthome;
+	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
+	req->respData		= req->dmc->getRespData(req->slave_idx);
+	req->cmdData->CMD	= GET_STATUS;							/*同步命令*/
+
+	return retval;
+}
+
+void MultiAbortHomeRequest::pushMultiAbortHome(MultiAbortHomeRequest *req)
+{
+	if (!req->ref->isFirst(req->slave_idx))
+		return;
+
+	const std::set<int>& axises = req->ref->getAxises();
+	size_t count = axises.size();
+
+	Item *items = new Item[count];
+
+	int col = 0;
+	for (std::set<int>::const_iterator iter = axises.begin();
+			iter != axises.end();
+			++iter, ++col)
+	{
+		items[col].index    		= *iter;							//从站地址
+		items[col].cmdData.CMD  	= ABORT_HOME;
+		items[col].cmdData.Data1 	= 0;
+		items[col].cmdData.Data2 	= 0;
+	}
+
+	req->dmc->m_rdWrManager.pushItems(items, 1, count);
+
+	delete [] items;
+}
+
+FsmRetType MultiAbortHomeRequest::exec()
+{
+	return fsmstate(this);
+}
+
+MultiAbortHomeRequest::MultiAbortHomeRequest(int axis, MultiAbortHomeRef *newRef)
+{
+	this->slave_idx = axis;
+	this->fsmstate	= fsm_state_start;
+	this->ref 		= newRef;
+	this->ref->duplicate(axis);
 }
 
 FsmRetType ReadIoRequest::fsm_state_done(ReadIoRequest *req)
