@@ -148,7 +148,7 @@ DMC1000_API DWORD WINAPI d1000_start_sa_move(short axis,long Pos, long StrVel, l
 返回值：正确：返回 ERR_NoError；
 错误：返回相关错误码。
 注意：		不同电机的参数意义不同，应参考驱动器手册。
-		例如台达驱动器电机highVel，lowVel的单位为rpm，acc的单位为s
+		例如台达驱动器电机highVel，lowVel的单位为0.1rpm，acc的单位为ms
 		而汇川驱动器highVel，lowVel的单位为p/s, acc单位为p/s^2
 
 		由于ECM底层原因，只有当某个轴回零完成后，另一个轴才能启动回零
