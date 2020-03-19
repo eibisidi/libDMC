@@ -384,8 +384,6 @@ FsmRetType MoveRequest::fsm_state_start(MoveRequest *req)
 	else
 		req->dstpos = req->startpos + req->dist;
 
-	LOGSINGLE_INFORMATION("MoveRequest::fsm_state_start startpos = %d, dstpos=%d.", __FILE__, __LINE__, req->startpos, req->dstpos);
-
 	if(req->dmc->isDriverOpCsp(req->slave_idx))
 	{//已经处于CSP模式
 		req->cmdData 	= req->dmc->getCmdData(req->slave_idx);
