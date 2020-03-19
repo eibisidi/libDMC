@@ -1590,7 +1590,7 @@ unsigned long DmcManager::check_done(short axis)
 	assert(m_slaveStates.count(axis) > 0);
 	ms = m_slaveStates[axis]->getSlaveState();
 
-	Poco::Thread::sleep(10);
+	//Poco::Thread::sleep(1);
 
 	return ms;
 }

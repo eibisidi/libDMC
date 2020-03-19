@@ -27,27 +27,21 @@ class SlaveState
 private:
 	unsigned int	slave_state;
 protected:
-	Poco::Mutex		mutex;
+	Poco::Mutex		mutex;				//±£¡Ù
 public:
 	SlaveState()
 	{
 		slave_state = MOVESTATE_NONE;
 	}
 
-	inline unsigned int getSlaveState()
+	inline unsigned int getSlaveState() const
 	{
-		unsigned int ss = MOVESTATE_NONE;
-		mutex.lock();
-		ss = slave_state;
-		mutex.unlock();
-		return ss;
+		return slave_state;
 	}
 
 	inline void setSlaveState(unsigned int ss)
 	{
-		mutex.lock();
 		slave_state = ss;
-		mutex.unlock();
 	}
 
 	virtual ~SlaveState()
