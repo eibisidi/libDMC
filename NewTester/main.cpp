@@ -43,8 +43,11 @@ DWORD all_go_home()
 			break;
 		}
 
+		//同时回零
+		short	AxisArray[]={AXIS_Y, AXIS_X, AXIS_LEFT, AXIS_RIGHT};
+		short	TotalAxis = sizeof(AxisArray)/ sizeof(AxisArray[0]);
+		ret = d1000_multi_home_move(TotalAxis, AxisArray);
 
-		ret = d1000_home_move(AXIS_Y, 1000, 100, 100/*ms*/);
 		if (ERR_NOERR != ret)
 			break;
 		WAIT_DONE(AXIS_Y, ms)
@@ -54,9 +57,6 @@ DWORD all_go_home()
 			break;
 		}
 
-		ret = d1000_home_move(AXIS_X, 1000, 100, 100/*ms*/);
-		if (ERR_NOERR != ret)
-			break;
 		WAIT_DONE(AXIS_X, ms)
 		if (ms != MOVESTATE_O_STOP)
 		{
@@ -64,29 +64,20 @@ DWORD all_go_home()
 			break;
 		}
 
-#if 1
-		ret = d1000_home_move(AXIS_LEFT, 2000, 1000, 10000);
-		if (ERR_NOERR != ret)
-			break;
-
 		WAIT_DONE(AXIS_LEFT, ms)
 		if (ms != MOVESTATE_O_STOP)
 		{
 			ret = -1;
 			break;
 		}
-
-		ret = d1000_home_move(AXIS_RIGHT, 2000, 1000, 10000);
-		if (ERR_NOERR != ret)
-			break;
-
+		
 		WAIT_DONE(AXIS_RIGHT, ms)
 		if (ms != MOVESTATE_O_STOP)
 		{
 			ret = -1;
 			break;
 		}
-#endif
+
 	}while(0);
 
 	return ret;
@@ -286,7 +277,7 @@ int main()
 	hThread = CreateThread(NULL, 0, MainThreadFunc, 0, 0, NULL); // 创建线程
 	hThread = CreateThread(NULL, 0, TongueThreadFunc, 0, 0, NULL); // 创建线程
 
-#if 1
+
 	short 	axisArray[] = {AXIS_X, AXIS_Y};
 	long	distArray[] = {50000, 50000};
 	DWORD   ret, ms;
@@ -316,7 +307,6 @@ int main()
 
 		NEG_ARRAY(distArray);
 	}
-#endif
 
 	d1000_board_close();
 	return 0;
