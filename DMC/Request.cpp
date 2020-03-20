@@ -1371,7 +1371,7 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 
 	req->dmc->logCspPoints(items, cycles, axises);	//输出规划结果到日志
 
-	req->dmc->m_rdWrManager.pushItems(items, cycles, axises);
+	req->dmc->m_rdWrManager.pushItemsSync(items, cycles, axises);
 
 	delete [] items;
 }
@@ -2236,7 +2236,7 @@ void MultiHomeRequest::pushMultiHome(MultiHomeRequest *req)
 		items[col].cmdData.Data2 	= 0;
 	}
 
-	req->dmc->m_rdWrManager.pushItems(items, 1, count);
+	req->dmc->m_rdWrManager.pushItemsSync(items, 1, count);
 
 	req->ref->setStarted();//已经开始回零
 
@@ -2399,7 +2399,7 @@ void MultiAbortHomeRequest::pushMultiAbortHome(MultiAbortHomeRequest *req)
 		items[col].cmdData.Data2 	= 0;
 	}
 
-	req->dmc->m_rdWrManager.pushItems(items, 1, count);
+	req->dmc->m_rdWrManager.pushItemsSync(items, 1, count);
 
 	delete [] items;
 }

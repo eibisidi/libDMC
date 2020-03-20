@@ -184,11 +184,28 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 
 }
 
-//每行代表一个周期，每列代表一个从站
-//为保证多轴插补命令队列一致性，按照轴号升序获得锁
-//要求items中列的轴号必须为升序，避免死锁
-//todo将更新lastCmdData命令挪到此函数调用前？
-void RdWrManager::pushItems(Item *items, int rows, size_t cols)
+void RdWrManager::pushItems(const Item *items, size_t rows, size_t cols)
+{
+	for(size_t  c = 0; c < cols; ++c)
+	{
+		int	slaveidx = items[c].index;
+		queueMutex[slaveidx].lock();
+
+		if (0 == tosend.count(slaveidx))
+			tosend[slaveidx] = new ItemQueue;
+
+		for(size_t r = 0; r < rows; ++r)
+		{
+			tosend[slaveidx]->push_back(items[r*cols + c]);
+		}
+		
+		queueMutex[slaveidx].unlock();
+	}
+}
+
+
+//同步插入命令队列：适用于多轴运动、多轴回原点，每行命令出现在一次Ecm_write调用中
+void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 {
 	if (cols == 1)
 	{//单轴运动，获得小锁
@@ -209,7 +226,22 @@ void RdWrManager::pushItems(Item *items, int rows, size_t cols)
 		//一行为一个周期，一列为一个轴
 		int c = 0;
 		int slaveidx;
-		
+
+		//等待当前所有队列全部消耗完
+		while(c < cols)
+		{
+			for(; c < cols; ++c)
+			{				
+				slaveidx = items[c].index;
+				if (tosend.count(slaveidx)>0
+					&& (!tosend[slaveidx]->empty()))
+					break; //当前队列仍有待发送数据
+			}
+			Poco::Thread::sleep(1);
+		}
+
+		//所有队列均空
+		c = 0;
 		while(c < cols)
 		{
 			coreMutex.lock(); //获得大锁
@@ -245,9 +277,7 @@ void RdWrManager::pushItems(Item *items, int rows, size_t cols)
 			queueMutex[slaveidx].unlock();
 		}
 		coreMutex.unlock();
-}
-
-	
+	}
 }
 
 size_t RdWrManager::peekQueue(int slaveidx)

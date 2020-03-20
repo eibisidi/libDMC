@@ -71,7 +71,8 @@ public:
 	~RdWrManager();
 	void setBusy();
 	void setIdle();
-	void pushItems(Item *items, int rows, size_t cols);
+	void pushItems(const Item *items, size_t rows, size_t cols);
+	void pushItemsSync(const Item *items, size_t rows, size_t cols);
 	size_t peekQueue(int slaveidx);
 	void declStop(int slaveidx, DeclStopInfo *stopInfo);
 
