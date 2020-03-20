@@ -13,9 +13,6 @@
 #define DEF_HOME_TIMEOUT 	(30)			//缺省回原点超时时间30s
 #define DEF_SERVO_POS_BIAS  (10)			//缺省伺服位置达到检测允许误差范围
 
-#define CSP_DATA2_DUMMY (0xFF)
-
-
 class DmcManager;
 
 typedef unsigned int FsmRetType;

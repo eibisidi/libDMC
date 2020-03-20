@@ -453,11 +453,6 @@ void DmcManager::beforeWriteCmd()
 
 		m_slaveStates[slave_idx]->setSlaveState(retval);	//按照状态机返回值设置请求当前状态
 
-		if (m_cmdData[slave_idx].CMD != GET_STATUS)
-		{
-			m_lastCmdData[slave_idx] = m_cmdData[slave_idx];
-		}
-
 	}
 
 #ifdef TIMING
@@ -824,6 +819,27 @@ void DmcManager::restoreLastCmd(transData *cmdData)
 	*cmdData = m_lastCmdData[slaveidx];
 }
 
+void DmcManager::pushItems(const Item *items, size_t rows, size_t cols, bool sync)
+{
+	if(NULL == items
+		|| rows <= 0
+		|| cols <= 0)
+		return;
+
+	if(sync)
+		m_rdWrManager.pushItemsSync(items, rows, cols);
+	else
+		m_rdWrManager.pushItems(items, rows, cols);
+
+	//将最后一行的命令更新到m_lastCmdData中
+	const Item * lastRow = items + (rows - 1)*cols;
+	for(size_t c = 0; c < cols; ++c)
+	{
+		int slave_idx = lastRow[c].index;
+		m_lastCmdData[slave_idx] = lastRow[c].cmdData;
+	}
+}
+
 void DmcManager::setRespData(transData *respData)
 {
 #ifdef TIMING
@@ -1036,8 +1052,6 @@ void  DmcManager::flipread(short slaveidx)
 		m_items[m_cols].cmdData.Data1 = getIoOutput(slaveidx);
 		m_items[m_cols].cmdData.Data2 = 0;
 	}
-
-	m_lastCmdData[slaveidx] = m_items[m_cols].cmdData;
 	++m_cols;
 } 
 
@@ -1061,10 +1075,6 @@ void DmcManager::run()
 				}
 				else if (m_cmdData[i].CMD != GET_STATUS)
 				{
-					if (m_cmdData[i].CMD == CSP && 0 == m_cmdData[i].Data2)
-						continue;
-					if (m_cmdData[i].CMD == CSP)
-						m_cmdData[i].Data2 = 0;			//CSP最后位置重发
 					m_items[m_cols].index = i;
 					m_items[m_cols].cmdData = m_cmdData[i];
 					++m_cols;
@@ -1072,7 +1082,7 @@ void DmcManager::run()
 			}
 
 			if (m_cols > 0)
-				m_rdWrManager.pushItems(m_items, 1, m_cols);	//加入发送队列
+				pushItems(m_items, 1, m_cols, false);	//加入发送队列
 
 			m_rdWrManager.setBusy();
 			copyRespData();//接收队列处理，刷新
@@ -1093,7 +1103,7 @@ void DmcManager::run()
 					}
 				}
 				if (m_cols > 0)
-					m_rdWrManager.pushItems(m_items, 1, m_cols);	//加入发送队列
+					pushItems(m_items, 1, m_cols, false);	//加入发送队列
 
 				m_rdWrManager.setBusy();
 				copyRespData();//接收队列处理，刷新

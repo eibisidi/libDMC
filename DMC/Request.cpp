@@ -106,7 +106,6 @@ FsmRetType DStopRequest::fsm_state_csp(DStopRequest *req)
 				req->rechecks = RETRIES;
 				req->cmdData->CMD 	= CSP;
 				req->cmdData->Data1 = req->stopInfo.endpos;	//重发最终位置
-				req->cmdData->Data2 = CSP_DATA2_DUMMY;		//特殊处理让充发位置可以进入待发送队列				
 			}
 			return retval;
 		}
@@ -207,7 +206,6 @@ FsmRetType MoveRequest::fsm_state_csp(MoveRequest *req)
 			LOGSINGLE_INFORMATION("MoveRequest::fsm_state_csp reattempts.attempts=%d. axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->attempts, req->slave_idx, (int)req->respData->Data1, req->dstpos);
 			req->cmdData->CMD   = CSP;
 			req->cmdData->Data1 = req->dstpos;
-			req->cmdData->Data2 = CSP_DATA2_DUMMY;	//特殊处理让充发位置可以进入待发送队列
 			req->rechecks = RETRIES;
 		}
 		return retval;
@@ -266,7 +264,7 @@ FsmRetType MoveRequest::fsm_state_svon(MoveRequest *req)
 	}
 
 	req->fsmstate	 	= fsm_state_csp;
-	req->cmdData->CMD 	= CSP;
+	req->cmdData->CMD 	= GET_STATUS;		/*非同步命令*/
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
 
@@ -323,7 +321,7 @@ FsmRetType MoveRequest::fsm_state_sdowr_cspmode(MoveRequest *req)
 			return MOVESTATE_ERR;
 		}
 		req->fsmstate	 	= MoveRequest::fsm_state_csp;
-		req->cmdData->CMD 	= CSP;	
+		req->cmdData->CMD 	= GET_STATUS;	/*非同步命令*/
 		pushCspPoints(req);
 	}
 	else
@@ -397,7 +395,7 @@ FsmRetType MoveRequest::fsm_state_start(MoveRequest *req)
 			}
 		
 			req->fsmstate	 	= MoveRequest::fsm_state_csp;
-			req->cmdData->CMD 	= CSP;
+			req->cmdData->CMD 	= GET_STATUS;/*非同步命令*/
 			pushCspPoints(req);
 		}
 		else
@@ -485,7 +483,7 @@ void MoveRequest::pushCspPoints(MoveRequest *req)
 	req->cmdData->Data1 	= items[cycles-1].cmdData.Data1; 
 
 	req->dmc->logCspPoints(items, cycles, 1);	//输出规划结果到日志
-	req->dmc->m_rdWrManager.pushItems(items, cycles, 1);
+	req->dmc->pushItems(items, cycles, 1, false);
 	delete [] items;
 	
 }
@@ -1081,10 +1079,9 @@ FsmRetType  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		}
 		else
 		{
-			LOGSINGLE_INFORMATION("MultiAxisRequest::fsm_state_csp reattempts. attemps=%d, axis=%d nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->attempts, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
+			LOGSINGLE_INFORMATION("MultiAxisRequest::fsm_state_csp reattempts. attempts=%d, axis=%d nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->attempts, req->slave_idx, (int)req->respData->Data1, req->axispara->dstpos);
 			req->cmdData->CMD = CSP;
 			req->cmdData->Data1 = req->axispara->dstpos;
-			req->cmdData->Data2 = CSP_DATA2_DUMMY;	//特殊处理让充发位置可以进入待发送队列
 			req->rechecks = RETRIES;
 		}
 		return retval;
@@ -1143,7 +1140,7 @@ FsmRetType  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 	}
 
 	req->fsmstate	 	= MultiAxisRequest::fsm_state_csp;
-	req->cmdData->CMD 	= CSP;
+	req->cmdData->CMD 	= GET_STATUS;						/*同步命令*/
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
 
@@ -1371,7 +1368,7 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 
 	req->dmc->logCspPoints(items, cycles, axises);	//输出规划结果到日志
 
-	req->dmc->m_rdWrManager.pushItemsSync(items, cycles, axises);
+	req->dmc->pushItems(items, cycles, axises, true);
 
 	delete [] items;
 }
@@ -2236,7 +2233,7 @@ void MultiHomeRequest::pushMultiHome(MultiHomeRequest *req)
 		items[col].cmdData.Data2 	= 0;
 	}
 
-	req->dmc->m_rdWrManager.pushItemsSync(items, 1, count);
+	req->dmc->pushItems(items, 1, count, true);
 
 	req->ref->setStarted();//已经开始回零
 
@@ -2399,7 +2396,7 @@ void MultiAbortHomeRequest::pushMultiAbortHome(MultiAbortHomeRequest *req)
 		items[col].cmdData.Data2 	= 0;
 	}
 
-	req->dmc->m_rdWrManager.pushItemsSync(items, 1, count);
+	req->dmc->pushItems(items, 1, count, true);
 
 	delete [] items;
 }

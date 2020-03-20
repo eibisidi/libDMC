@@ -109,13 +109,14 @@ public:
 	bool	getSdoCmdResp(BaseRequest *req, transData **ppCmd, transData **ppResp);		//获取SDO命令，成功返回true
 	void 	freeSdoCmdResp(BaseRequest *req);											  //释放SDO命令
 	void restoreLastCmd(transData *cmdData);
+	void pushItems(const Item *items, size_t rows, size_t cols, bool sync);
 
 	void setRespData(transData *respData);		// 发送接收线程返回数据，以及发送接收线程当前状态
 	void copyRespData();						// 处理返回的数据
 	
 	virtual ~DmcManager();
 
-	RdWrManager m_rdWrManager;			//发送接收管理线程
+	RdWrManager 		m_rdWrManager;			//发送接收管理线程
 private:
 	DmcManager();
 	void 	clear();
@@ -160,6 +161,7 @@ private:
 
 	Item				m_items[DEF_MA_MAX];
 	int					m_cols;
+
 };
 
 #endif
