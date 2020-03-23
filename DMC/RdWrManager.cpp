@@ -265,7 +265,7 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 					&& (!tosend[slaveidx]->empty()))
 					break; //当前队列仍有待发送数据
 			}
-			Poco::Thread::sleep(1);
+			//Poco::Thread::sleep(1);
 		}
 
 		//所有队列均空
@@ -282,7 +282,7 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 			}
 			
 			coreMutex.unlock();
-			Poco::Thread::sleep(1);
+			//Poco::Thread::sleep(1);
 		}
 
 		//已经获得所有的队列锁
@@ -312,11 +312,11 @@ size_t RdWrManager::peekQueue(int slaveidx)
 {
 	size_t queuecount = 0;
 
-	queueMutex[slaveidx].lock();
+	//queueMutex[slaveidx].lock();
 
 	if (tosend.count(slaveidx))
 		queuecount = tosend[slaveidx]->size();
-	queueMutex[slaveidx].unlock();
+	//queueMutex[slaveidx].unlock();
 
 	return queuecount;
 }
@@ -433,7 +433,7 @@ void RdWrManager::run()
 				io_input[9] = respData[9].Data1;
 			DmcManager::instance().setRespData(respData);
 
-			if (!m_consecutive)
+			if (m_consecutive)
 			{
 				switch(rdWrState.flag1)
 				{
