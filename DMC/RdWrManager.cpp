@@ -10,6 +10,10 @@
 #define FIFO_LOWATER	(32)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
+unsigned int io_input[42];
+unsigned int io_output[42];
+
+
 RdWrManager::RdWrManager()
 {
 	clear();
@@ -196,6 +200,9 @@ void RdWrManager::pushItems(const Item *items, size_t rows, size_t cols)
 
 		for(size_t r = 0; r < rows; ++r)
 		{
+			if(CSP != items[r*cols+c].cmdData.CMD)
+				tosend[slaveidx]->clear();
+
 			tosend[slaveidx]->push_back(items[r*cols + c]);
 		}
 		
@@ -362,6 +369,18 @@ void RdWrManager::run()
 		{
 			popItems(cmdData, DEF_MA_MAX);
 
+			if(0 == towrite)
+			{
+				cmdData[8].CMD = IO_RD;
+				cmdData[9].CMD = IO_RD;
+			}
+			else
+			{				
+				cmdData[8].CMD 	= IO_WR;
+				cmdData[8].Data1= io_output[8];
+				cmdData[9].CMD 	= IO_WR;
+				cmdData[9].Data1= io_output[9];
+			}
 			do{
 				bRet =  ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData));
 				if (!bRet)
@@ -387,6 +406,10 @@ void RdWrManager::run()
 			}
 
 			//更新响应数据
+			if (respData[8].CMD == IO_RD)
+				io_input[8] = respData[8].Data1;
+			if(respData[9].CMD == IO_RD)
+				io_input[9] = respData[9].Data1;
 			DmcManager::instance().setRespData(respData);
 
 			switch(rdWrState.flag1)

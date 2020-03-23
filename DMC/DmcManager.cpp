@@ -714,11 +714,15 @@ void DmcManager::updateState()
 					;
 			}
 		}
+		#if 0
 		else if(isIoSlave(slaveidx))
 		{
 			IoSlaveState *iss = dynamic_cast<IoSlaveState*>(iter->second);
 			switch(CMD)
 			{
+				case IO_WR:
+					break;
+			
 				case IO_RD:
 					iss->setInput(m_respData[slaveidx].Data1);
 					break;
@@ -726,6 +730,7 @@ void DmcManager::updateState()
 					;
 			}
 		}
+		#endif
 	}
 
 }
@@ -991,39 +996,22 @@ bool DmcManager::isServo(short slaveidx)
 	return DRIVE == m_slaveType[slaveidx - 1];				//伺服电机
 }
 
+extern unsigned int io_input[42];
+extern unsigned int io_output[42];
+
 void DmcManager::setIoOutput(short slaveidx, unsigned int output)
 {
-	IoSlaveState * iss = dynamic_cast<IoSlaveState *>(m_slaveStates[slaveidx]);
-	if (iss)
-		iss->setOutput(output);
-	else
-		LOGSINGLE_FATAL("slave %?d is not a io.", __FILE__, __LINE__, slaveidx);
+	io_output[slaveidx] = output;
 }
 
 unsigned int DmcManager::getIoOutput(short slaveidx)
 {
-	unsigned int output = 0;
-
-	IoSlaveState * iss = dynamic_cast<IoSlaveState *>(m_slaveStates[slaveidx]);
-	if (iss)
-		output = iss->getOutput();
-	else
-		LOGSINGLE_FATAL("slave %?d is not a io.", __FILE__, __LINE__, slaveidx);
-
-	return output;
+	return io_output[slaveidx];
 }
 
 unsigned int DmcManager::getIoInput(short slaveidx)
 {
-	unsigned int input = 0;
-
-	IoSlaveState * iss = dynamic_cast<IoSlaveState *>(m_slaveStates[slaveidx]);
-	if (iss)
-		input = iss->getInput();
-	else
-		LOGSINGLE_FATAL("slave %?d is not a io.", __FILE__, __LINE__, slaveidx);
-
-	return input;
+	return io_input[slaveidx];
 }
 
 void  DmcManager::flipread(short slaveidx)
@@ -1069,11 +1057,7 @@ void DmcManager::run()
 
 			for(i = 0, m_cols = 0; i < DEF_MA_MAX; ++i)
 			{
-				if (isIoSlave(i))
-				{//pigtails io_rd 
-					flipread(i);
-				}
-				else if (m_cmdData[i].CMD != GET_STATUS)
+				if (m_cmdData[i].CMD != GET_STATUS)
 				{
 					m_items[m_cols].index = i;
 					m_items[m_cols].cmdData = m_cmdData[i];
@@ -1090,24 +1074,9 @@ void DmcManager::run()
 		else
 		{
 			m_rdWrManager.setIdle();
-			bool wake = m_condition.tryWait(m_mutex, 10);
+			bool wake = m_condition.tryWait(m_mutex, 2);
 			m_mutex.unlock();
-			if (false == wake)	//休眠10ms，等待用户命令
-			{//polls current inputs if idle
-
-				for(i = 0, m_cols = 0; i < DEF_MA_MAX; ++i)
-				{
-					if(isIoSlave(i))
-					{
-						flipread(i);
-					}
-				}
-				if (m_cols > 0)
-					pushItems(m_items, 1, m_cols, false);	//加入发送队列
-
-				m_rdWrManager.setBusy();
-				copyRespData();//接收队列处理，刷新
-			}
+			
 		}
 
 	}
