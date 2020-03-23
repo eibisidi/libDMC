@@ -41,8 +41,10 @@ void RdWrManager::cancel()				//停止线程
 
 void RdWrManager::clear()
 {
-	m_idle = true;
-	m_canceled = false;
+	m_idle 			= true;
+	m_canceled 		= false;
+	m_consecutive	= false;
+	m_towrite		= 2;
 
 	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
 					iter!= tosend.end();
@@ -75,8 +77,9 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 	QueryPerformanceCounter(&timeStart); 
 #endif
 
-	int activeItems = 0;
-	int slaveidx;
+	int 	activeItems = 0;
+	int 	slaveidx;
+	bool	con			= false;
 	
 	memset(cmdData, 0, sizeof(transData)* cmdcount);
 
@@ -161,10 +164,28 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 			}
 			////////////////////////////////////////////////////////////////////////////////////////////
 			queueMutex[slaveidx].unlock();
+
+			if (CSP == cmdData[slaveidx].CMD)
+				con = true;
 		}
 	}
 
 	coreMutex.unlock();//释放队列大锁
+
+	if (false == m_consecutive
+		&& true == con)
+	{
+		m_consecutive	= true;
+		m_towrite = BATCH_WRITE - 1;
+	}
+
+	if (true == m_consecutive
+		&& false == con)
+	{
+		m_consecutive	= false;
+		m_towrite = 1;
+	}
+		
 
 #ifdef TIMING
 
@@ -340,7 +361,6 @@ void RdWrManager::setIdle()
 
 void RdWrManager::run()
 {
-	int 		towrite = BATCH_WRITE;
 	transData	cmdData[DEF_MA_MAX];
 	transData	respData[DEF_MA_MAX];
 		
@@ -360,16 +380,17 @@ void RdWrManager::run()
 	
 	while(!m_canceled)
 	{	
+	/*
 		m_mutex.lock();
 		while(m_idle)
 			m_condition.wait(m_mutex);
 		m_mutex.unlock();
-
-		while(towrite--)
+	*/
+		while(m_towrite--)
 		{
 			popItems(cmdData, DEF_MA_MAX);
 
-			if(0 == towrite)
+			if(0 == m_towrite)
 			{
 				cmdData[8].CMD = IO_RD;
 				cmdData[9].CMD = IO_RD;
@@ -412,53 +433,67 @@ void RdWrManager::run()
 				io_input[9] = respData[9].Data1;
 			DmcManager::instance().setRespData(respData);
 
-			switch(rdWrState.flag1)
+			if (!m_consecutive)
 			{
-				case 0:
-					if (FIFO_REMAIN(respData) < rdWrState.lastRemain)
-					{
-						rdWrState.flag1 = 1;
-					}
-					break;
-				case 1://剩余FIFO数开始增加
-					if (FIFO_REMAIN(respData) > rdWrState.lastRemain)
-					{
+				switch(rdWrState.flag1)
+				{
+					case 0:
+						if (FIFO_REMAIN(respData) < rdWrState.lastRemain)
+						{
+							rdWrState.flag1 = 1;
+						}
+						break;
+					case 1://剩余FIFO数开始增加
+						if (FIFO_REMAIN(respData) > rdWrState.lastRemain)
+						{
+							if (FIFO_REMAIN(respData) > FIFO_LOWATER)
+							{
+								rdWrState.flag1 = 3;
+								rdWrState.lastRemain = FIFO_REMAIN(respData);
+								goto SEND;
+							}
+							rdWrState.flag1 = 2;
+						}
+						break;
+					case 2://剩余FIFO数超过低值
 						if (FIFO_REMAIN(respData) > FIFO_LOWATER)
 						{
 							rdWrState.flag1 = 3;
 							rdWrState.lastRemain = FIFO_REMAIN(respData);
 							goto SEND;
 						}
-						rdWrState.flag1 = 2;
-					}
-					break;
-				case 2://剩余FIFO数超过低值
-					if (FIFO_REMAIN(respData) > FIFO_LOWATER)
-					{
-						rdWrState.flag1 = 3;
-						rdWrState.lastRemain = FIFO_REMAIN(respData);
-						goto SEND;
-					}
-					break;
-				default:
-					LOGSINGLE_FATAL("Unexpected case.%s", __FILE__, __LINE__, std::string(""));
-			}
-			
-			rdWrState.lastRemain = FIFO_REMAIN(respData);
+						break;
+					default:
+						LOGSINGLE_FATAL("Unexpected case.%s", __FILE__, __LINE__, std::string(""));
+				}
+				
+				rdWrState.lastRemain = FIFO_REMAIN(respData);
 
-			if (rdWrState.flag1 && FIFO_REMAIN(respData) == ECM_FIFO_SIZE)
+				if (rdWrState.flag1 && FIFO_REMAIN(respData) == ECM_FIFO_SIZE)
+				{
+					printf("FIFO EMPTY Error \n");
+					LOGSINGLE_FATAL("FIFO empty.flag1=%d, readCount=%d, lastRemain=%?d, fifoRemain=%?d.", __FILE__, __LINE__,
+									rdWrState.flag1, rdWrState.readCount, rdWrState.lastRemain, FIFO_REMAIN(respData));
+					//keep running!!!
+				}
+			}
+			else
 			{
-				printf("FIFO EMPTY Error \n");
-				LOGSINGLE_FATAL("FIFO empty.flag1=%d, readCount=%d, lastRemain=%?d, fifoRemain=%?d.", __FILE__, __LINE__,
-								rdWrState.flag1, rdWrState.readCount, rdWrState.lastRemain, FIFO_REMAIN(respData));
-				//keep running!!!
+				if (FIFO_REMAIN(respData)>=ECM_FIFO_SIZE)
+				{
+					rdWrState.lastRemain = FIFO_REMAIN(respData);
+					goto SEND;
+				}
 			}
 		}while(rdWrState.readCount < 300);	//防止出现死循环，连续读取之后跳出，todo?
 
 SEND:
 		//printf("last_remain=%d, fifo_remain=%d, readcount = %d, flag1=%d.\n", rdWrState.lastRemain, FIFO_REMAIN(respData), rdWrState.readCount, rdWrState.flag1);
 		rdWrState.flag1 = 0;
-		towrite = BATCH_WRITE;			//todo，是否修改为根据FIFO Remain增加的数量动态调整下一次写入量，而不是采用固定值？
+		if (m_consecutive)
+			m_towrite = BATCH_WRITE;			//todo，是否修改为根据FIFO Remain增加的数量动态调整下一次写入量，而不是采用固定值？
+		else
+			m_towrite = 2;
 	};
 
 	LOGSINGLE_INFORMATION("RdWrManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));

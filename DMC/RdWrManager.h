@@ -85,6 +85,8 @@ private:
 	Poco::Condition 	m_condition;			//条件变量
 	bool				m_idle;
 	bool				m_canceled;				//线程停止
+	bool				m_consecutive;			//连续Write模式？
+	int 				m_towrite;
 
 	typedef std::deque<Item> ItemQueue;
 	typedef bool		 	QueueFlag;
