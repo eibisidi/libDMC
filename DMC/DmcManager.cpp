@@ -1068,15 +1068,13 @@ void DmcManager::run()
 			if (m_cols > 0)
 				pushItems(m_items, 1, m_cols, false);	//加入发送队列
 
-			m_rdWrManager.setBusy();
 			copyRespData();//接收队列处理，刷新
 		}
 		else
 		{
-			m_rdWrManager.setIdle();
 			bool wake = m_condition.tryWait(m_mutex, 2);
-			m_mutex.unlock();
-			
+			copyRespData();
+			m_mutex.unlock();			
 		}
 
 	}

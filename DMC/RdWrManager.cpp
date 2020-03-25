@@ -6,8 +6,8 @@
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
-#define BATCH_WRITE		(20)
-#define FIFO_LOWATER	(32)			
+#define BATCH_WRITE		(10)
+#define FIFO_LOWATER	(120)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
 unsigned int io_input[42];
@@ -32,16 +32,14 @@ void RdWrManager::start()
 void RdWrManager::cancel()				//停止线程
 {
 	m_canceled = true;
-
-	setBusy();			//如果空闲，唤醒run，避免无法退出
 	
 	m_thread.join();	//等待run函数返回
+	
 	clear();
 }
 
 void RdWrManager::clear()
 {
-	m_idle 			= true;
 	m_canceled 		= false;
 	m_consecutive	= false;
 	m_towrite		= 2;
@@ -329,36 +327,6 @@ void RdWrManager::declStop(int slaveidx, DeclStopInfo *stopInfo)
 	queueMutex[slaveidx].unlock();
 }
 
-void RdWrManager::setBusy()
-{
-
-	m_mutex.lock();	
-
-	m_idle = false;
-	m_condition.signal();
-
-	m_mutex.unlock();
-
-}
-
-void RdWrManager::setIdle()
-{
-	m_mutex.lock();	
-
-	std::map<int, ItemQueue *>::iterator iter = tosend.begin();
-	for(; iter!= tosend.end(); ++iter)
-	{
-		if (iter->second 
-			 && !(iter->second)->empty())
-		{
-			break;
-		}
-	}
-
-	if (iter == tosend.end()) m_idle = true;				//队列恰好为空，线程置为空闲
-	m_mutex.unlock();
-}
-
 void RdWrManager::run()
 {
 	transData	cmdData[DEF_MA_MAX];
@@ -380,12 +348,6 @@ void RdWrManager::run()
 	
 	while(!m_canceled)
 	{	
-	/*
-		m_mutex.lock();
-		while(m_idle)
-			m_condition.wait(m_mutex);
-		m_mutex.unlock();
-	*/
 		while(m_towrite--)
 		{
 			popItems(cmdData, DEF_MA_MAX);

@@ -69,8 +69,7 @@ public:
 	void cancel();				//停止线程
 
 	~RdWrManager();
-	void setBusy();
-	void setIdle();
+
 	void pushItems(const Item *items, size_t rows, size_t cols);
 	void pushItemsSync(const Item *items, size_t rows, size_t cols);
 	size_t peekQueue(int slaveidx);
@@ -81,9 +80,6 @@ private:
 	int popItems(transData *cmdData, size_t count);
 
 	Poco::Thread		m_thread;
-	Poco::Mutex  		m_mutex;
-	Poco::Condition 	m_condition;			//条件变量
-	bool				m_idle;
 	bool				m_canceled;				//线程停止
 	bool				m_consecutive;			//连续Write模式？
 	int 				m_towrite;
