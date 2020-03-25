@@ -479,8 +479,7 @@ void MoveRequest::pushCspPoints(MoveRequest *req)
 	}
 
 	//将最后一个位置点进行存储
-	req->cmdData->CMD 	= CSP;
-	req->cmdData->Data1 	= items[cycles-1].cmdData.Data1; 
+	req->cmdData->CMD	= GET_STATUS;
 
 	req->dmc->logCspPoints(items, cycles, 1);	//输出规划结果到日志
 	req->dmc->pushItems(items, cycles, 1, false);
