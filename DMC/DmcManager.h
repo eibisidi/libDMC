@@ -155,8 +155,8 @@ private:
 
 	MasterConfig		m_masterConfig;			//Ö÷Õ¾ÅäÖÃĞÅÏ¢
 
-	std::map<int, BaseRequest *> m_requests;			
-	std::map<int, SlaveState *> m_slaveStates;
+	std::map<int, BaseRequest *> 	m_requests;			
+	std::map<int, DriverSlaveState> m_slaveStates;
 
 	Item				m_items[DEF_MA_MAX];
 	int					m_cols;
