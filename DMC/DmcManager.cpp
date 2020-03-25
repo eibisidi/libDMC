@@ -1014,35 +1014,6 @@ unsigned int DmcManager::getIoInput(short slaveidx)
 	return io_input[slaveidx];
 }
 
-void  DmcManager::flipread(short slaveidx)
-{
-	bool shouldread = false;
-	IoSlaveState * iss = dynamic_cast<IoSlaveState *>(m_slaveStates[slaveidx]);
-	if (iss)
-		shouldread = iss->flip();
-	else
-	{
-		LOGSINGLE_FATAL("slave %?d is not a io.", __FILE__, __LINE__, slaveidx);
-		return;
-	}
-
-	if (shouldread)
-	{
-		m_items[m_cols].index = slaveidx;
-		m_items[m_cols].cmdData.CMD	= IO_RD;
-		m_items[m_cols].cmdData.Data1 = 0;
-		m_items[m_cols].cmdData.Data2 = 0;
-	}
-	else
-	{
-		m_items[m_cols].index = slaveidx;
-		m_items[m_cols].cmdData.CMD	= IO_WR;
-		m_items[m_cols].cmdData.Data1 = getIoOutput(slaveidx);
-		m_items[m_cols].cmdData.Data2 = 0;
-	}
-	++m_cols;
-} 
-
 void DmcManager::run()
 {	
 	int i;
