@@ -869,32 +869,19 @@ void DmcManager::setRespData(transData *respData)
 
 void DmcManager::copyRespData()
 {
-#if TIMING
-	LARGE_INTEGER frequency;								//计时器频率 
-	QueryPerformanceFrequency(&frequency);	 
-	double quadpart = (double)frequency.QuadPart / 1000000;    //计时器频率   
-
-	LARGE_INTEGER timeStart, timeEnd;
-	double elapsed;
-	QueryPerformanceCounter(&timeStart); 
-#endif
 	m_mutexRespData.lock();
-	
-	while(!newRespData)
-		m_conditionRespData.wait(m_mutexRespData);
 
-	memcpy(m_respData, m_realRespData, sizeof(m_realRespData));
-	newRespData = false;
+	if (m_conditionRespData.tryWait(m_mutexRespData, 1))
+	{
+		if (newRespData)
+		{
+			memcpy(m_respData, m_realRespData, sizeof(m_realRespData));
+			newRespData = false;
+			updateState();
+		}
+	}
 
 	m_mutexRespData.unlock();
-
-	updateState();
-
-#if TIMING
-	QueryPerformanceCounter(&timeEnd); 
-	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
-	printf("time elapsed = %f\n", elapsed);
-#endif
 }
 
 bool DmcManager::isDriverOpCsp(short slaveidx)
@@ -1024,11 +1011,12 @@ void DmcManager::run()
 		}
 		else
 		{
-			bool wake = m_condition.tryWait(m_mutex, 2);
-			copyRespData();
+			if (!m_condition.tryWait(m_mutex, 2))
+			{
+				copyRespData();
+			}
 			m_mutex.unlock();			
 		}
-
 	}
 
 	LOGSINGLE_INFORMATION("DmcManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));
