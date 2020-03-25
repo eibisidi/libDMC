@@ -10,6 +10,8 @@
 #include "Poco/Runnable.h"
 #include "Poco/Thread.h"
 
+#include "SlaveState.h"
+
 class Item
 {
 public:
@@ -65,6 +67,7 @@ class RdWrManager : public Poco::Runnable
 public:
 	RdWrManager();
 	virtual void run();
+	void addIoSlave(int slaveidx);
 	void start();
 	void cancel();				//停止线程
 
@@ -75,6 +78,10 @@ public:
 	size_t peekQueue(int slaveidx);
 	void declStop(int slaveidx, DeclStopInfo *stopInfo);
 
+	void setIoOutput(short slaveidx, unsigned int output);
+	unsigned int getIoOutput(short slaveidx);
+	unsigned int getIoInput(short slaveidx);
+	
 private:
 	void clear();
 	int popItems(transData *cmdData, size_t count);
@@ -91,6 +98,7 @@ private:
 	std::map<int, DeclStopInfo*>	tostop;							//待减速停止
 	transData					lastSent[DEF_MA_MAX];				//记录上次发送命令
 	RdWrState					rdWrState;
+	std::map<int, IoSlaveState> ioState;							//Io模块输入、输出值
 
 	Poco::Mutex		coreMutex;						//Main Core Mutext To Guard each queueMutex
 	Poco::Mutex		queueMutex[DEF_MA_MAX];

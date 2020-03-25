@@ -10,10 +10,6 @@
 #define FIFO_LOWATER	(120)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
-unsigned int io_input[42];
-unsigned int io_output[42];
-
-
 RdWrManager::RdWrManager()
 {
 	clear();
@@ -21,6 +17,11 @@ RdWrManager::RdWrManager()
 
 RdWrManager::~RdWrManager()
 {
+}
+
+void RdWrManager::addIoSlave(int slaveidx)
+{
+	ioState[slaveidx] = IoSlaveState;
 }
 
 void RdWrManager::start()
@@ -57,6 +58,7 @@ void RdWrManager::clear()
 	tosend.clear();
 	tostop.clear();
 	memset(lastSent, 0, sizeof(lastSent));
+	ioState.clear();
 }
 
 int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
@@ -74,8 +76,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 	double elapsed;
 	QueryPerformanceCounter(&timeStart); 
 #endif
-
-	int 	activeItems = 0;
+	
 	int 	slaveidx;
 	bool	con			= false;
 	
@@ -184,6 +185,20 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 		m_towrite = 1;
 	}
 		
+	//修改IO命令
+	for(std::map<int, IoSlaveState>::const_iterator iter = ioState.begin();
+			iter != ioState.end();
+			++iter)
+	{
+		if (m_towrite)
+		{
+			cmdData[iter->first].CMD 	= IO_WR;
+			cmdData[iter->first].Data1	= (iter->second).getOutput();
+		}
+		else
+			cmdData[iter->first].CMD = IO_RD;
+	}
+
 
 #ifdef TIMING
 
@@ -203,7 +218,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 #endif
 
 
-	return activeItems;
+	return 0;
 
 }
 
@@ -327,6 +342,21 @@ void RdWrManager::declStop(int slaveidx, DeclStopInfo *stopInfo)
 	queueMutex[slaveidx].unlock();
 }
 
+void RdWrManager::setIoOutput(short slaveidx, unsigned int output)
+{
+	ioState[slaveidx].setOutput(output);
+}
+
+unsigned int RdWrManager::getIoOutput(short slaveidx)
+{
+	return ioState[slaveidx].getOutput();
+}
+
+unsigned int RdWrManager::getIoInput(short slaveidx)
+{
+	return ioState[slaveidx].getInput();
+}
+
 void RdWrManager::run()
 {
 	transData	cmdData[DEF_MA_MAX];
@@ -352,18 +382,6 @@ void RdWrManager::run()
 		{
 			popItems(cmdData, DEF_MA_MAX);
 
-			if(0 == m_towrite)
-			{
-				cmdData[8].CMD = IO_RD;
-				cmdData[9].CMD = IO_RD;
-			}
-			else
-			{				
-				cmdData[8].CMD 	= IO_WR;
-				cmdData[8].Data1= io_output[8];
-				cmdData[9].CMD 	= IO_WR;
-				cmdData[9].Data1= io_output[9];
-			}
 			do{
 				bRet =  ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData));
 				if (!bRet)
@@ -388,11 +406,15 @@ void RdWrManager::run()
 				rdWrState.lastFifoFull = FIFO_FULL(respData);	//update lastFifoFull and keep running!!!
 			}
 
-			//更新响应数据
-			if (respData[8].CMD == IO_RD)
-				io_input[8] = respData[8].Data1;
-			if(respData[9].CMD == IO_RD)
-				io_input[9] = respData[9].Data1;
+			//更新输入值
+			for(std::map<int, IoSlaveState>::iterator iter = ioState.begin();
+						iter != ioState.end();
+						++iter)
+			{
+				if (IO_RD == respData[iter->first].CMD)
+					(iter->second).setInput(respData[iter->first].Data1);
+			}
+
 			DmcManager::instance().setRespData(respData);
 
 			if (m_consecutive)

@@ -469,7 +469,7 @@ void  DmcManager::initSlaveState()
 		if (m_slaveType[i - 1] == DRIVE || m_slaveType[i - 1] == STEP)  
 			m_slaveStates[i] = new DriverSlaveState;
 		else if (m_slaveType[i - 1] == IO)
-			m_slaveStates[i] = new IoSlaveState;
+			m_rdWrManager.addIoSlave(i);
 	}
 }
 
@@ -980,22 +980,19 @@ bool DmcManager::isServo(short slaveidx)
 	return DRIVE == m_slaveType[slaveidx - 1];				//ËÅ·þµç»ú
 }
 
-extern unsigned int io_input[42];
-extern unsigned int io_output[42];
-
 void DmcManager::setIoOutput(short slaveidx, unsigned int output)
 {
-	io_output[slaveidx] = output;
+	m_rdWrManager.setIoOutput( slaveidx,  output);
 }
 
 unsigned int DmcManager::getIoOutput(short slaveidx)
 {
-	return io_output[slaveidx];
+	return m_rdWrManager.getIoOutput(slaveidx);
 }
 
 unsigned int DmcManager::getIoInput(short slaveidx)
 {
-	return io_input[slaveidx];
+	return m_rdWrManager.getIoInput(slaveidx);
 }
 
 void DmcManager::run()

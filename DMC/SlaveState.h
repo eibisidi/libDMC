@@ -1,8 +1,6 @@
 #ifndef SLAVE_STATE_H
 #define SLAVE_STATE_H
 
-#include "DMC.h"
-
 #include "Poco/Mutex.h"
 
 enum OpMode						//控制模式
@@ -26,12 +24,10 @@ class SlaveState
 {
 private:
 	unsigned int	slave_state;
-protected:
-	Poco::Mutex		mutex;				//保留
 public:
 	SlaveState()
 	{
-		slave_state = MOVESTATE_NONE;
+		slave_state = 0;
 	}
 
 	inline unsigned int getSlaveState() const
@@ -84,22 +80,19 @@ class IoSlaveState : public SlaveState
 {
 private:
 	unsigned int    input;			//输入值
-	unsigned int    output;			//输出值
-	bool			read;
+	unsigned int    output;			//输出值	
 public:
 	IoSlaveState()
 	{
 		input 	= 0;
-		output  = 0;
-		read	= false;
+		output  = 0;		
 	}
 
 	inline unsigned int getInput() const {return input;}
 	inline void setInput(unsigned int i) {input = i;}
 
 	inline unsigned int getOutput() const {return output;}
-	inline void setOutput(unsigned int o) {output = o;}
-	inline bool	flip() { read = !read; return read;}
+	inline void setOutput(unsigned int o) {output = o;}	
 };
 
 #endif
