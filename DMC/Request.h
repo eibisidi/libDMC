@@ -9,9 +9,9 @@
 #include <vector>
 #include <set>
 
-#define DEF_HOME_METHOD     (19)			//缺省回原点方式
-#define DEF_HOME_TIMEOUT 	(30)			//缺省回原点超时时间30s
-#define DEF_SERVO_POS_BIAS  (10)			//缺省伺服位置达到检测允许误差范围
+#define DEF_HOME_METHOD     (21)			//缺省回原点方式
+#define DEF_HOME_TIMEOUT 	(60)			//缺省回原点超时时间30s
+#define DEF_SERVO_POS_BIAS  (100)			//缺省伺服位置达到检测允许误差范围
 
 class DmcManager;
 
