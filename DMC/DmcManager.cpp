@@ -714,23 +714,7 @@ void DmcManager::updateState()
 					;
 			}
 		}
-		#if 0
-		else if(isIoSlave(slaveidx))
-		{
-			IoSlaveState *iss = dynamic_cast<IoSlaveState*>(iter->second);
-			switch(CMD)
-			{
-				case IO_WR:
-					break;
-			
-				case IO_RD:
-					iss->setInput(m_respData[slaveidx].Data1);
-					break;
-				default:
-					;
-			}
-		}
-		#endif
+
 	}
 
 }
