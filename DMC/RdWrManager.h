@@ -45,18 +45,7 @@ public:
 	}
 };
 
-class RdWrState
-{
-public:
-	unsigned int lastFifoFull;	//ECM返回的fifofull记录数，如检测到发生改变，代表写入速度过快
-	int 		 readCount;
 
-	RdWrState()
-		:lastFifoFull(0),
-		 readCount(0)
-	{
-	}
-};
 
 class RdWrManager : public Poco::Runnable
 {
@@ -93,7 +82,7 @@ private:
 	std::map<int, ItemQueue*> 	tosend;								//待发送	命令队列
 	std::map<int, DeclStopInfo*>	tostop;							//待减速停止
 	transData					lastSent[DEF_MA_MAX];				//记录上次发送命令
-	RdWrState					rdWrState;
+
 	std::map<int, IoSlaveState> ioState;							//Io模块输入、输出值
 
 	Poco::Mutex		coreMutex;						//Main Core Mutext To Guard each queueMutex

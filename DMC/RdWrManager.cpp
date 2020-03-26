@@ -2,11 +2,13 @@
 #include "CLogSingle.h"
 #include "DmcManager.h"
 
+#include "RdManager.h"
+
 #define FIFO_REMAIN(respData) 	((respData)[0].Data2 & 0xFFFF)	//FIFO剩余空间
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
-#define BATCH_WRITE		(10)
+#define BATCH_WRITE		(20)
 #define FIFO_LOWATER	(150)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
@@ -184,6 +186,8 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 		m_consecutive	= false;
 		m_towrite = 1;
 	}
+
+	RdManager::instance().rdWrState.consecutive = m_consecutive;
 		
 	//修改IO命令
 	for(std::map<int, IoSlaveState>::const_iterator iter = ioState.begin();
@@ -360,85 +364,38 @@ unsigned int RdWrManager::getIoInput(short slaveidx)
 void RdWrManager::run()
 {
 	transData	cmdData[DEF_MA_MAX];
-	transData	respData[DEF_MA_MAX];
-		
-	//初始化FIFO状态
-	if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
-	{
-		LOGSINGLE_FATAL("ECMUSBRead failed.%s", __FILE__, __LINE__, std::string(""));
-		return;
-	}
-
-	rdWrState.lastFifoFull	= FIFO_FULL(respData);
-	rdWrState.readCount		= 0;
-	
+			
 	bool	bRet;
 	
 	while(!m_canceled)
 	{	
-		while(m_towrite--)
+		unsigned int remain = RdManager::instance().rdWrState.fifoRemain;
+		if ( remain > FIFO_LOWATER)
 		{
-			popItems(cmdData, DEF_MA_MAX);
-
-			do{
-				bRet =  ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData));
-				if (!bRet)
-					LOGSINGLE_FATAL("Write Error.", __FILE__, __LINE__, std::string(""));
-			}while(!bRet);
-		}
-
-		rdWrState.readCount 	= 0;
-		do{
-			do {
-				bRet = ECMUSBRead((unsigned char*)respData, sizeof(respData));
-				if (!bRet)
-					LOGSINGLE_FATAL("Read Error.", __FILE__, __LINE__, std::string(""));
-			}while(!bRet);
-
-			++rdWrState.readCount;
-			if (FIFO_FULL(respData) != rdWrState.lastFifoFull)
+			while(m_towrite--)
 			{
-				LOGSINGLE_FATAL("FIFO full.readCount=%d, fifoRemain=%?d.", __FILE__, __LINE__, rdWrState.readCount,  FIFO_REMAIN(respData));
-			}
+				popItems(cmdData, DEF_MA_MAX);
 
-			//更新输入值
-			for(std::map<int, IoSlaveState>::iterator iter = ioState.begin();
-						iter != ioState.end();
-						++iter)
-			{
-				if (IO_RD == respData[iter->first].CMD)
-					(iter->second).setInput(respData[iter->first].Data1);
-			}
 
-			DmcManager::instance().setRespData(respData);
+				if (cmdData[1].CMD == GO_HOME)
+					{
+						int i = cmdData[1].CMD ;
+					}
+				do{
+					bRet =	ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData));
+					if (!bRet)
+						LOGSINGLE_FATAL("Write Error.", __FILE__, __LINE__, std::string(""));
+				}while(!bRet);
+			}
 
 			if (m_consecutive)
-			{
-				if (FIFO_REMAIN(respData) == ECM_FIFO_SIZE)
-				{
-					LOGSINGLE_FATAL("readCount=%d, fifoRemain=%?d.", __FILE__, __LINE__, rdWrState.readCount,  FIFO_REMAIN(respData));
-					goto SEND;
-				}
-				if (FIFO_REMAIN(respData) > FIFO_LOWATER)
-				{
-					goto SEND;
-				}
-			}
+				m_towrite = BATCH_WRITE;			//todo，是否修改为根据FIFO Remain增加的数量动态调整下一次写入量，而不是采用固定值？
 			else
-			{
-				if (FIFO_REMAIN(respData)>=ECM_FIFO_SIZE)
-				{
-					goto SEND;
-				}
-			}
-		}while(true);
+				m_towrite = 2;
+		}
+	
 
-SEND:
-		if (m_consecutive)
-			m_towrite = BATCH_WRITE;			//todo，是否修改为根据FIFO Remain增加的数量动态调整下一次写入量，而不是采用固定值？
-		else
-			m_towrite = 2;
-	};
+	}
 
 	LOGSINGLE_INFORMATION("RdWrManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));
 }
