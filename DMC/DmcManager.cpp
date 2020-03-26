@@ -1,7 +1,6 @@
 #include "DmcManager.h"
 #include "DMC.h"
 #include "CLogSingle.h"
-#include "RdManager.h"
 
 #include "Poco/DOM/DOMParser.h"
 #include "Poco/DOM/Document.h"
@@ -309,8 +308,6 @@ unsigned long DmcManager::init()
 	initSlaveState();
 
 	//Æô¶¯Ïß³Ì
-	RdManager::instance().start();
-	Poco::Thread::sleep(500);
 	m_rdWrManager.start();
 	
 	m_thread.setPriority(Poco::Thread::PRIO_NORMAL);
@@ -462,10 +459,7 @@ void  DmcManager::initSlaveState()
 		if (m_slaveType[i - 1] == DRIVE || m_slaveType[i - 1] == STEP)  
 			m_slaveStates[i] = DriverSlaveState();
 		else if (m_slaveType[i - 1] == IO)
-		{
-			RdManager::instance().addIoSlave(i);
 			m_rdWrManager.addIoSlave(i);
-		}
 	}
 }
 
@@ -933,7 +927,7 @@ unsigned int DmcManager::getIoOutput(short slaveidx)
 
 unsigned int DmcManager::getIoInput(short slaveidx)
 {
-	return RdManager::instance().getIoInput(slaveidx);
+	return m_rdWrManager.getIoInput(slaveidx);
 }
 
 void DmcManager::run()
