@@ -19,6 +19,7 @@
 					ms = d1000_check_done(axis);	\
 					if (MOVESTATE_BUSY != ms)		\
 						break;						\
+					Sleep(1);						\
 				}									\
 
 #define NEG_ARRAY(array) 											\
@@ -126,13 +127,15 @@ DWORD WINAPI LoaderThreadFunc(LPVOID p)
 	while(true)
     {
     	//R->30000
-		ret  = d1000_start_ta_move(AXIS_RIGHT, 30000, 0, 20000, 0.2);
+		ret  = d1000_start_ta_move(AXIS_RIGHT, 30000, 0, 80000, 0.2);
 		if (ERR_NOERR != ret)
 			return -1;
 		WAIT_DONE(AXIS_RIGHT, ms)
 		if (ms != MOVESTATE_STOP)
 			return -1;
 
+		d1000_out_bit(9, 3, 1);
+#if 0
     	//L->20000
 		ret  = d1000_start_ta_move(AXIS_LEFT, 20000, 0, 20000, 0.2);
 		if (ERR_NOERR != ret)
@@ -148,14 +151,16 @@ DWORD WINAPI LoaderThreadFunc(LPVOID p)
 		WAIT_DONE(AXIS_LEFT, ms)
 		if (ms != MOVESTATE_STOP)
 			return -1;
-
+#endif
 		//R->0
-		ret  = d1000_start_ta_move(AXIS_RIGHT, 0, 0, 20000, 0.2);
+		ret  = d1000_start_ta_move(AXIS_RIGHT, 0, 0, 80000, 0.2);
 		if (ERR_NOERR != ret)
 			return -1;
 		WAIT_DONE(AXIS_RIGHT, ms)
 		if (ms != MOVESTATE_STOP)
 			return -1;
+
+		d1000_out_bit(9,3, 0);
 	}
 	
     return 0;
@@ -269,15 +274,38 @@ int main()
 	}
 
 	printf("All Homed.\n");
+	
 
-#if 1
 	HANDLE hThread;
 	hThread = CreateThread(NULL, 0, IoThreadFunc, 0, 0, NULL); // 创建线程
 	hThread = CreateThread(NULL, 0, LoaderThreadFunc, 0, 0, NULL); // 创建线程
 	hThread = CreateThread(NULL, 0, RotatorThreadFunc, 0, 0, NULL); // 创建线程
 	hThread = CreateThread(NULL, 0, MainThreadFunc, 0, 0, NULL); // 创建线程
 	hThread = CreateThread(NULL, 0, TongueThreadFunc, 0, 0, NULL); // 创建线程
+	//LoaderThreadFunc(0);
 
+#if 1
+	DWORD	ret, ms;
+	while (true)
+	{
+		ret  = d1000_start_t_move(AXIS_X, 170000, 0, 200000, 0.2);
+		if (ERR_NOERR != ret)
+			break;
+		WAIT_DONE(AXIS_X, ms)
+		if (ms != MOVESTATE_STOP)
+			break;
+
+		ret  = d1000_start_t_move(AXIS_X, -170000, 0, 200000, 0.2);
+		if (ERR_NOERR != ret)
+			break;
+		WAIT_DONE(AXIS_X, ms)
+		if (ms != MOVESTATE_STOP)
+			break;
+	}
+#endif
+
+	
+#if 0
 
 	short 	axisArray[] = {AXIS_X, AXIS_Y};
 	long	distArray[] = {50000, 50000};

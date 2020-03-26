@@ -3,6 +3,7 @@
 
 #include "AxisPara.h"
 #include "RdWrManager.h"
+#include "CLogSingle.h"
 
 #include "Poco/Timestamp.h"
 
@@ -12,6 +13,9 @@
 #define DEF_HOME_METHOD     (21)			//缺省回原点方式
 #define DEF_HOME_TIMEOUT 	(60)			//缺省回原点超时时间30s
 #define DEF_SERVO_POS_BIAS  (100)			//缺省伺服位置达到检测允许误差范围
+
+
+//#define REQUEST_TIMING 1
 
 class DmcManager;
 
@@ -86,6 +90,9 @@ public:
 	int 			slave_idx;
 	transData		*cmdData;
 	transData		*respData;
+#ifdef REQUEST_TIMING
+	Poco::Timestamp ctime;			//创建时间
+#endif
 	virtual ~BaseRequest(){}
 	virtual FsmRetType exec() = 0;
 	BaseRequest();
@@ -154,6 +161,12 @@ public:
 	{
 		if (moveparam)
 		{
+		
+#ifdef REQUEST_TIMING
+			double elapsed =  ctime.elapsed() / 1000000.0;
+			double cost = elapsed - moveparam->T;
+			LOGSINGLE_INFORMATION("~MoveRequest axis=%?d, plantime=%f, lifetime=%f, cost=%f.", __FILE__, __LINE__, slave_idx,moveparam->T, elapsed, cost);
+#endif
 			delete moveparam;
 		}
 	}

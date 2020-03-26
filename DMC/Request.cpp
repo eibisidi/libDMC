@@ -1,6 +1,6 @@
 #include "Request.h"
 #include "DmcManager.h"
-#include "CLogSingle.h"
+
 
 #define RETRIES (10 * 50)
 #define MAX_ATTEMPTS (5)				
