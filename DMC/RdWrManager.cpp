@@ -45,16 +45,7 @@ void RdWrManager::clear()
 	m_consecutive	= false;
 	m_towrite		= 2;
 
-	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
-					iter!= tosend.end();
-					++iter)
-	{
-		if (iter->second)
-		{
-			delete (iter->second);
-			iter->second = NULL;
-		}
-	}
+
 	tosend.clear();
 	tostop.clear();
 	memset(lastSent, 0, sizeof(lastSent));
@@ -83,90 +74,38 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 	memset(cmdData, 0, sizeof(transData)* cmdcount);
 
 	coreMutex.lock();//获取队列大锁
+
+	transData cmd;
+
 	
-	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
+	for(std::map<int, CmdQueue>::iterator iter = tosend.begin();
 				iter!= tosend.end();
 				++iter)
 	{
+		memset(&cmd, 0, sizeof(transData));
 		slaveidx = iter->first;
-		if (true == queueMutex[slaveidx].tryLock())	
+		CmdQueue &queue = iter->second;
+		unsigned int begin_seq,end_seq;
+		begin_seq = seqLock[slaveidx].seq;
+
+		if (queue.cur)
 		{
-			///////////////////////////////////////////////////////////////////////////////////////////
-			if (0 == tostop.count(slaveidx))
-			{
-				ItemQueue *que = iter->second;
-				if (que && !que->empty())
-				{
-					lastSent[slaveidx] = cmdData[slaveidx] =  (iter->second)->front().cmdData;
-					(iter->second)->pop_front();
-				}
-			}
-			else
-			{//停止该从站
-				size_t unsents = (iter->second)->size();
-				
-				if (unsents > 0)
-				{
-					int estimate = (int)(tostop[slaveidx]->decltime * CYCLES_PER_SEC) + 1;					//预计停止周期数量
-					int	q0, q1;
-					if (unsents > 2 && estimate < unsents)
-					{//重新计算一条减速曲线
-						q0 = (iter->second)->front().cmdData.Data1;
-						(iter->second)->pop_front();
-						q1 = (iter->second)->front().cmdData.Data1;
-
-						(iter->second)->clear();		//清除当前队列中所有待发送CSP目标位置
-	
-						int     vel0 = (q1 > q0) ? (q1 - q0) : (q0 - q1);		//初始运动速率
-						double  dec  = 1.0 * vel0 / estimate;					//减速度
-						int     dir  = (q1 > q0) ? 1 : -1;						//运动方向
-						double  vel  = vel0;
-						int 	q    = q0;
-						
-						Item    item;
-						item.index 			= slaveidx;
-						item.cmdData.CMD 	= CSP;
-						item.cmdData.Data1	= q0;
-
-						lastSent[slaveidx] = cmdData[slaveidx] =  item.cmdData;
-						
-						while (vel > 0)
-						{
-							vel = vel - dec;
-							q 	= int(q + dir * vel);
-
-							item.cmdData.Data1 = q;
-							(iter->second)->push_back(item);
-						}
-					}
-					
-					tostop[slaveidx]->valid = true;
-					if ((iter->second)->size() > 0)
-						tostop[slaveidx]->endpos = (iter->second)->back().cmdData.Data1;
-					else
-						tostop[slaveidx]->endpos = q0;
-				}
-				else
-				{//并未运动
-					if (lastSent[slaveidx].CMD == CSP)
-					{
-						tostop[slaveidx]->valid = true;
-						tostop[slaveidx]->endpos = lastSent[slaveidx].Data1;
-					}
-					else{
-						tostop[slaveidx]->valid = false;
-					}
-				}
-
-				//移除该停止指令 
-				tostop.erase(slaveidx);
-			}
-			////////////////////////////////////////////////////////////////////////////////////////////
-			queueMutex[slaveidx].unlock();
-
-			if (CSP == cmdData[slaveidx].CMD)
-				con = true;
+			cmd = (queue.cur)->cmdData;
 		}
+		
+		end_seq   = seqLock[slaveidx].seq;
+
+		if (!(begin_seq & 1) ||( end_seq != begin_seq))
+		{
+			if (queue.cur)
+			{
+				queue.cur = queue.cur->next;
+				cmdData[slaveidx] = cmd;
+			}
+		}
+
+		if (CSP == cmdData[slaveidx].CMD)
+			con = true;
 	}
 
 	coreMutex.unlock();//释放队列大锁
@@ -227,20 +166,41 @@ void RdWrManager::pushItems(const Item *items, size_t rows, size_t cols)
 	for(size_t  c = 0; c < cols; ++c)
 	{
 		int	slaveidx = items[c].index;
-		queueMutex[slaveidx].lock();
 
-		if (0 == tosend.count(slaveidx))
-			tosend[slaveidx] = new ItemQueue;
+		seqLock[slaveidx].lock();
 
-		for(size_t r = 0; r < rows; ++r)
+		for (size_t r = 0; r < rows; ++r)
 		{
-			if(CSP != items[r*cols+c].cmdData.CMD)
-				tosend[slaveidx]->clear();
-
-			tosend[slaveidx]->push_back(items[r*cols + c]);
+			Item *newItem = new Item;
+			*newItem = items[r*cols + c];
+			
+			if (tosend[slaveidx].head == NULL)
+			{
+				tosend[slaveidx].head = newItem;
+				tosend[slaveidx].tail = newItem;
+				tosend[slaveidx].cur = newItem;
+			}
+			else
+			{
+				(tosend[slaveidx].tail)->next  = newItem;
+				(tosend[slaveidx].tail) 	   = newItem;
+				if (tosend[slaveidx].cur == NULL)
+					tosend[slaveidx].cur = tosend[slaveidx].tail;
+			}
 		}
+	
 		
-		queueMutex[slaveidx].unlock();
+		
+		Item *todel;
+		while(tosend[slaveidx].head != tosend[slaveidx].cur)
+		{
+			todel = tosend[slaveidx].head;
+			tosend[slaveidx].head = (tosend[slaveidx].head)->next;
+			//todel->next = NULL;
+			delete todel;
+		}
+
+		seqLock[slaveidx].unlock();
 	}
 }
 
@@ -250,17 +210,7 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 {
 	if (cols == 1)
 	{//单轴运动，获得小锁
-		int		slaveidx = items[0].index;
-		queueMutex[slaveidx].lock();
-		
-		for (size_t i = 0; i < rows * cols; ++i)
-		{
-			if (0 == tosend.count(slaveidx))
-				tosend[slaveidx] = new ItemQueue;
-			tosend[slaveidx]->push_back(items[i]);
-		}
-
-		queueMutex[slaveidx].unlock();
+		pushItems(items, rows, cols);
 	}
 	else//多轴插补
 	{
@@ -275,39 +225,58 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 			{				
 				slaveidx = items[c].index;
 				if (tosend.count(slaveidx)>0
-					&& (!tosend[slaveidx]->empty()))
+					&& (tosend[slaveidx].cur))
 					break; //当前队列仍有待发送数据
 			}
-			//Poco::Thread::sleep(1);
 		}
+
+		
 
 		//所有队列均空
-		c = 0;
-		while(c < cols)
+		coreMutex.lock(); //获得大锁
+		for(c = 0; c < cols; ++c)
 		{
-			coreMutex.lock(); //获得大锁
-	
-			for( ; c < cols; ++c)
-			{
-				slaveidx = items[c].index;
-				if (false == queueMutex[slaveidx].tryLock())
-					break; //当前队列正忙
-			}
-			
-			coreMutex.unlock();
-			//Poco::Thread::sleep(1);
+			slaveidx = items[c].index;
+			seqLock[slaveidx].lock();
 		}
-
+		coreMutex.unlock(); //获得大锁
 		//已经获得所有的队列锁
 		
 	//////////////////////////////////////////////////////////////////////////////////////
-		for (size_t i = 0; i < rows * cols; ++i)
+
+	for(size_t	c = 0; c < cols; ++c)
+	{
+		int slaveidx = items[c].index;
+
+		Item *todel;
+		while(tosend[slaveidx].head)
 		{
-			slaveidx = items[i].index;
-			if (0 == tosend.count(slaveidx))
-				tosend[slaveidx] = new ItemQueue;
-			tosend[slaveidx]->push_back(items[i]);
+			todel = tosend[slaveidx].head;
+			tosend[slaveidx].head = (tosend[slaveidx].head)->next;
+			todel->next = NULL;
+			delete todel;
 		}
+
+		for (size_t r = 0; r < rows; ++r)
+		{
+			Item *newItem = new Item;
+			*newItem = items[r*cols + c];
+
+			if (0 == r)
+			{
+				tosend[slaveidx].head = newItem;
+				tosend[slaveidx].tail = newItem;
+				tosend[slaveidx].cur = newItem;
+			}
+			else
+			{
+				(tosend[slaveidx].tail)->next  = newItem;
+				(tosend[slaveidx].tail)		   = newItem;
+			}
+		}
+
+	}
+
 	///////////////////////////////////////////////////////////////////////////////////////
 	
 		//释放所有的队列锁
@@ -315,7 +284,7 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 		for(c = 0; c < cols; ++c)
 		{
 			slaveidx = items[c].index;
-			queueMutex[slaveidx].unlock();
+			seqLock[slaveidx].lock();
 		}
 		coreMutex.unlock();
 	}
@@ -325,11 +294,8 @@ size_t RdWrManager::peekQueue(int slaveidx)
 {
 	size_t queuecount = 0;
 
-	//queueMutex[slaveidx].lock();
-
 	if (tosend.count(slaveidx))
-		queuecount = tosend[slaveidx]->size();
-	//queueMutex[slaveidx].unlock();
+		queuecount = (tosend[slaveidx].cur) ? 1: 0;
 
 	return queuecount;
 }

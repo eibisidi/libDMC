@@ -17,6 +17,7 @@ class Item
 public:
 	int			index;
 	transData 	cmdData;
+	Item		*next;
 	//add extra
 	Item()
 	{
@@ -25,6 +26,7 @@ public:
 		cmdData.Parm = 0;
 		cmdData.Data1 = 0;
 		cmdData.Data2 = 0;
+		next  = NULL;
 		//cmdData.Data3 = 0;
 	}
 };
@@ -58,6 +60,40 @@ public:
 	}
 };
 
+struct SeqLock{
+	unsigned int seq;
+	SeqLock()
+	{
+		seq = 0;
+	}
+
+	void lock()
+	{
+		seq++;
+	}
+
+	void unlock()
+	{
+		seq++;
+	}
+
+};
+	
+struct CmdQueue
+{
+	Item 			*head;
+	Item 			*tail;
+	Item			*cur;
+	
+	CmdQueue()
+	{
+		head = tail = NULL;
+		cur	 = NULL;
+	}
+
+	
+};
+
 class RdWrManager : public Poco::Runnable
 {
 public:
@@ -88,9 +124,9 @@ private:
 	int 				m_towrite;
 
 	typedef std::deque<Item> ItemQueue;
-	typedef bool		 	QueueFlag;
 
-	std::map<int, ItemQueue*> 	tosend;								//待发送	命令队列
+
+	std::map<int, CmdQueue> 	tosend;								//待发送	命令队列
 	std::map<int, DeclStopInfo*>	tostop;							//待减速停止
 	transData					lastSent[DEF_MA_MAX];				//记录上次发送命令
 	RdWrState					rdWrState;
@@ -98,6 +134,8 @@ private:
 
 	Poco::Mutex		coreMutex;						//Main Core Mutext To Guard each queueMutex
 	Poco::Mutex		queueMutex[DEF_MA_MAX];
+
+	SeqLock		seqLock[DEF_MA_MAX];
 };
 
 #endif
