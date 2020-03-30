@@ -49,6 +49,7 @@ void RdWrManager::clear()
 	tostop.clear();
 	memset(lastSent, 0, sizeof(lastSent));
 	ioState.clear();
+	//todo退出前清除delete掉tosend中节点
 }
 
 int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
@@ -86,6 +87,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 		unsigned int begin_seq,end_seq;
 		begin_seq = seqLock[slaveidx].seq;
 
+		//todo增加减速停止逻辑
 		if (queue.cur)
 		{
 			localCur = queue.cur;
