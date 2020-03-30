@@ -99,8 +99,11 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 		{
 			if (queue.cur)
 			{
-				queue.cur = queue.cur->next;
 				cmdData[slaveidx] = cmd;
+				queue.cur = queue.cur->next;
+				if (queue.cur == queue.head)
+					queue.cur = NULL;
+
 			}
 		}
 
@@ -161,42 +164,44 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 
 }
 
-void RdWrManager::pushItems(const Item *items, size_t rows, size_t cols)
+void RdWrManager::pushItems(Item **itemLists, size_t rows, size_t cols)
 {
 	for(size_t  c = 0; c < cols; ++c)
 	{
-		int	slaveidx = items[c].index;
+		Item * toAppend = itemLists[c];
+		int	slaveidx 	= toAppend->index;
 
 		seqLock[slaveidx].lock();
 
-		for (size_t r = 0; r < rows; ++r)
+		if (tosend[slaveidx].head == NULL)
 		{
-			Item *newItem = new Item;
-			*newItem = items[r*cols + c];
-			
-			if (tosend[slaveidx].head == NULL)
-			{
-				tosend[slaveidx].head = newItem;
-				tosend[slaveidx].tail = newItem;
-				tosend[slaveidx].cur = newItem;
-			}
-			else
-			{
-				(tosend[slaveidx].tail)->next  = newItem;
-				(tosend[slaveidx].tail) 	   = newItem;
-				if (tosend[slaveidx].cur == NULL)
-					tosend[slaveidx].cur = tosend[slaveidx].tail;
-			}
+			tosend[slaveidx].head 	= toAppend;
+			tosend[slaveidx].tail 	= toAppend->prev;
+			tosend[slaveidx].cur 	= toAppend;
 		}
-	
-		
-		
+		else
+		{//append to tosend list, chain it up
+			(tosend[slaveidx].head)->prev 	= toAppend->prev;	
+			(tosend[slaveidx].tail)->next 	= toAppend;
+			(toAppend->prev)->next			= (tosend[slaveidx].head);
+			toAppend->prev					= (tosend[slaveidx].tail);
+
+			
+			(tosend[slaveidx].tail) 	   	= (tosend[slaveidx].head)->prev;
+			
+			if (tosend[slaveidx].cur == NULL)					//旧的数据已经发送光
+				tosend[slaveidx].cur = toAppend;
+		}
+
+		//释放已经发送过的内存
 		Item *todel;
 		while(tosend[slaveidx].head != tosend[slaveidx].cur)
 		{
 			todel = tosend[slaveidx].head;
-			tosend[slaveidx].head = (tosend[slaveidx].head)->next;
-			//todel->next = NULL;
+			tosend[slaveidx].head 			= todel->next;
+			(tosend[slaveidx].head)->prev 	= todel->prev;
+			if((tosend[slaveidx].head)->next == todel)
+				(tosend[slaveidx].head)->next = tosend[slaveidx].head;
 			delete todel;
 		}
 
@@ -206,11 +211,11 @@ void RdWrManager::pushItems(const Item *items, size_t rows, size_t cols)
 
 
 //同步插入命令队列：适用于多轴运动、多轴回原点，每行命令出现在一次Ecm_write调用中
-void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
+void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols)
 {
 	if (cols == 1)
 	{//单轴运动，获得小锁
-		pushItems(items, rows, cols);
+		pushItems(itemLists, rows, cols);
 	}
 	else//多轴插补
 	{
@@ -223,20 +228,18 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 		{
 			for(; c < cols; ++c)
 			{				
-				slaveidx = items[c].index;
+				slaveidx = itemLists[c]->index;
 				if (tosend.count(slaveidx)>0
 					&& (tosend[slaveidx].cur))
 					break; //当前队列仍有待发送数据
 			}
 		}
 
-		
-
 		//所有队列均空
 		coreMutex.lock(); //获得大锁
 		for(c = 0; c < cols; ++c)
 		{
-			slaveidx = items[c].index;
+			slaveidx = itemLists[c]->index;
 			seqLock[slaveidx].lock();
 		}
 		coreMutex.unlock(); //获得大锁
@@ -246,35 +249,25 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 
 	for(size_t	c = 0; c < cols; ++c)
 	{
-		int slaveidx = items[c].index;
+		Item * toAppend = itemLists[c];
+		int	slaveidx 	= toAppend->index;
 
 		Item *todel;
-		while(tosend[slaveidx].head)
+		if (tosend[slaveidx].tail)
 		{
-			todel = tosend[slaveidx].head;
-			tosend[slaveidx].head = (tosend[slaveidx].head)->next;
-			todel->next = NULL;
-			delete todel;
-		}
-
-		for (size_t r = 0; r < rows; ++r)
-		{
-			Item *newItem = new Item;
-			*newItem = items[r*cols + c];
-
-			if (0 == r)
+			(tosend[slaveidx].tail)->next = NULL;
+			while(tosend[slaveidx].head)
 			{
-				tosend[slaveidx].head = newItem;
-				tosend[slaveidx].tail = newItem;
-				tosend[slaveidx].cur = newItem;
-			}
-			else
-			{
-				(tosend[slaveidx].tail)->next  = newItem;
-				(tosend[slaveidx].tail)		   = newItem;
+				todel = tosend[slaveidx].head;
+				tosend[slaveidx].head 			= todel->next;
+				delete todel;
 			}
 		}
-
+		
+		//empty and memory deleted
+		tosend[slaveidx].head 	= toAppend;
+		tosend[slaveidx].tail 	= toAppend->prev;
+		tosend[slaveidx].cur 	= toAppend;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////
@@ -283,7 +276,7 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 		coreMutex.lock(); 
 		for(c = 0; c < cols; ++c)
 		{
-			slaveidx = items[c].index;
+			slaveidx = itemLists[c]->index;
 			seqLock[slaveidx].lock();
 		}
 		coreMutex.unlock();

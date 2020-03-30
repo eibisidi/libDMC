@@ -18,6 +18,7 @@ public:
 	int			index;
 	transData 	cmdData;
 	Item		*next;
+	Item		*prev;
 	//add extra
 	Item()
 	{
@@ -26,8 +27,9 @@ public:
 		cmdData.Parm = 0;
 		cmdData.Data1 = 0;
 		cmdData.Data2 = 0;
-		next  = NULL;
 		//cmdData.Data3 = 0;
+		next  = this;
+		prev  = this;
 	}
 };
 
@@ -105,8 +107,8 @@ public:
 
 	~RdWrManager();
 
-	void pushItems(const Item *items, size_t rows, size_t cols);
-	void pushItemsSync(const Item *items, size_t rows, size_t cols);
+	void pushItems(Item **itemLists, size_t rows, size_t cols);
+	void pushItemsSync(Item **itemLists, size_t rows, size_t cols);
 	size_t peekQueue(int slaveidx);
 	void declStop(int slaveidx, DeclStopInfo *stopInfo);
 

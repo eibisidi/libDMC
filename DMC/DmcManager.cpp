@@ -777,24 +777,24 @@ void DmcManager::restoreLastCmd(transData *cmdData)
 	*cmdData = m_lastCmdData[slaveidx];
 }
 
-void DmcManager::pushItems(const Item *items, size_t rows, size_t cols, bool sync)
+void DmcManager::pushItems(Item **itemLists, size_t rows, size_t cols, bool sync)
 {
-	if(NULL == items
+	if(NULL == itemLists
 		|| rows <= 0
 		|| cols <= 0)
 		return;
 
 	if(sync)
-		m_rdWrManager.pushItemsSync(items, rows, cols);
+		m_rdWrManager.pushItemsSync(itemLists, rows, cols);
 	else
-		m_rdWrManager.pushItems(items, rows, cols);
+		m_rdWrManager.pushItems(itemLists, rows, cols);
 
 	//将最后一行的命令更新到m_lastCmdData中
-	const Item * lastRow = items + (rows - 1)*cols;
 	for(size_t c = 0; c < cols; ++c)
 	{
-		int slave_idx = lastRow[c].index;
-		m_lastCmdData[slave_idx] = lastRow[c].cmdData;
+		Item * tailItem = itemLists[c]->prev;
+		int slave_idx 	= tailItem->index;
+		m_lastCmdData[slave_idx] = tailItem->cmdData;
 	}
 }
 
@@ -946,14 +946,15 @@ void DmcManager::run()
 			{
 				if (m_cmdData[i].CMD != GET_STATUS)
 				{
-					m_items[m_cols].index = i;
-					m_items[m_cols].cmdData = m_cmdData[i];
+					m_itemLists[m_cols] = new Item;
+					m_itemLists[m_cols]->index = i;
+					m_itemLists[m_cols]->cmdData = m_cmdData[i];
 					++m_cols;
 				}		
 			}
 
 			if (m_cols > 0)
-				pushItems(m_items, 1, m_cols, false);	//加入发送队列
+				pushItems(m_itemLists, 1, m_cols, false);	//加入发送队列
 
 			copyRespData();//接收队列处理，刷新
 		}
