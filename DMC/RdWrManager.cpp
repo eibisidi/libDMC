@@ -75,14 +75,16 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 
 	coreMutex.lock();//获取队列大锁
 
-	transData cmd;
+	
 
 	
 	for(std::map<int, CmdQueue>::iterator iter = tosend.begin();
 				iter!= tosend.end();
 				++iter)
 	{
-		memset(&cmd, 0, sizeof(transData));
+		transData localCmd;
+		Item *localCur = NULL, *localNext=NULL, *localHead=NULL;
+		memset(&localCmd, 0, sizeof(transData));
 		slaveidx = iter->first;
 		CmdQueue &queue = iter->second;
 		unsigned int begin_seq,end_seq;
@@ -90,20 +92,23 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 
 		if (queue.cur)
 		{
-			cmd = (queue.cur)->cmdData;
+			localCur = queue.cur;
+			localNext= localCur->next;
+			localHead= queue.head;
+			localCmd = (queue.cur)->cmdData;
 		}
 		
 		end_seq   = seqLock[slaveidx].seq;
 
 		if (!(begin_seq & 1) ||( end_seq != begin_seq))
 		{
-			if (queue.cur)
+			if (localCur)
 			{
-				cmdData[slaveidx] = cmd;
-				queue.cur = queue.cur->next;
-				if (queue.cur == queue.head)
+				cmdData[slaveidx] = localCmd;
+				if (localNext == localHead)
 					queue.cur = NULL;
-
+				else
+					queue.cur = localNext;
 			}
 		}
 
@@ -178,6 +183,7 @@ void RdWrManager::pushItems(Item **itemLists, size_t rows, size_t cols)
 			tosend[slaveidx].head 	= toAppend;
 			tosend[slaveidx].tail 	= toAppend->prev;
 			tosend[slaveidx].cur 	= toAppend;
+			tosend[slaveidx].count	= rows;
 		}
 		else
 		{//append to tosend list, chain it up
@@ -186,23 +192,26 @@ void RdWrManager::pushItems(Item **itemLists, size_t rows, size_t cols)
 			(toAppend->prev)->next			= (tosend[slaveidx].head);
 			toAppend->prev					= (tosend[slaveidx].tail);
 
-			
 			(tosend[slaveidx].tail) 	   	= (tosend[slaveidx].head)->prev;
+			tosend[slaveidx].count			+= rows;
 			
 			if (tosend[slaveidx].cur == NULL)					//旧的数据已经发送光
 				tosend[slaveidx].cur = toAppend;
 		}
 
 		//释放已经发送过的内存
+		(tosend[slaveidx].cur)->prev 	= tosend[slaveidx].tail;
+		(tosend[slaveidx].tail)->next 	= tosend[slaveidx].cur;
+
 		Item *todel;
 		while(tosend[slaveidx].head != tosend[slaveidx].cur)
 		{
 			todel = tosend[slaveidx].head;
 			tosend[slaveidx].head 			= todel->next;
-			(tosend[slaveidx].head)->prev 	= todel->prev;
-			if((tosend[slaveidx].head)->next == todel)
-				(tosend[slaveidx].head)->next = tosend[slaveidx].head;
+			todel->next = NULL;
+			todel->prev = NULL;
 			delete todel;
+			--tosend[slaveidx].count;
 		}
 
 		seqLock[slaveidx].unlock();
@@ -268,6 +277,7 @@ void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols)
 		tosend[slaveidx].head 	= toAppend;
 		tosend[slaveidx].tail 	= toAppend->prev;
 		tosend[slaveidx].cur 	= toAppend;
+		tosend[slaveidx].count	= rows;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////

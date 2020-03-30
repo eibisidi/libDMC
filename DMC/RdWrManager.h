@@ -86,11 +86,12 @@ struct CmdQueue
 	Item 			*head;
 	Item 			*tail;
 	Item			*cur;
-	
+	size_t			count;		//当前队列中数目
 	CmdQueue()
 	{
 		head = tail = NULL;
 		cur	 = NULL;
+		count = 0;
 	}
 
 	
