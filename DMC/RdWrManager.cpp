@@ -45,7 +45,6 @@ void RdWrManager::clear()
 	m_consecutive	= false;
 	m_towrite		= 2;
 
-
 	tosend.clear();
 	tostop.clear();
 	memset(lastSent, 0, sizeof(lastSent));
@@ -75,9 +74,6 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 
 	coreMutex.lock();//获取队列大锁
 
-	
-
-	
 	for(std::map<int, CmdQueue>::iterator iter = tosend.begin();
 				iter!= tosend.end();
 				++iter)
@@ -146,9 +142,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 			cmdData[iter->first].CMD = IO_RD;
 	}
 
-
 #ifdef TIMING
-
 	QueryPerformanceCounter(&timeEnd); 
 	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
 
@@ -163,10 +157,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 	++count;
 	printf("popItems elapsed = %f, longest=%f, shortest=%f, average=%f.\n", elapsed, longest, shortest, total/count);
 #endif
-
-
 	return 0;
-
 }
 
 void RdWrManager::pushItems(Item **itemLists, size_t rows, size_t cols)
