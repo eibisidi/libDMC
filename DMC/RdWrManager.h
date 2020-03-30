@@ -3,6 +3,7 @@
 
 #include <map>
 #include <deque>
+#include <list>
 
 #include "NEXTWUSBLib_12B.h"
 #include "Poco/Mutex.h"
@@ -69,8 +70,8 @@ public:
 
 	~RdWrManager();
 
-	void pushItems(const Item *items, size_t rows, size_t cols);
-	void pushItemsSync(const Item *items, size_t rows, size_t cols);
+	void pushItems(const std::list<Item> *itemLists, size_t rows, size_t cols);
+	void pushItemsSync(const std::list<Item> *itemLists, size_t rows, size_t cols);
 	size_t peekQueue(int slaveidx);
 	void declStop(int slaveidx, DeclStopInfo *stopInfo);
 

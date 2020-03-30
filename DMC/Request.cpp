@@ -470,21 +470,22 @@ void MoveRequest::pushCspPoints(MoveRequest *req)
 {
 	int cycles = req->moveparam->cycles;
 
-	Item *items = new Item[cycles];
+	std::list<Item> itemList;
+
 	for (int row = 0; row < cycles; ++row)
 	{
-		items[row].index 		= req->slave_idx;
-		items[row].cmdData.CMD 	= CSP;
-		items[row].cmdData.Data1=req->moveparam->position();
+		Item newItem;
+		newItem.index 		= req->slave_idx;
+		newItem.cmdData.CMD 	= CSP;
+		newItem.cmdData.Data1=req->moveparam->position();
+		itemList.push_back(newItem);
 	}
 
 	//将最后一个位置点进行存储
 	req->cmdData->CMD	= GET_STATUS;
 
-	req->dmc->logCspPoints(items, cycles, 1);	//输出规划结果到日志
-	req->dmc->pushItems(items, cycles, 1, false);
-	delete [] items;
-	
+	//req->dmc->logCspPoints(items, cycles, 1);	//输出规划结果到日志
+	req->dmc->pushItems(&itemList, cycles, 1, false);	
 }
 
 FsmRetType MoveRequest::exec()
@@ -1350,7 +1351,8 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 	int cycles = req->axispara->totalCycles();
 	size_t axises = paras.size();
 
-	Item *items = new Item[cycles * axises];
+	std::list<Item>* newItemLists = new std::list<Item>[axises];
+
 	for (int row = 0; row < cycles; ++row)
 	{
 		int col = 0;
@@ -1359,17 +1361,22 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 				++iter, ++col)
 		{
 			BaseMultiAxisPara *para = iter->second;
-			items[row * axises + col].index    		= para->req->slave_idx;							//从站地址
-			items[row * axises + col].cmdData.CMD  	= CSP;
-			items[row * axises + col].cmdData.Data1  = para->nextPosition(para->req->slave_idx);	//CSP目的位置
+			std::list<Item> & itemList = newItemLists[col];
+			
+			Item newItem;
+			newItem.index    		= para->req->slave_idx;							//从站地址
+			newItem.cmdData.CMD  	= CSP;
+			newItem.cmdData.Data1  = para->nextPosition(para->req->slave_idx);	//CSP目的位置
+
+			itemList.push_back(newItem);
 		}
 	}
 
-	req->dmc->logCspPoints(items, cycles, axises);	//输出规划结果到日志
+//	req->dmc->logCspPoints(items, cycles, axises);	//输出规划结果到日志
 
-	req->dmc->pushItems(items, cycles, axises, true);
+	req->dmc->pushItems(newItemLists, cycles, axises, true);
 
-	delete [] items;
+	delete [] newItemLists;
 }
 
 bool MultiAxisRequest::startPlan()
@@ -2219,24 +2226,27 @@ void MultiHomeRequest::pushMultiHome(MultiHomeRequest *req)
 	const std::set<int>& axises = req->ref->getAxises();
 	size_t count = axises.size();
 
-	Item *items = new Item[count];
+	std::list<Item> *itemLists = new std::list<Item>[count];
 
 	int col = 0;
 	for (std::set<int>::const_iterator iter = axises.begin();
 			iter != axises.end();
 			++iter, ++col)
 	{
-		items[col].index    		= *iter;							//从站地址
-		items[col].cmdData.CMD  	= GO_HOME;
-		items[col].cmdData.Data1 	= 0;
-		items[col].cmdData.Data2 	= 0;
+		std::list<Item> & itemList = itemLists[col];
+		Item newItem;
+		newItem.index    		= *iter;							//从站地址
+		newItem.cmdData.CMD  	= GO_HOME;
+		newItem.cmdData.Data1 	= 0;
+		newItem.cmdData.Data2 	= 0;
+
+		itemList.push_back(newItem);
 	}
 
-	req->dmc->pushItems(items, 1, count, true);
+	req->dmc->pushItems(itemLists, 1, count, true);
 
 	req->ref->setStarted();//已经开始回零
-
-	delete [] items;
+	delete [] itemLists;
 }
 
 FsmRetType MultiHomeRequest::exec()
@@ -2382,22 +2392,27 @@ void MultiAbortHomeRequest::pushMultiAbortHome(MultiAbortHomeRequest *req)
 	const std::set<int>& axises = req->ref->getAxises();
 	size_t count = axises.size();
 
-	Item *items = new Item[count];
+	std::list<Item> *itemLists = new std::list<Item>[count];
+
+
 
 	int col = 0;
 	for (std::set<int>::const_iterator iter = axises.begin();
 			iter != axises.end();
 			++iter, ++col)
 	{
-		items[col].index    		= *iter;							//从站地址
-		items[col].cmdData.CMD  	= ABORT_HOME;
-		items[col].cmdData.Data1 	= 0;
-		items[col].cmdData.Data2 	= 0;
+		std::list<Item> &itemList = itemLists[col];
+		Item newItem;
+		newItem.index    		= *iter;							//从站地址
+		newItem.cmdData.CMD  	= ABORT_HOME;
+		newItem.cmdData.Data1 	= 0;
+		newItem.cmdData.Data2 	= 0;
+		itemList.push_back(newItem);
 	}
 
-	req->dmc->pushItems(items, 1, count, true);
+	req->dmc->pushItems(itemLists, 1, count, true);
 
-	delete [] items;
+	delete [] itemLists;
 }
 
 FsmRetType MultiAbortHomeRequest::exec()

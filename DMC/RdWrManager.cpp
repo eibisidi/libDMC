@@ -222,22 +222,22 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 
 }
 
-void RdWrManager::pushItems(const Item *items, size_t rows, size_t cols)
+void RdWrManager::pushItems(const std::list<Item> *itemLists, size_t rows, size_t cols)
 {
 	for(size_t  c = 0; c < cols; ++c)
 	{
-		int	slaveidx = items[c].index;
+		const std::list<Item> & itemList = itemLists[c];
+		int	slaveidx = itemList.front().index;
 		queueMutex[slaveidx].lock();
 
 		if (0 == tosend.count(slaveidx))
 			tosend[slaveidx] = new ItemQueue;
 
-		for(size_t r = 0; r < rows; ++r)
+		for(std::list<Item>::const_iterator iter = itemList.begin();
+								iter != itemList.end();
+								++iter)
 		{
-			if(CSP != items[r*cols+c].cmdData.CMD)
-				tosend[slaveidx]->clear();
-
-			tosend[slaveidx]->push_back(items[r*cols + c]);
+			tosend[slaveidx]->push_back(*iter);
 		}
 		
 		queueMutex[slaveidx].unlock();
@@ -246,21 +246,11 @@ void RdWrManager::pushItems(const Item *items, size_t rows, size_t cols)
 
 
 //同步插入命令队列：适用于多轴运动、多轴回原点，每行命令出现在一次Ecm_write调用中
-void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
+void RdWrManager::pushItemsSync(const std::list<Item> *itemLists, size_t rows, size_t cols)
 {
 	if (cols == 1)
 	{//单轴运动，获得小锁
-		int		slaveidx = items[0].index;
-		queueMutex[slaveidx].lock();
-		
-		for (size_t i = 0; i < rows * cols; ++i)
-		{
-			if (0 == tosend.count(slaveidx))
-				tosend[slaveidx] = new ItemQueue;
-			tosend[slaveidx]->push_back(items[i]);
-		}
-
-		queueMutex[slaveidx].unlock();
+		pushItems(itemLists, rows, cols);
 	}
 	else//多轴插补
 	{
@@ -273,7 +263,7 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 		{
 			for(; c < cols; ++c)
 			{				
-				slaveidx = items[c].index;
+				slaveidx = itemLists[c].front().index;
 				if (tosend.count(slaveidx)>0
 					&& (!tosend[slaveidx]->empty()))
 					break; //当前队列仍有待发送数据
@@ -289,7 +279,7 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 	
 			for( ; c < cols; ++c)
 			{
-				slaveidx = items[c].index;
+				slaveidx = itemLists[c].front().index;
 				if (false == queueMutex[slaveidx].tryLock())
 					break; //当前队列正忙
 			}
@@ -301,12 +291,18 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 		//已经获得所有的队列锁
 		
 	//////////////////////////////////////////////////////////////////////////////////////
-		for (size_t i = 0; i < rows * cols; ++i)
+		for(size_t c = 0; c < cols; ++c)
 		{
-			slaveidx = items[i].index;
+			const std::list<Item> & itemList = itemLists[c];
+			slaveidx = itemList.front().index;
 			if (0 == tosend.count(slaveidx))
 				tosend[slaveidx] = new ItemQueue;
-			tosend[slaveidx]->push_back(items[i]);
+			for(std::list<Item>::const_iterator iter = itemList.begin();
+						iter != itemList.end();
+						++iter)
+			{
+				tosend[slaveidx]->push_back(*iter);
+			}
 		}
 	///////////////////////////////////////////////////////////////////////////////////////
 	
@@ -314,7 +310,7 @@ void RdWrManager::pushItemsSync(const Item *items, size_t rows, size_t cols)
 		coreMutex.lock(); 
 		for(c = 0; c < cols; ++c)
 		{
-			slaveidx = items[c].index;
+			slaveidx = itemLists[c].front().index;
 			queueMutex[slaveidx].unlock();
 		}
 		coreMutex.unlock();
