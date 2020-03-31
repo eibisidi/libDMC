@@ -6,7 +6,7 @@
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
-#define BATCH_WRITE		(10)
+#define BATCH_WRITE		(5)
 #define FIFO_LOWATER	(150)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
@@ -98,7 +98,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 		
 		end_seq   = seqLock[slaveidx].seq;
 
-		if (!(begin_seq & 1) ||( end_seq != begin_seq))
+		if (!((begin_seq & 1) ||( end_seq != begin_seq)))
 		{
 			if (localCur)
 			{
@@ -107,6 +107,16 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 					queue.cur = NULL;
 				else
 					queue.cur = localNext;
+
+#if 0
+				if (slaveidx == 7 && cmdData[7].CMD == CSP)
+				{
+					if (cmdData[6].CMD != CSP
+						|| cmdData[6].Data1 != cmdData[7].Data1)
+
+					int i = 0;
+				}
+#endif
 			}
 		}
 
@@ -280,7 +290,7 @@ void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols)
 		for(c = 0; c < cols; ++c)
 		{
 			slaveidx = itemLists[c]->index;
-			seqLock[slaveidx].lock();
+			seqLock[slaveidx].unlock();
 		}
 		coreMutex.unlock();
 	}
