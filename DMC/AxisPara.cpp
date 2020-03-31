@@ -150,12 +150,13 @@ bool LinearRef::lastCycle() const
 
 double	LinearRef::getDistanceRatio(int slave_index)
 {
+	double oldRatio = this->cur_ratio;
 	if (slave_index == this->last_slaveidx)
 	{
 		this->cur_ratio = this->moveparam->position() / this->max_dist;
 	}
 
-	return this->cur_ratio;
+	return oldRatio;
 }
 
 double LinearRef::getCurrentVel() const 					//获得当前运动速率 
@@ -268,14 +269,15 @@ int LinearPara::nextPosition(int slaveidx)
 {
 	int		nextpos;
 	LinearRef *linearRef = dynamic_cast<LinearRef *> (this->ref);
-	
-	double distRatio = linearRef->getDistanceRatio(slaveidx); // > 0
-	
+
 	if (linearRef->lastCycle())
-	//避免浮点数计算误差
-		nextpos = this->dstpos;
+		//避免浮点数计算误差
+			nextpos = this->dstpos;
 	else
+	{
+		double distRatio = linearRef->getDistanceRatio(slaveidx); // > 0
 		nextpos = (int)(this->startpos +  distRatio * (this->dstpos - this->startpos) );
+	}
 
 	return nextpos;
 }
