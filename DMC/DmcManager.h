@@ -63,7 +63,7 @@ public:
 	unsigned long init();
 	void close();
 	//记录CSP规划点位置到日志文件中
-	void logCspPoints(const Item *pItems, int rows, size_t cols) const;
+	void logCspPoints(Item **itemLists, int rows, size_t cols) const;
 
 	//运动
 	unsigned long clr_alarm(short axis);
