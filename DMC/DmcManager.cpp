@@ -384,11 +384,18 @@ void DmcManager::close()
 	clear();
 }
 
-void DmcManager::logCspPoints(const Item *pItems, int rows, size_t cols) const
+void DmcManager::logCspPoints(Item **itemLists, int rows, size_t cols) const
 {
 	if (m_masterConfig.logpoint_axis.empty())
 		return;
 
+	std::vector<const Item*> vecPrintCur;
+	for(int c = 0; c < cols; ++c)
+	{
+		const Item * itemList = itemLists[c];
+		vecPrintCur.push_back(itemList);
+	}
+	
 	for (int r = 0; r < rows; ++r)
 	{
 		//按照轴号顺序输出规划位置
@@ -398,10 +405,11 @@ void DmcManager::logCspPoints(const Item *pItems, int rows, size_t cols) const
 		{
 			for(int c = 0; c < cols; ++c)
 			{
-				if(pItems[r*cols + c].index == *iter)
+				const Item * itemList = itemLists[c];
+				if (itemList->index == *iter)
 				{
-					CLogSingle::logPoint((int)(pItems[r*cols+c].cmdData.Data1));
-					break;
+					CLogSingle::logPoint((int)(vecPrintCur[c]->cmdData.Data1));
+					vecPrintCur[c] = vecPrintCur[c]->next;
 				}
 			}
 		}
