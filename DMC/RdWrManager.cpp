@@ -49,7 +49,24 @@ void RdWrManager::clear()
 	tostop.clear();
 	memset(lastSent, 0, sizeof(lastSent));
 	ioState.clear();
-	//todo退出前清除delete掉tosend中节点
+
+	for(std::map<int, CmdQueue>::iterator iter = tosend.begin();
+				iter!= tosend.end();
+				++iter)
+	{
+		CmdQueue &queue = iter->second;
+
+		if (queue.tail)
+		{
+			queue.tail->next = NULL;
+			while(queue.head)
+			{
+				Item * toDel 	= queue.head;
+				queue.head		= queue.head->next;
+				delete toDel;
+			}
+		}
+	}
 }
 
 int RdWrManager::popItems(transData *cmdData , size_t cmdcount)

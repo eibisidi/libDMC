@@ -71,11 +71,13 @@ struct SeqLock{
 
 	void lock()
 	{
+		//mb()
 		seq++;
 	}
 
 	void unlock()
 	{
+		//mb()
 		seq++;
 	}
 
