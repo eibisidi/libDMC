@@ -655,6 +655,16 @@ int DmcManager::getServoPosBias() const
 	return m_masterConfig.servo_pos_bias;
 }
 
+unsigned long DmcManager::getSlaveState(short axis)
+{
+	unsigned int ms = MOVESTATE_NONE;
+
+	if(m_slaveStates.count(axis) )
+		ms = m_slaveStates[axis].getSlaveState();
+
+	return ms;
+}
+
 void DmcManager::updateState()
 {
 	//更新驱动器状态
@@ -984,16 +994,14 @@ unsigned long DmcManager::clr_alarm(short axis)
 	unsigned long retValue = ERR_NOERR;
 	ClrAlarmRequest *newReq = NULL;
 	
-	m_mutex.lock();
-
 	do{
 		if (false == isDriverSlave(axis))
 		{
 			retValue = ERR_NO_AXIS;
 			break;
 		}
-
-		if (m_requests.count(axis))
+		
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
 			retValue = ERR_AXIS_BUSY;
 			break;
@@ -1008,11 +1016,11 @@ unsigned long DmcManager::clr_alarm(short axis)
 
 		newReq->slave_idx = axis;
 
+		m_mutex.lock();
 		setSlaveState(axis, MOVESTATE_BUSY);
-		addRequest(axis, newReq);		
+		addRequest(axis, newReq);
+		m_mutex.unlock();
 	}while(0);
-
-	m_mutex.unlock();
 
 	unsigned long ms;
 	if (ERR_NOERR == retValue)
@@ -1044,8 +1052,6 @@ unsigned long DmcManager::init_driver(short axis)
 {
 	unsigned long retValue = ERR_NOERR;
 	InitSlaveRequest *newReq = NULL;
-	
-	m_mutex.lock();
 
 	do{
 		if ( false == isDriverSlave(axis))
@@ -1054,7 +1060,7 @@ unsigned long DmcManager::init_driver(short axis)
 			break;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
 			retValue = ERR_AXIS_BUSY;
 			break;
@@ -1078,12 +1084,12 @@ unsigned long DmcManager::init_driver(short axis)
 				break;
 			}
 		}
-		
+
+		m_mutex.lock();
 		setSlaveState(axis, MOVESTATE_BUSY);
 		addRequest(axis, newReq);		
+		m_mutex.unlock();
 	}while(0);
-
-	m_mutex.unlock();
 
 	unsigned long ms;
 	if (ERR_NOERR == retValue)
@@ -1114,8 +1120,6 @@ unsigned long DmcManager::servo_on(short axis)
 	unsigned long retValue = ERR_NOERR;
 	ServoOnRequest *newReq = NULL;
 	
-	m_mutex.lock();
-
 	do{
 		if (false == isDriverSlave(axis))
 		{
@@ -1123,11 +1127,12 @@ unsigned long DmcManager::servo_on(short axis)
 			break;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
 			retValue = ERR_AXIS_BUSY;
 			break;
 		}
+
 
 		newReq = new ServoOnRequest;
 		if (NULL == newReq)
@@ -1137,12 +1142,12 @@ unsigned long DmcManager::servo_on(short axis)
 		}
 
 		newReq->slave_idx = axis;
-
+		
+		m_mutex.lock();
 		setSlaveState(axis, MOVESTATE_BUSY);
-		addRequest(axis, newReq);		
+		addRequest(axis, newReq);	
+		m_mutex.unlock();	
 	}while(0);
-
-	m_mutex.unlock();
 
 	unsigned long ms;
 	if (ERR_NOERR == retValue)
@@ -1178,8 +1183,6 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 
 	unsigned long retValue = ERR_NOERR;
 	MoveRequest *newReq = NULL;
-	
-	m_mutex.lock();
 
 	do{
 		if (false == isDriverSlave(axis))
@@ -1188,7 +1191,7 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 			break;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
 			retValue = ERR_AXIS_BUSY;
 			break;
@@ -1213,9 +1216,6 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 			retValue = ERR_MEM;
 			break;
 		}
-
-		setSlaveState(axis, MOVESTATE_BUSY);
-		
 		newReq->slave_idx = axis;
 		newReq->abs 	  = abs;				//相对 绝对
 		newReq->dist	  = Dist;
@@ -1223,10 +1223,12 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 		newReq->maxvel	  = MaxVel;				//最大速度
 		newReq->maxa	  = MaxVel / Tacc;		//最大加速度
 		newReq->maxj	  = MAXJ_RATIO *(newReq->maxa);
-		addRequest(axis, newReq);		
+		
+		m_mutex.lock();
+		setSlaveState(axis, MOVESTATE_BUSY);
+		addRequest(axis, newReq);
+		m_mutex.unlock();	
 	}while(0);
-
-	m_mutex.unlock();
 
 	return retValue;
 }
@@ -1295,8 +1297,6 @@ unsigned long DmcManager::multi_home_move(short totalAxis, short * axisArray)
 	MultiHomeRequest 				*newReq = NULL;
 	MultiHomeRequest::MultiHomeRef	*newRef = NULL;
 	
-	m_mutex.lock();
-	
 	//先进行容错检查
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
@@ -1307,9 +1307,8 @@ unsigned long DmcManager::multi_home_move(short totalAxis, short * axisArray)
 			goto DONE;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
-			LOGSINGLE_ERROR("Axis %?d is busy.", __FILE__, __LINE__, axis);
 			retValue = ERR_AXIS_BUSY;
 			goto DONE;
 		}
@@ -1321,20 +1320,19 @@ unsigned long DmcManager::multi_home_move(short totalAxis, short * axisArray)
 		retValue = ERR_MEM;
 		goto DONE;
 	}
-
-//新建请求
+	
+	m_mutex.lock();
+	//新建请求
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
 		short axis = axisArray[i];
 		newReq = new MultiHomeRequest(axis, newRef, m_masterConfig.home_timeout);
 		setSlaveState(axis, MOVESTATE_BUSY);
 		m_requests[axis] = newReq;
-	}
-DONE:
-	m_condition.signal();
-
+	}	
+	m_condition.signal();	
 	m_mutex.unlock();
-
+DONE:
 	return retValue;
 }
 
@@ -1349,8 +1347,6 @@ unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *dis
 	MultiAxisRequest *newReq = NULL;
 	LinearRef		 *newLinearRef = NULL;
 	
-	m_mutex.lock();
-	
 	//先进行容错检查
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
@@ -1362,9 +1358,8 @@ unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *dis
 			goto DONE;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
-			LOGSINGLE_ERROR("Axis %?d is busy.", __FILE__, __LINE__, axis);
 			retValue = ERR_AXIS_BUSY;
 			goto DONE;
 		}
@@ -1381,8 +1376,9 @@ unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *dis
 	newLinearRef->maxa	  = maxvel / Tacc;
 	newLinearRef->maxj	  = MAXJ_RATIO * newLinearRef->maxa;
 	newLinearRef->movetype  = movetype;
-
-//新建请求
+	
+	m_mutex.lock();
+	//新建请求
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
 		short axis = axisArray[i];
@@ -1391,13 +1387,10 @@ unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *dis
 		setSlaveState(axis, MOVESTATE_BUSY);
 		m_requests[axis] = newReq;
 	}
-DONE:
-	m_condition.signal();
-
+	m_condition.signal();	
 	m_mutex.unlock();
-
+DONE:
 	return retValue;
-		
 }
 
 unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *distArray, double maxvel, double Tacc, bool abs,  long hh, long hu, long hd)
@@ -1413,7 +1406,7 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 	MultiAxisRequest *newReq = NULL;
 	ArchlRef		 *newArchlRef = NULL;
 	
-	m_mutex.lock();
+
 	
 	//先进行容错检查
 	for(int i = 0 ; i < totalAxis; ++i)
@@ -1426,7 +1419,7 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 			goto DONE;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
 			retValue = ERR_AXIS_BUSY;
 			goto DONE;
@@ -1446,6 +1439,7 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 	newArchlRef->hh		= hh;
 	newArchlRef->hd		= hd;
 	
+	m_mutex.lock();
 	//新建请求
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
@@ -1454,12 +1448,10 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 		newReq = new MultiAxisRequest(axis, newArchlRef, distArray[i], abs, (i==0)/*是否为Z轴*/);
 		setSlaveState(axis, MOVESTATE_BUSY);
 		m_requests[axis] = newReq;
-	}
-DONE:
+	}	
 	m_condition.signal();
-
 	m_mutex.unlock();
-
+DONE:
 	return retValue;
 }
 
@@ -1492,7 +1484,7 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 	unsigned long retValue = ERR_NOERR;
 	DStopRequest *newReq = NULL;
 
-	m_mutex.lock();
+
 	do{
 		if ( false == isDriverSlave(axis))
 		{
@@ -1500,11 +1492,13 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 			break;
 		}
 
-		if (0 == m_requests.count(axis))
+		if (MOVESTATE_BUSY != getSlaveState(axis))
 		{//当前未在运动
 			retValue = ERR_AXIS_NOT_MOVING;
 			break;
 		}
+		
+		m_mutex.lock();
 
 		MoveRequest *moveReq = dynamic_cast<MoveRequest * >(m_requests[axis]);
 		if (NULL != moveReq)
@@ -1572,9 +1566,11 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 					break;
 				}
 			}
-		}
+		}	
+
+		m_mutex.unlock();
 	}while(0);
-	m_mutex.unlock();
+
 	return retValue;
 }
 

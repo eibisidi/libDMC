@@ -93,6 +93,7 @@ public:
 	long getDriverCmdPos(short slaveidx);									//获得起始位置
 	void setDriverCmdPos(short slaveidx, long val); 						//更新起始位置
 	int	getServoPosBias() const;
+	unsigned long getSlaveState(short axis);
 
 	//IO
 	unsigned long out_bit(short slave_idx, short bitNo, short bitData);
