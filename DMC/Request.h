@@ -264,6 +264,7 @@ class MultiAxisRequest : public BaseRequest
 {
 private:
 	static FsmRetType fsm_state_done(MultiAxisRequest *req);
+	static FsmRetType fsm_state_wait_all_sent(MultiAxisRequest *req);
 	static FsmRetType  fsm_state_wait_all_pos_reached(MultiAxisRequest *req);
 	static FsmRetType  fsm_state_csp(MultiAxisRequest *req);
 	static FsmRetType  fsm_state_svon(MultiAxisRequest *req);

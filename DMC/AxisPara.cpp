@@ -560,7 +560,7 @@ int AccRef::startPlan()
 {
 	if (0 == planned)
 	{
-		cycles  = (int)(tAcc * CYCLES_PER_SEC) + 1;
+		cycles  = (int)(tAcc * CYCLES_PER_SEC) + 2; /*保证最少两个点，便于通过增量计算速度*/
 		elapsed = 0;
 		planned = 1;
 	}
@@ -614,9 +614,13 @@ int AccMultiAxisPara::nextPosition(int slaveidx)
 	if (accRef->lastCycle())
 		v = this->maxv;
 	else
-		v = (long)((accRef->getElpased(slaveidx) )*1.0/ (accRef->totalCycles()));
-
+	{
+		int elapsed = accRef->getElpased(slaveidx);
+		v = (long)(elapsed * 1.0 *this->maxv/ accRef->totalCycles());
+	}
+		
 	nextpos	= this->lastpos + v;
+	this->lastpos = nextpos;
 
 	return nextpos;
 }

@@ -1008,6 +1008,30 @@ FsmRetType MultiAxisRequest::fsm_state_done(MultiAxisRequest *req)
 	return MOVESTATE_NONE;
 }
 
+FsmRetType MultiAxisRequest::fsm_state_wait_all_sent(MultiAxisRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+	
+	if(0 != req->axispara->getError())
+	{
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
+	{//尚未发送完毕
+		return retval;
+	}
+	
+	req->fsmstate		= MultiAxisRequest::fsm_state_done;
+	retval				= MOVESTATE_RUNNING;
+	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+
+	return retval;
+}
+
 FsmRetType  MultiAxisRequest::fsm_state_wait_all_pos_reached(MultiAxisRequest *req)
 {
 	FsmRetType retval = MOVESTATE_BUSY;
@@ -1158,9 +1182,7 @@ FsmRetType  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 
 	if (req->keep)
 	{
-		req->fsmstate		= MultiAxisRequest::fsm_state_done;
-		retval				= MOVESTATE_RUNNING;				/*持续运动中*/
-		req->reqState		= REQUEST_STATE_SUCCESS;
+		req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_sent;
 	}
 	else
 	{
