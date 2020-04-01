@@ -27,7 +27,7 @@ private:
 public:
 	SlaveState()
 	{
-		slave_state = 0;
+		slave_state = 1; /*MOVESTATE_STOP*/
 	}
 
 	inline unsigned int getSlaveState() const

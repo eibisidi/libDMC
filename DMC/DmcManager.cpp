@@ -1022,7 +1022,7 @@ unsigned long DmcManager::clr_alarm(short axis)
 		m_mutex.unlock();
 	}while(0);
 
-	unsigned long ms;
+	unsigned long ms = MOVESTATE_NONE;
 	if (ERR_NOERR == retValue)
 	{
 		while(true)

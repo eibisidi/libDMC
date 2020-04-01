@@ -35,7 +35,7 @@ enum MoveState
 {
 	MOVESTATE_NONE = -1,
 	MOVESTATE_BUSY = 0,			//正在运行
-	MOVESTATE_STOP,				//运动位置到达
+	MOVESTATE_STOP = 1,				//运动位置到达
 	MOVESTATE_TIMEOUT,			//运动超时
 	MOVESTATE_ERR,				//运动错误（规划失败，电机使能失败等）
 	MOVESTATE_CMD_STOP,			//急停、减速停止
