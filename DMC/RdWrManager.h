@@ -131,16 +131,14 @@ private:
 	typedef std::deque<Item> ItemQueue;
 
 
-	std::map<int, CmdQueue> 	tosend;								//待发送	命令队列
-	std::map<int, DeclStopInfo*>	tostop;							//待减速停止
+	std::map<int, CmdQueue> 	tosend;								//待发送	命令队列				
+	DeclStopInfo				*tostop[DEF_MA_MAX];				//待减速停止
 	transData					lastSent[DEF_MA_MAX];				//记录上次发送命令
 	RdWrState					rdWrState;
 	std::map<int, IoSlaveState> ioState;							//Io模块输入、输出值
 
-	Poco::Mutex		coreMutex;						//Main Core Mutext To Guard each queueMutex
-	Poco::Mutex		queueMutex[DEF_MA_MAX];
-
-	SeqLock		seqLock[DEF_MA_MAX];
+	Poco::Mutex					coreMutex;							//Main Core Mutext To Guard each queueMutex
+	SeqLock						seqLock[DEF_MA_MAX];
 };
 
 #endif

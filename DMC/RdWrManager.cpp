@@ -46,7 +46,7 @@ void RdWrManager::clear()
 	m_towrite		= 2;
 
 	tosend.clear();
-	tostop.clear();
+	memset(tostop, 0, sizeof(tostop));
 	memset(lastSent, 0, sizeof(lastSent));
 	ioState.clear();
 
@@ -187,6 +187,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 					tostop[slaveidx]->valid = false;
 				}
 			}
+			tostop[slaveidx] = NULL;
 		}
 		else
 		{
@@ -207,7 +208,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 			{
 				if (localCur)
 				{
-					cmdData[slaveidx] = localCmd;
+					lastSent[slaveidx] = cmdData[slaveidx] = localCmd;
 					if (localNext == localHead)
 						queue.cur = NULL;
 					else
@@ -405,9 +406,7 @@ size_t RdWrManager::peekQueue(int slaveidx)
 //¼õËÙÍ£Ö¹
 void RdWrManager::declStop(int slaveidx, DeclStopInfo *stopInfo)
 {
-	queueMutex[slaveidx].lock(); 
 	tostop[slaveidx] = stopInfo;
-	queueMutex[slaveidx].unlock();
 }
 
 void RdWrManager::setIoOutput(short slaveidx, unsigned int output)
