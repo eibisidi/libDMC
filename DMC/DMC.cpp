@@ -117,3 +117,19 @@ long WINAPI d1000_get_command_pos(short axis)
 {
 	return DmcManager::instance().getDriverCmdPos(axis);
 }
+
+DWORD WINAPI d1000_start_running(short TotalAxis,short *AxisArray,long *VelArray, double Tacc)
+{
+	return DmcManager::instance().start_running(TotalAxis, AxisArray, VelArray, Tacc);
+}
+
+DWORD WINAPI d1000_adjust(short TotalAxis, long deltav, short cycles)
+{
+	return DmcManager::instance().adjust(TotalAxis, deltav, cycles);	
+}
+
+DWORD WINAPI d1000_end_running(short TotalAxis,short *AxisArray,double Tacc)
+{
+	return DmcManager::instance().end_running(TotalAxis, AxisArray, Tacc);	
+}
+

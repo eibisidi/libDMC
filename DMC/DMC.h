@@ -41,6 +41,7 @@ enum MoveState
 	MOVESTATE_CMD_STOP,			//急停、减速停止
 	MOVESTATE_LIMIT_STOP,		//遇限位停止，未使用
 	MOVESTATE_O_STOP,			//遇原点停止
+	MOVESTATE_RUNNING,			//持续运动中
 };
 	
 enum ErrorNum{
@@ -303,6 +304,13 @@ DMC1000_API DWORD WINAPI d1000_start_ta_archl(short TotalAxis,short *AxisArray,l
 返回值：指定轴当前指令位置计数器值，单位： pulse。
 */
 DMC1000_API long WINAPI d1000_get_command_pos(short axis);
+
+DMC1000_API DWORD WINAPI d1000_start_running(short TotalAxis,short *AxisArray,long *VelArray, double Tacc);
+
+DMC1000_API DWORD WINAPI d1000_adjust(short TotalAxis, long deltav, short cycles);
+
+DMC1000_API DWORD WINAPI d1000_end_running(short TotalAxis,short *AxisArray,double Tacc);
+
 
 
 #ifdef __cplusplus
