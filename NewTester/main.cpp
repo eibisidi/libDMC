@@ -124,43 +124,37 @@ DWORD WINAPI LoaderThreadFunc(LPVOID p)
 	DWORD ret, ms;
 	printf("Start loading.\n");
 
-	while(true)
-    {
-    	//R->30000
-		ret  = d1000_start_ta_move(AXIS_RIGHT, 30000, 0, 80000, 0.2);
-		if (ERR_NOERR != ret)
-			return -1;
-		WAIT_DONE(AXIS_RIGHT, ms)
-		if (ms != MOVESTATE_STOP)
-			return -1;
+	short	axisArray[] = {AXIS_LEFT, AXIS_RIGHT};
+	long	distArray[] = {30000, 30000};
 
+	while (true)
+	{
+		ret  = d1000_start_t_line(sizeof(axisArray)/sizeof(axisArray[0]), axisArray, distArray, 0, 80000, 0.2);
+		if (ERR_NOERR != ret)
+			break;
+		WAIT_DONE(axisArray[0], ms)
+		if (ms != MOVESTATE_STOP)
+			break;
+		WAIT_DONE(axisArray[1], ms)
+		if (ms != MOVESTATE_STOP)
+			break;
 		d1000_out_bit(9, 3, 1);
-#if 0
-    	//L->20000
-		ret  = d1000_start_ta_move(AXIS_LEFT, 20000, 0, 20000, 0.2);
-		if (ERR_NOERR != ret)
-			return -1;
-		WAIT_DONE(AXIS_LEFT, ms)
-		if (ms != MOVESTATE_STOP)
-			return -1;
 
-    	//L->0
-		ret  = d1000_start_ta_move(AXIS_LEFT, 0, 0, 20000, 0.2);
-		if (ERR_NOERR != ret)
-			return -1;
-		WAIT_DONE(AXIS_LEFT, ms)
-		if (ms != MOVESTATE_STOP)
-			return -1;
-#endif
-		//R->0
-		ret  = d1000_start_ta_move(AXIS_RIGHT, 0, 0, 80000, 0.2);
-		if (ERR_NOERR != ret)
-			return -1;
-		WAIT_DONE(AXIS_RIGHT, ms)
-		if (ms != MOVESTATE_STOP)
-			return -1;
+		NEG_ARRAY(distArray);
 
-		d1000_out_bit(9,3, 0);
+		ret  = d1000_start_t_line(sizeof(axisArray)/sizeof(axisArray[0]), axisArray, distArray, 0, 80000, 0.2);
+		if (ERR_NOERR != ret)
+			break;
+		WAIT_DONE(axisArray[0], ms)
+		if (ms != MOVESTATE_STOP)
+			break;
+		WAIT_DONE(axisArray[1], ms)
+		if (ms != MOVESTATE_STOP)
+			break;
+		d1000_out_bit(9, 3, 0);
+
+		NEG_ARRAY(distArray);
+
 	}
 	
     return 0;
@@ -277,14 +271,14 @@ int main()
 	
 
 	HANDLE hThread;
-	hThread = CreateThread(NULL, 0, IoThreadFunc, 0, 0, NULL); // 创建线程
-	hThread = CreateThread(NULL, 0, LoaderThreadFunc, 0, 0, NULL); // 创建线程
-	hThread = CreateThread(NULL, 0, RotatorThreadFunc, 0, 0, NULL); // 创建线程
-	hThread = CreateThread(NULL, 0, MainThreadFunc, 0, 0, NULL); // 创建线程
-	hThread = CreateThread(NULL, 0, TongueThreadFunc, 0, 0, NULL); // 创建线程
-	//LoaderThreadFunc(0);
+	//hThread = CreateThread(NULL, 0, IoThreadFunc, 0, 0, NULL); // 创建线程
+	//hThread = CreateThread(NULL, 0, LoaderThreadFunc, 0, 0, NULL); // 创建线程
+	//hThread = CreateThread(NULL, 0, RotatorThreadFunc, 0, 0, NULL); // 创建线程
+	//hThread = CreateThread(NULL, 0, MainThreadFunc, 0, 0, NULL); // 创建线程
+	//hThread = CreateThread(NULL, 0, TongueThreadFunc, 0, 0, NULL); // 创建线程
+	LoaderThreadFunc(0);
 
-#if 1
+#if 0
 	DWORD	ret, ms;
 	while (true)
 	{
