@@ -544,3 +544,85 @@ double ArchlMultiAxisPara::getCurSpeed() const 		//返回当前速度，有符号
 	
 	return v;
 }
+
+AccRef::AccRef()
+{
+	maxv 	= 0;
+	tAcc	= 0;
+}
+
+AccRef::~AccRef()
+{
+
+}
+
+int AccRef::startPlan()
+{
+	if (0 == planned)
+	{
+		cycles  = (int)(tAcc * CYCLES_PER_SEC) + 1;
+		elapsed = 0;
+		planned = 1;
+	}
+	return planned;
+}
+
+int AccRef::totalCycles() const
+{
+	return cycles;
+}
+
+bool AccRef::lastCycle() const
+{
+	return (this->elapsed >= totalCycles() - 1);
+}
+
+int AccRef::getElpased(int slave_index)
+{
+	int oldElapsed = this->elapsed;
+	if (slave_index == this->last_slaveidx)
+	{
+		this->elapsed++;
+	}
+
+	return oldElapsed;
+}
+
+AccMultiAxisPara::AccMultiAxisPara(AccRef *newAccRef, MultiAxisRequest *mar, int axis, long maxvel, int sp)
+	:BaseMultiAxisPara(newAccRef, mar,axis, sp, 0/*dummy*/)
+{
+	maxv 	= maxvel / CYCLES_PER_SEC;
+	lastpos	= sp;
+}
+	
+AccMultiAxisPara::~AccMultiAxisPara()
+{
+}
+
+bool AccMultiAxisPara::startPlan()
+{
+	bool success = (1 == this->ref->startPlan());	//0尚未规划， -1规划失败 1规划成功
+	return success;
+}
+
+int AccMultiAxisPara::nextPosition(int slaveidx)
+{
+	int 	nextpos;
+	AccRef *accRef = dynamic_cast<AccRef *> (this->ref);
+	long	v;			//本DC周期速度
+
+	if (accRef->lastCycle())
+		v = this->maxv;
+	else
+		v = (long)((accRef->getElpased(slaveidx) )*1.0/ (accRef->totalCycles()));
+
+	nextpos	= this->lastpos + v;
+
+	return nextpos;
+}
+
+double AccMultiAxisPara::getCurSpeed() const
+{//todo
+	return 0;
+}
+
