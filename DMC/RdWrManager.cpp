@@ -101,110 +101,130 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 		memset(&localCmd, 0, sizeof(transData));
 		slaveidx = iter->first;
 		CmdQueue &queue = iter->second;
-
-
-		if (tostop[slaveidx])
+		unsigned int begin_seq,end_seq;
+		begin_seq = seqLock[slaveidx].seq;
+		
+		if (queue.cur)
 		{
-			DeclStopInfo *dcInfo = tostop[slaveidx];
-			int estimate = (int)(dcInfo->decltime * CYCLES_PER_SEC) + 1;
-			if (queue.cur != NULL 
-				&& queue.cur->next != queue.head)
+			localCur = queue.cur;
+			localNext= localCur->next;
+			localHead= queue.head;
+			localCmd = (queue.cur)->cmdData;
+		}
+		
+		end_seq   = seqLock[slaveidx].seq;
+		if ((begin_seq & 1) ||( end_seq != begin_seq)) 
+			continue;	/*不一致数据*/
+
+		if (queue.keeprun)
+		{//持续运动
+			if (localCur)
 			{
-				int q0 = queue.cur->cmdData.Data1;
-				int q1 = (queue.cur->next)->cmdData.Data1;
-
-				int     vel0 = (q1 > q0) ? (q1 - q0) : (q0 - q1);		//初始运动速率
-				double  dec  = 1.0 * vel0 / estimate;					//减速度
-				int     dir  = (q1 > q0) ? 1 : -1;						//运动方向
-				double  vel  = vel0;
-				int 	q    = q0;
-
-				Item    item;
-				item.index 			= slaveidx;
-				item.cmdData.CMD 	= CSP;
-				item.cmdData.Data1	= q0;
-
-				lastSent[slaveidx] = cmdData[slaveidx] =  item.cmdData;
-
-				queue.tail->next	= NULL;
-
-				Item 	*toOverWrite = queue.cur;
-				Item	*newTail = queue.tail;
-				int 	deltaCount = 0;
-				while (vel > 0)
-				{
-					vel = vel - dec;
-					q	= int(q + dir * vel);
-
-					toOverWrite->cmdData.CMD 	= CSP;
-					toOverWrite->cmdData.Data1	= q;
-					newTail						= toOverWrite;
-					toOverWrite = toOverWrite->next;
-					if (toOverWrite->next == queue.head
-						&& vel > 0)
-					{
-						Item * newItem = new Item;
-						toOverWrite->next 	= newItem;
-						newItem->prev		= toOverWrite;
-						newItem->next		= queue.head;
-						
-						toOverWrite  	= newItem;
-						++deltaCount;
-					}
-				}
-
-				//释放内存
-				if (!deltaCount 
-					&& toOverWrite->next != queue.head)
-				{
-					queue.tail->next	= NULL;
-					Item * toDel = toOverWrite, *nextDel;
-					while(toDel)
-					{
-						nextDel = toDel->next;
-						delete toDel;
-						toDel = nextDel;
-						deltaCount--;
-					}
-				}
-
-				queue.tail			= newTail;
-				queue.tail->next	= queue.head;
-				queue.count		   += deltaCount;
-				
-				tostop[slaveidx]->valid = true;
-				tostop[slaveidx]->endpos = queue.tail->cmdData.Data1;
+				lastSent[slaveidx] = cmdData[slaveidx] = localCmd;
+				if (localNext == localHead)
+					queue.cur = NULL;
+				else
+					queue.cur = localNext;
 			}
 			else
-			{
-				//并未运动
-				if (lastSent[slaveidx].CMD == CSP)
-				{
-					tostop[slaveidx]->valid = true;
-					tostop[slaveidx]->endpos = lastSent[slaveidx].Data1;
-				}
-				else{
-					tostop[slaveidx]->valid = false;
-				}
+			{//已经在匀速运动阶段
+				int q1 = queue.tail->cmdData.Data1;
+				int q0 = (queue.tail->prev)->cmdData.Data1;
+				int v  = q1 - q0;								//todo增加调节逻辑
+				cmdData[slaveidx].CMD 	= CSP;
+				cmdData[slaveidx].Data1	= lastSent[slaveidx].Data1 + v;
+				lastSent[slaveidx]		= cmdData[slaveidx];
 			}
-			tostop[slaveidx] = NULL;
 		}
 		else
-		{
-			unsigned int begin_seq,end_seq;
-			begin_seq = seqLock[slaveidx].seq;
-			
-			if (queue.cur)
+		{//非持续运动
+			if (tostop[slaveidx])
 			{
-				localCur = queue.cur;
-				localNext= localCur->next;
-				localHead= queue.head;
-				localCmd = (queue.cur)->cmdData;
-			}
-			
-			end_seq   = seqLock[slaveidx].seq;
+				DeclStopInfo *dcInfo = tostop[slaveidx];
+				int estimate = (int)(dcInfo->decltime * CYCLES_PER_SEC) + 1;
+				if (queue.cur != NULL 
+					&& queue.cur->next != queue.head)
+				{
+					int q0 = queue.cur->cmdData.Data1;
+					int q1 = (queue.cur->next)->cmdData.Data1;
 
-			if (!((begin_seq & 1) ||( end_seq != begin_seq)))
+					int     vel0 = (q1 > q0) ? (q1 - q0) : (q0 - q1);		//初始运动速率
+					double  dec  = 1.0 * vel0 / estimate;					//减速度
+					int     dir  = (q1 > q0) ? 1 : -1;						//运动方向
+					double  vel  = vel0;
+					int 	q    = q0;
+
+					Item    item;
+					item.index 			= slaveidx;
+					item.cmdData.CMD 	= CSP;
+					item.cmdData.Data1	= q0;
+
+					lastSent[slaveidx] = cmdData[slaveidx] =  item.cmdData;
+
+					queue.tail->next	= NULL;
+
+					Item 	*toOverWrite = queue.cur;
+					Item	*newTail = queue.tail;
+					int 	deltaCount = 0;
+					while (vel > 0)
+					{
+						vel = vel - dec;
+						q	= int(q + dir * vel);
+
+						toOverWrite->cmdData.CMD 	= CSP;
+						toOverWrite->cmdData.Data1	= q;
+						newTail						= toOverWrite;
+						toOverWrite = toOverWrite->next;
+						if (toOverWrite->next == queue.head
+							&& vel > 0)
+						{
+							Item * newItem = new Item;
+							toOverWrite->next 	= newItem;
+							newItem->prev		= toOverWrite;
+							newItem->next		= queue.head;
+							
+							toOverWrite  	= newItem;
+							++deltaCount;
+						}
+					}
+
+					//释放内存
+					if (!deltaCount 
+						&& toOverWrite->next != queue.head)
+					{
+						queue.tail->next	= NULL;
+						Item * toDel = toOverWrite, *nextDel;
+						while(toDel)
+						{
+							nextDel = toDel->next;
+							delete toDel;
+							toDel = nextDel;
+							deltaCount--;
+						}
+					}
+
+					queue.tail			= newTail;
+					queue.tail->next	= queue.head;
+					queue.count		   += deltaCount;
+					
+					tostop[slaveidx]->valid = true;
+					tostop[slaveidx]->endpos = queue.tail->cmdData.Data1;
+				}
+				else
+				{
+					//并未运动
+					if (lastSent[slaveidx].CMD == CSP)
+					{
+						tostop[slaveidx]->valid = true;
+						tostop[slaveidx]->endpos = lastSent[slaveidx].Data1;
+					}
+					else{
+						tostop[slaveidx]->valid = false;
+					}
+				}
+				tostop[slaveidx] = NULL;
+			}
+			else
 			{
 				if (localCur)
 				{
@@ -216,7 +236,6 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 				}
 			}
 		}
-
 		if (CSP == cmdData[slaveidx].CMD)
 			con = true;
 	}
