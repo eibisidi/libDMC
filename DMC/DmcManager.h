@@ -16,42 +16,6 @@
 
 using std::map;
 
-
-
-//电机状态
-struct DriverState
-{
-	long 			curpos;		//当前位置, 驱动器返回实时更新
-	MoveState		movestate;
-	unsigned short	status;		//状态字
-	OpMode			opmode;		//操作模式
-	long			cmdpos;		//绝对位置,第一次电机使能后赋初值,回零后更新
-	
-	DriverState()
-	{
-		curpos = 0;
-		movestate  = MOVESTATE_NONE;
-		status = 0;
-		opmode = OPMODE_CSP;//OPMODE_NONE;
-		cmdpos = 0;
-	}
-};
-
-
-
-struct IoState
-{
-	unsigned int    input;			//输入值
-	unsigned int    output;			//输出值
-	IoRequestState	iors;
-	IoState()
-	{
-		input 	= 0;
-		output  = 0;
-		iors	= IORS_NONE;
-	}
-};
-
 class DmcManager : public Poco::Runnable
 {
 
