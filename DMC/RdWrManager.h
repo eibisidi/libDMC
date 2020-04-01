@@ -89,14 +89,14 @@ struct CmdQueue
 	Item 			*tail;
 	Item			*cur;
 	size_t			count;		//当前队列中数目
+	bool			keeprun;	//是否持续运动
 	CmdQueue()
 	{
 		head = tail = NULL;
 		cur	 = NULL;
 		count = 0;
+		keeprun = false;
 	}
-
-	
 };
 
 class RdWrManager : public Poco::Runnable
@@ -110,8 +110,8 @@ public:
 
 	~RdWrManager();
 
-	void pushItems(Item **itemLists, size_t rows, size_t cols);
-	void pushItemsSync(Item **itemLists, size_t rows, size_t cols);
+	void pushItems(Item **itemLists, size_t rows, size_t cols, bool keep);
+	void pushItemsSync(Item **itemLists, size_t rows, size_t cols, bool keep);
 	size_t peekQueue(int slaveidx);
 	void declStop(int slaveidx, DeclStopInfo *stopInfo);
 

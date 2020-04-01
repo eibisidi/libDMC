@@ -276,6 +276,8 @@ private:
 	bool	startPlan();
 	bool	positionReached(int curpos, int bias = 0) const;
 
+	bool 	keep;/*加速后持续匀速运动*/
+
 public:
 	BaseMultiAxisPara 	*axispara;
 
@@ -291,6 +293,7 @@ public:
 
 	MultiAxisRequest(int axis, LinearRef *newLinearRef, int dist, bool abs);				//直线插补
 	MultiAxisRequest(int axis, ArchlRef *newArchlRef, int dist, bool abs, bool z);			//Z轴拱门插补
+	MultiAxisRequest(int axis, AccRef *newAccRef, long maxvel);								//匀加速后持续运动
 };
 
 class HomeMoveRequest: public BaseRequest

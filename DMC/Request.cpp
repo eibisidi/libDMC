@@ -1153,13 +1153,22 @@ FsmRetType  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 		return MOVESTATE_ERR;
 	}
 
-	req->fsmstate	 	= MultiAxisRequest::fsm_state_csp;
-	req->cmdData->CMD 	= GET_STATUS;						/*同步命令*/
-	req->rechecks		= RETRIES;
-	req->attempts		= 0;
-
 	//多轴插入CSP规划点
 	pushCspPoints(req);
+
+	if (req->keep)
+	{
+		req->fsmstate		= MultiAxisRequest::fsm_state_done;
+		retval				= MOVESTATE_RUNNING;				/*持续运动中*/
+		req->reqState		= REQUEST_STATE_SUCCESS;
+	}
+	else
+	{
+		req->fsmstate	 	= MultiAxisRequest::fsm_state_csp;
+	}	
+	req->cmdData->CMD	= GET_STATUS;							/*同步命令*/
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
 
 	return retval;
 }
@@ -1400,7 +1409,7 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 
 	//req->dmc->logCspPoints(itemLists, cycles, axises);	//输出规划结果到日志
 
-	req->dmc->pushItems(itemLists, cycles, axises, true);
+	req->dmc->pushItems(itemLists, cycles, axises, true/*同步*/, req->keep/*持续匀速运动*/);
 
 	delete [] itemLists;
 }
@@ -1438,6 +1447,8 @@ MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, b
 	double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);	
 	if (dist > newLinearRef->max_dist)
 		newLinearRef->max_dist = dist;				//参考轴运动距离
+
+	this->keep = false;
 }
 
 MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, bool abs, bool z)			//Z轴拱门插补
@@ -1465,6 +1476,20 @@ MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, boo
 		if (dist > newArchlRef->max_dist)
 			newArchlRef->max_dist = dist;				//参考轴运动距离
 	}
+
+	this->keep = false;
+}
+
+MultiAxisRequest::MultiAxisRequest(int axis, AccRef *newAccRef, long maxvel)
+{
+	int startpos;
+	startpos = DmcManager::instance().getDriverCmdPos(axis);
+	
+	this->slave_idx = axis;
+	this->fsmstate 	= fsm_state_start;
+	this->axispara	= new AccMultiAxisPara(newAccRef, this, axis, maxvel, startpos);
+
+	this->keep = true;
 }
 
 FsmRetType HomeMoveRequest::fsm_state_done(HomeMoveRequest *req)

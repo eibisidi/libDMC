@@ -269,7 +269,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 	return 0;
 }
 
-void RdWrManager::pushItems(Item **itemLists, size_t rows, size_t cols)
+void RdWrManager::pushItems(Item **itemLists, size_t rows, size_t cols, bool keep)
 {
 	for(size_t  c = 0; c < cols; ++c)
 	{
@@ -314,17 +314,19 @@ void RdWrManager::pushItems(Item **itemLists, size_t rows, size_t cols)
 			--tosend[slaveidx].count;
 		}
 
+		tosend[slaveidx].keeprun= keep;
+
 		seqLock[slaveidx].unlock();
 	}
 }
 
 
 //同步插入命令队列：适用于多轴运动、多轴回原点，每行命令出现在一次Ecm_write调用中
-void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols)
+void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols, bool keep)
 {
 	if (cols == 1)
 	{//单轴运动，获得小锁
-		pushItems(itemLists, rows, cols);
+		pushItems(itemLists, rows, cols, keep);
 	}
 	else//多轴插补
 	{
@@ -378,6 +380,7 @@ void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols)
 		tosend[slaveidx].tail 	= toAppend->prev;
 		tosend[slaveidx].cur 	= toAppend;
 		tosend[slaveidx].count	= rows;
+		tosend[slaveidx].keeprun= keep;
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////

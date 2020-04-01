@@ -795,7 +795,7 @@ void DmcManager::restoreLastCmd(transData *cmdData)
 	*cmdData = m_lastCmdData[slaveidx];
 }
 
-void DmcManager::pushItems(Item **itemLists, size_t rows, size_t cols, bool sync)
+void DmcManager::pushItems(Item **itemLists, size_t rows, size_t cols, bool sync, bool keep)
 {
 	if(NULL == itemLists
 		|| rows <= 0
@@ -803,9 +803,9 @@ void DmcManager::pushItems(Item **itemLists, size_t rows, size_t cols, bool sync
 		return;
 
 	if(sync)
-		m_rdWrManager.pushItemsSync(itemLists, rows, cols);
+		m_rdWrManager.pushItemsSync(itemLists, rows, cols, keep);
 	else
-		m_rdWrManager.pushItems(itemLists, rows, cols);
+		m_rdWrManager.pushItems(itemLists, rows, cols, keep);
 
 	//将最后一行的命令更新到m_lastCmdData中
 	for(size_t c = 0; c < cols; ++c)
@@ -1478,12 +1478,79 @@ long DmcManager::get_command_pos(short axis)
 	return retpos;
 }
 
+unsigned long DmcManager::start_running(short totalAxis,short *axisArray,long *VelArray, double Tacc)
+{
+	if (totalAxis <= 0
+			|| axisArray == NULL
+			|| VelArray  == NULL
+			|| Tacc < 1E-6)
+		return ERR_INVALID_ARG;
+	
+	unsigned long	retValue = ERR_NOERR;
+	MultiAxisRequest *newReq = NULL;
+	AccRef		 	*newAccRef = NULL; //匀加速
+	
+	//先进行容错检查
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short axis = axisArray[i];
+		if ( false == isDriverSlave(axis))
+		{
+			retValue = ERR_NO_AXIS;
+			goto DONE;
+		}
+
+		unsigned long ms = getSlaveState(axis);
+		
+		if (MOVESTATE_BUSY == ms
+			|| MOVESTATE_RUNNING == ms)
+		{
+			retValue = ERR_AXIS_BUSY;
+			goto DONE;
+		}
+	}
+
+	newAccRef = new AccRef;
+	if(NULL == newAccRef)
+	{
+		retValue = ERR_MEM;
+		goto DONE;
+	}
+
+	newAccRef->maxv = VelArray[0];
+	newAccRef->tAcc = Tacc;
+	
+	m_mutex.lock();
+	//新建请求
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short 	axis = axisArray[i];
+		long 	vel = VelArray[i];
+		newReq = new MultiAxisRequest(axis, newAccRef, vel);
+		setSlaveState(axis, MOVESTATE_BUSY);
+		m_requests[axis] = newReq;
+	}	
+	m_condition.signal();
+	m_mutex.unlock();
+DONE:
+	return retValue;
+}
+
+unsigned long DmcManager::adjust(short TotalAxis, long deltav, short cycles)
+{//todo
+	return 0;
+}
+
+unsigned long DmcManager::end_running(short TotalAxis,short *AxisArray,double Tacc)
+{//todo
+	return 0;
+}
+
 unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 {
 	assert(tDec > 1E-6);
 	unsigned long retValue = ERR_NOERR;
 	DStopRequest *newReq = NULL;
-
 
 	do{
 		if ( false == isDriverSlave(axis))

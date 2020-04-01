@@ -41,6 +41,11 @@ public:
 	unsigned long check_done(short axis);
 	long get_command_pos(short axis);
 
+	//同步匀加速持续运动
+	unsigned long start_running(short TotalAxis,short *AxisArray,long *VelArray, double Tacc);
+	unsigned long adjust(short TotalAxis, long deltav, short cycles);
+	unsigned long end_running(short TotalAxis,short *AxisArray,double Tacc);
+
 	//停止
 	unsigned long decel_stop(short axis, double tDec, bool bServOff = false);
 	unsigned long immediate_stop(short axis);
@@ -73,7 +78,7 @@ public:
 	bool	getSdoCmdResp(BaseRequest *req, transData **ppCmd, transData **ppResp);		//获取SDO命令，成功返回true
 	void 	freeSdoCmdResp(BaseRequest *req);											  //释放SDO命令
 	void restoreLastCmd(transData *cmdData);
-	void pushItems(Item **itemList, size_t rows, size_t cols, bool sync);
+	void pushItems(Item **itemLists, size_t rows, size_t cols, bool sync, bool keep = false);
 
 	void setRespData(transData *respData);		// 发送接收线程返回数据，以及发送接收线程当前状态
 	void copyRespData();						// 处理返回的数据
