@@ -1541,9 +1541,62 @@ unsigned long DmcManager::adjust(short TotalAxis, long deltav, short cycles)
 	return 0;
 }
 
-unsigned long DmcManager::end_running(short TotalAxis,short *AxisArray,double Tacc)
-{//todo
-	return 0;
+unsigned long DmcManager::end_running(short totalAxis,short *axisArray,double tDec)
+{
+	if (totalAxis <= 0
+			|| axisArray == NULL
+			|| tDec < 1E-6)
+		return ERR_INVALID_ARG;
+	
+	unsigned long	retValue 					= ERR_NOERR;
+	MultiDeclRequest *newReq 					= NULL;
+	MultiDeclRequest::MultiDeclRef	*newDeclRef = NULL; //匀加速
+	
+	//先进行容错检查
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short axis = axisArray[i];
+		if ( false == isDriverSlave(axis))
+		{
+			retValue = ERR_NO_AXIS;
+			goto DONE;
+		}
+
+		unsigned long ms = getSlaveState(axis);
+		
+		if (MOVESTATE_BUSY == ms)
+		{
+			retValue = ERR_AXIS_BUSY;
+			goto DONE;
+		}
+		
+		if (MOVESTATE_RUNNING != ms)
+		{
+			retValue = ERR_AXIS_NOT_MOVING;
+			goto DONE;
+		}
+	}
+
+	newDeclRef = new MultiDeclRequest::MultiDeclRef;
+	if(NULL == newDeclRef)
+	{
+		retValue = ERR_MEM;
+		goto DONE;
+	}
+
+	m_mutex.lock();
+	//新建请求
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short	axis = axisArray[i];
+		newReq = new MultiDeclRequest(axis, newDeclRef, tDec);
+		setSlaveState(axis, MOVESTATE_BUSY);
+		m_requests[axis] = newReq;
+	}	
+	m_condition.signal();
+	m_mutex.unlock();
+DONE:
+	return retValue;
 }
 
 unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)

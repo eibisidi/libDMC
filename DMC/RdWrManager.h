@@ -37,12 +37,14 @@ public:
 class DeclStopInfo
 {
 public:
+	int			slaveIdx;
 	double 		decltime;			//减速时间
 	bool		valid;				//减速目标位置是否有效
 	int			endpos;				//减速目标位置，valid = true时有效
 
 	DeclStopInfo()
 	{
+		slaveIdx = 0;
 		decltime = 0.1;
 		valid 	 = false;
 		endpos	 = 0;
@@ -114,6 +116,7 @@ public:
 	void pushItemsSync(Item **itemLists, size_t rows, size_t cols, bool keep);
 	size_t peekQueue(int slaveidx);
 	void declStop(int slaveidx, DeclStopInfo *stopInfo);
+	void declStopSync(DeclStopInfo **stopInfos, size_t cols);
 
 	void setIoOutput(short slaveidx, unsigned int output);
 	unsigned int getIoOutput(short slaveidx);

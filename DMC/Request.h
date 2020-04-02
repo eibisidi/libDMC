@@ -515,6 +515,92 @@ public:
 	MultiAbortHomeRequest(int axis, MultiAbortHomeRef *newRef );
 };
 
+class MultiDeclRequest : public BaseRequest
+{
+private:
+	static FsmRetType fsm_state_done(MultiDeclRequest *req);
+	static FsmRetType fsm_state_svoff(MultiDeclRequest *req);
+	static FsmRetType fsm_state_csp(MultiDeclRequest *req);	
+	static FsmRetType fsm_state_start(MultiDeclRequest *req);
+	static void pushMultiDecl(MultiDeclRequest *req);
+	bool  	positionReached(int q , int bias) const;
+
+public:
+	class MultiDeclRef
+	{
+	private:
+		int rc;
+		int sync_count;
+		int first_slave;
+		int error;
+		std::map<int, DeclStopInfo *> declInfos;
+	public:
+		MultiDeclRef():rc(0), sync_count(0),first_slave(0),error(0) {}
+		virtual ~MultiDeclRef() {}
+		void duplicate(int axis, DeclStopInfo * stopInfo)
+		{
+			++rc;
+			declInfos[axis] = stopInfo;
+		}
+		void release() 
+		{
+			if (--rc == 0)
+			{
+				delete this;
+			}
+		}
+
+		void reg_sync(int slaveidx)
+		{
+			++sync_count;
+		}
+
+		bool all_sync() const
+		{
+			return sync_count == rc;
+		}
+
+		int getError() const
+		{
+			return error;
+		}
+
+		void setError()
+		{
+			error  = 1;
+		}
+
+		bool isFirst(int i) const
+		{
+			if (!declInfos.empty())
+				return (i == (declInfos.begin()->first));
+			return false;
+		}
+
+		const std::map<int, DeclStopInfo *>& getStopInfos() const
+		{
+			return declInfos;
+		}
+	};
+
+	MultiDeclRef * 	ref;
+	bool			serveOff;				//停止后是否关闭使能
+	DeclStopInfo 	stopInfo;
+
+	FsmRetType (* fsmstate)(MultiDeclRequest *);	
+	
+	virtual ~MultiDeclRequest() 
+	{
+		if (ref)
+			ref->release();
+	}
+	
+	virtual FsmRetType exec();
+
+	MultiDeclRequest(int axis, MultiDeclRef *newRef, double tdec);
+};
+
+
 class ReadIoRequest: public BaseRequest
 {
 private:

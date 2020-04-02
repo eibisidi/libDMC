@@ -2500,6 +2500,197 @@ MultiAbortHomeRequest::MultiAbortHomeRequest(int axis, MultiAbortHomeRef *newRef
 	this->ref->duplicate(axis);
 }
 
+FsmRetType MultiDeclRequest::fsm_state_done(MultiDeclRequest *req)
+{
+	//shall not be called
+	return MOVESTATE_NONE;
+}
+
+FsmRetType MultiDeclRequest::fsm_state_svoff(MultiDeclRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+	if(SV_OFF != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData)
+			&& req->rechecks--)
+	{
+		return retval;
+	}
+
+	if (req->dmc->isDriverOn(req->slave_idx)
+			&& req->rechecks--)
+	{
+		return retval;
+	}
+	
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{			
+			LOGSINGLE_ERROR("DStopRequest::fsm_state_svoff timeouts. axis=%d, status=0x%?x.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx));
+			req->reqState = REQUEST_STATE_FAIL;
+			retval = MOVESTATE_TIMEOUT;
+		} 
+		else
+		{
+			LOGSINGLE_INFORMATION("DStopRequest::fsm_state_svoff reattempts. axis=%d, status=0x%?x.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx));
+			req->dmc->restoreLastCmd(req->cmdData);
+			req->rechecks = RETRIES;
+		}
+		return retval;
+	}
+
+	req->fsmstate		= MultiDeclRequest::fsm_state_done;
+	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+	retval = MOVESTATE_CMD_STOP;
+	return MOVESTATE_CMD_STOP;
+}
+
+FsmRetType MultiDeclRequest::fsm_state_csp(MultiDeclRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	if(!req->stopInfo.valid)
+	{//尚未发送完毕
+		return retval;
+	}
+
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
+	{//尚未发送完毕
+		return retval;
+	}
+
+	//发送已经完成
+
+	if(CSP != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData )
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+
+	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+
+	if ( !req->positionReached(req->respData->Data1, posBias) 
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+
+	if (req->rechecks <= 0)						//等待位置到达超时
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{	
+			LOGSINGLE_ERROR("MultiDeclRequest::fsm_state_csp timeout. nowpos=%d, endpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->stopInfo.endpos);
+			req->reqState = REQUEST_STATE_FAIL;
+			retval = MOVESTATE_TIMEOUT;
+		}
+		else
+		{
+			LOGSINGLE_INFORMATION("MultiDeclRequest::fsm_state_csp reattempts. attempts=%d. nowpos=%d, endpos=%d.", __FILE__, __LINE__, req->attempts, (int)req->respData->Data1, req->stopInfo.endpos);
+			req->rechecks = RETRIES;
+			req->cmdData->CMD 	= CSP;
+			req->cmdData->Data1 = req->stopInfo.endpos;	//重发最终位置
+		}
+		return retval;
+	}
+
+	LOGSINGLE_INFORMATION("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
+
+	//目标位置已到达,更新新的绝对位置
+	if(req->stopInfo.valid)
+		req->dmc->setDriverCmdPos(req->slave_idx, req->stopInfo.endpos);
+	else
+		req->dmc->setDriverCmdPos(req->slave_idx, req->dmc->getCurpos(req->slave_idx));
+	
+	if (req->serveOff)
+	{//需关闭电机使能
+		req->fsmstate		= MultiDeclRequest::fsm_state_svoff;
+		req->cmdData->CMD	= SV_OFF;
+	}
+	else
+	{//不需关闭电机使能
+		req->fsmstate		= fsm_state_done;
+		retval = MOVESTATE_CMD_STOP;
+		req->reqState		= REQUEST_STATE_SUCCESS;
+	}
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+	return retval;
+}
+
+FsmRetType MultiDeclRequest::fsm_state_start(MultiDeclRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+	
+	if(0 != req->ref->getError())
+	{//其它电机已经出现错误
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if (req->ref->isFirst(req->slave_idx))
+	{
+		pushMultiDecl(req);
+	}
+
+	req->fsmstate		= MultiDeclRequest::fsm_state_csp;
+	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
+	req->respData		= req->dmc->getRespData(req->slave_idx);
+	req->cmdData->CMD	= GET_STATUS;							/*同步命令*/
+
+	return retval;
+}
+
+bool  MultiDeclRequest::positionReached(int q , int bias) const
+{
+	if (bias)
+		return (::abs(q - this->stopInfo.endpos) < bias);
+	else
+		return q == this->stopInfo.endpos;
+}
+
+void MultiDeclRequest::pushMultiDecl(MultiDeclRequest *req)
+{
+	if (!req->ref->isFirst(req->slave_idx))
+		return;
+
+	const std::map<int, DeclStopInfo *>& stopInfos = req->ref->getStopInfos();
+	size_t count = stopInfos.size();
+
+	DeclStopInfo ** declStopInfos = new DeclStopInfo*[count];
+
+	int col = 0;
+	for (std::map<int, DeclStopInfo *>::const_iterator iter = stopInfos.begin();
+			iter != stopInfos.end();
+			++iter, ++col)
+	{
+		declStopInfos[col] = iter->second;
+	}
+
+	req->dmc->m_rdWrManager.declStopSync(declStopInfos, count);
+
+	delete []declStopInfos;
+}
+
+
+FsmRetType MultiDeclRequest::exec()
+{
+	return fsmstate(this);
+}
+
+MultiDeclRequest::MultiDeclRequest(int axis, MultiDeclRef *newRef, double tdec)
+{
+	this->slave_idx = axis;
+	this->fsmstate	= fsm_state_start;
+	this->ref		= newRef;
+	this->ref->duplicate(axis, &(this->stopInfo));
+	this->serveOff	= false;
+	this->stopInfo.slaveIdx  = axis;
+	this->stopInfo.decltime	 = tdec;
+}
+
 FsmRetType ReadIoRequest::fsm_state_done(ReadIoRequest *req)
 {
 	//shall not be called

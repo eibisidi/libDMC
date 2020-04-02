@@ -128,12 +128,90 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 			}
 			else
 			{//已经在匀速运动阶段
-				int q1 = queue.tail->cmdData.Data1;
-				int q0 = (queue.tail->prev)->cmdData.Data1;
-				int v  = q1 - q0;								//todo增加调节逻辑
-				cmdData[slaveidx].CMD 	= CSP;
-				cmdData[slaveidx].Data1	= lastSent[slaveidx].Data1 + v;
-				lastSent[slaveidx]		= cmdData[slaveidx];
+				if (tostop[slaveidx])
+				{
+					DeclStopInfo *dcInfo = tostop[slaveidx];
+					int estimate = (int)(dcInfo->decltime * CYCLES_PER_SEC) + 1;
+					
+					int v  		 = queue.tail->cmdData.Data1 - (queue.tail->prev)->cmdData.Data1;	//匀速速度
+					int q0 		 = lastSent[slaveidx].Data1 + v;
+					int 	vel0 = (v > 0) ? (v) : (-v);		//初始运动速率
+					double	dec  = 1.0 * vel0 / estimate;					//减速度
+					int 	dir  = (v > 0) ? 1 : -1;						//运动方向
+					double	vel  = vel0;
+					int 	q	 = q0;
+
+					Item	item;
+					item.index			= slaveidx;
+					item.cmdData.CMD	= CSP;
+					item.cmdData.Data1	= q0;
+					
+					lastSent[slaveidx] = cmdData[slaveidx] =  item.cmdData;
+
+					Item	*toOverWrite = queue.head;
+					Item	*newTail = queue.tail;
+					int 	deltaCount = 0;
+					while (vel > 0)
+					{
+						vel = vel - dec;
+						q	= int(q + dir * vel);
+
+						toOverWrite->cmdData.CMD	= CSP;
+						toOverWrite->cmdData.Data1	= q;
+						newTail	= toOverWrite;
+
+						toOverWrite = toOverWrite->next;
+						if (toOverWrite == queue.head
+							&& vel > 0)
+						{
+							Item * newItem = new Item;
+
+							queue.tail->next	= newItem;
+							newItem->prev		= queue.tail;
+							newItem->next		= queue.head;
+							queue.tail			= newItem;			//更新tail
+							queue.head->prev	= newItem;
+
+							toOverWrite 		= newItem;
+							++deltaCount;
+						}
+					}
+
+					//释放内存
+					if (!deltaCount 
+						&& toOverWrite != queue.head)
+					{
+						queue.tail->next	= NULL;
+						Item * toDel = toOverWrite, *nextDel;
+						while(toDel)
+						{
+							nextDel = toDel->next;
+							delete toDel;
+							toDel = nextDel;
+							deltaCount--;
+						}
+					}
+
+					queue.cur			= queue.head;		//从头开始发送
+					queue.tail			= newTail;
+					queue.tail->next	= queue.head;
+					queue.head->prev	= queue.tail;
+					queue.count 	   += deltaCount;
+					queue.keeprun		= false;			//切换为非连续运动
+					
+					tostop[slaveidx]->valid = true;
+					tostop[slaveidx]->endpos = queue.tail->cmdData.Data1;
+					tostop[slaveidx] = NULL;
+				}
+				else
+				{
+					int q1 = queue.tail->cmdData.Data1;
+					int q0 = (queue.tail->prev)->cmdData.Data1;
+					int v  = q1 - q0;								//todo增加调节逻辑
+					cmdData[slaveidx].CMD 	= CSP;
+					cmdData[slaveidx].Data1	= lastSent[slaveidx].Data1 + v;
+					lastSent[slaveidx]		= cmdData[slaveidx];
+				}
 			}
 		}
 		else
@@ -161,8 +239,6 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 
 					lastSent[slaveidx] = cmdData[slaveidx] =  item.cmdData;
 
-					queue.tail->next	= NULL;
-
 					Item 	*toOverWrite = queue.cur;
 					Item	*newTail = queue.tail;
 					int 	deltaCount = 0;
@@ -189,8 +265,8 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 					}
 
 					//释放内存
-					if (!deltaCount 
-						&& toOverWrite->next != queue.head)
+					if (!deltaCount  
+						&& toOverWrite != queue.head)
 					{
 						queue.tail->next	= NULL;
 						Item * toDel = toOverWrite, *nextDel;
@@ -430,6 +506,64 @@ void RdWrManager::declStop(int slaveidx, DeclStopInfo *stopInfo)
 {
 	tostop[slaveidx] = stopInfo;
 }
+
+void RdWrManager::declStopSync(DeclStopInfo **stopInfos, size_t cols)
+{
+	if (cols == 1)
+	{//单轴运动，获得小锁
+		declStop(stopInfos[0]->slaveIdx, stopInfos[0]);
+	}
+	else//多轴插补
+	{
+		//一行为一个周期，一列为一个轴
+		int c = 0;
+		int slaveidx;
+
+		//等待当前所有队列全部消耗完
+		while(c < cols)
+		{
+			for(; c < cols; ++c)
+			{				
+				slaveidx = stopInfos[c]->slaveIdx;
+				if (tosend.count(slaveidx)>0
+					&& (tosend[slaveidx].cur))
+					break; //当前队列仍有待发送数据
+			}
+		}
+
+		//所有队列均空
+		coreMutex.lock(); //获得大锁
+		for(c = 0; c < cols; ++c)
+		{
+			slaveidx = stopInfos[c]->slaveIdx;
+			seqLock[slaveidx].lock();
+		}
+		coreMutex.unlock(); //获得大锁
+		//已经获得所有的队列锁
+		
+	//////////////////////////////////////////////////////////////////////////////////////
+
+		for(size_t	c = 0; c < cols; ++c)
+		{
+			//todo关闭调节功能
+			slaveidx = stopInfos[c]->slaveIdx;
+			tostop[slaveidx] 	= stopInfos[c];
+		}
+
+	///////////////////////////////////////////////////////////////////////////////////////
+	
+		//释放所有的队列锁
+		coreMutex.lock(); 
+		for(c = 0; c < cols; ++c)
+		{
+			slaveidx = stopInfos[c]->slaveIdx;
+			seqLock[slaveidx].unlock();
+		}
+		coreMutex.unlock();
+	}
+}
+
+
 
 void RdWrManager::setIoOutput(short slaveidx, unsigned int output)
 {
