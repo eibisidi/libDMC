@@ -307,7 +307,7 @@ DMC1000_API long WINAPI d1000_get_command_pos(short axis);
 
 DMC1000_API DWORD WINAPI d1000_start_running(short TotalAxis,short *AxisArray,long *VelArray, double Tacc);
 
-DMC1000_API DWORD WINAPI d1000_adjust(short TotalAxis, long deltav, short cycles);
+DMC1000_API DWORD WINAPI d1000_adjust(short axis, short deltav, size_t cycles);
 
 DMC1000_API DWORD WINAPI d1000_end_running(short TotalAxis,short *AxisArray,double Tacc);
 

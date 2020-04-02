@@ -207,7 +207,26 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 				{
 					int q1 = queue.tail->cmdData.Data1;
 					int q0 = (queue.tail->prev)->cmdData.Data1;
-					int v  = q1 - q0;								//todo增加调节逻辑
+					int v  = q1 - q0;
+					if (adjusts[slaveidx].remainCount)
+					{
+						--adjusts[slaveidx].remainCount;
+						int dVel = adjusts[slaveidx].dVel;
+						if (v > 0)
+						{
+							if (dVel >= 0)
+								v += dVel;
+							else
+								v -= dVel;
+						}
+						else
+						{
+							if (dVel >= 0)
+								v -= dVel;
+							else
+								v += dVel;
+						}
+					}
 					cmdData[slaveidx].CMD 	= CSP;
 					cmdData[slaveidx].Data1	= lastSent[slaveidx].Data1 + v;
 					lastSent[slaveidx]		= cmdData[slaveidx];
@@ -563,7 +582,15 @@ void RdWrManager::declStopSync(DeclStopInfo **stopInfos, size_t cols)
 	}
 }
 
+void RdWrManager::setAdjust(short axis, short deltav, size_t cycles)
+{
+	seqLock[axis].lock();
 
+	adjusts[axis].dVel = deltav;
+	adjusts[axis].remainCount = cycles;
+	
+	seqLock[axis].unlock();
+}
 
 void RdWrManager::setIoOutput(short slaveidx, unsigned int output)
 {

@@ -51,6 +51,20 @@ public:
 	}
 };
 
+//减速停止信息
+class AdjustInfo
+{
+public:
+	int 		dVel;		//速率变化 +加速  -减速
+	size_t		remainCount;
+
+	AdjustInfo()
+	{
+		dVel 			= 0;
+		remainCount 	= 0;
+	}
+};
+
 class RdWrState
 {
 public:
@@ -117,6 +131,7 @@ public:
 	size_t peekQueue(int slaveidx);
 	void declStop(int slaveidx, DeclStopInfo *stopInfo);
 	void declStopSync(DeclStopInfo **stopInfos, size_t cols);
+	void setAdjust(short axis, short deltav, size_t cycles);
 
 	void setIoOutput(short slaveidx, unsigned int output);
 	unsigned int getIoOutput(short slaveidx);
@@ -136,7 +151,8 @@ private:
 
 	std::map<int, CmdQueue> 	tosend;								//待发送	命令队列				
 	DeclStopInfo				*tostop[DEF_MA_MAX];				//待减速停止
-	transData					lastSent[DEF_MA_MAX];				//记录上次发送命令
+	transData					lastSent[DEF_MA_MAX];				//记录上次发送CSP命令
+	AdjustInfo					adjusts[DEF_MA_MAX];				//调速
 	RdWrState					rdWrState;
 	std::map<int, IoSlaveState> ioState;							//Io模块输入、输出值
 
