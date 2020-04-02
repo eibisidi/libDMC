@@ -426,8 +426,8 @@ bool MoveRequest::startPlan()
 	if (MOVETYPE_T == this->movetype)
 	{
 		TParam *newT = new TParam;
-		newT->q0   = this->startpos;		
-		newT->q1   = this->dstpos;
+		newT->q0   = 0;		
+		newT->q1   = this->dstpos - this->startpos;
 		newT->vmax = this->maxvel;
 		newT->amax = this->maxa;
 		if (-1 == ::Plan_T(newT))
@@ -441,8 +441,8 @@ bool MoveRequest::startPlan()
 	else
 	{
 		SParam *newS = new SParam;
-		newS->q0   = this->startpos;		
-		newS->q1   = this->dstpos;
+		newS->q0   = 0;		
+		newS->q1   = this->dstpos - this->startpos;
 		newS->vmax = this->maxvel;
 		newS->amax = this->maxa;
 		newS->jmax = this->maxj;			//最大加加速度
@@ -479,7 +479,7 @@ void MoveRequest::pushCspPoints(MoveRequest *req)
 		newItem = new Item;
 		newItem->index 			= req->slave_idx;
 		newItem->cmdData.CMD	= CSP;
-		newItem->cmdData.Data1	= req->moveparam->position();
+		newItem->cmdData.Data1	= req->startpos + req->moveparam->position();
 		newItem->cmdData.Data2	= 0;
 		
 		if (0 == row)
