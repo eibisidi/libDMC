@@ -45,7 +45,6 @@ void RdWrManager::clear()
 	m_consecutive	= false;
 	m_towrite		= 2;
 
-	tosend.clear();
 	memset(tostop, 0, sizeof(tostop));
 	memset(lastSent, 0, sizeof(lastSent));
 	ioState.clear();
@@ -67,6 +66,7 @@ void RdWrManager::clear()
 			}
 		}
 	}
+	tosend.clear();
 }
 
 int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
