@@ -600,7 +600,7 @@ public:
 	MultiDeclRequest(int axis, MultiDeclRef *newRef, double tdec);
 };
 
-
+/*已废弃*/
 class ReadIoRequest: public BaseRequest
 {
 private:
@@ -620,6 +620,7 @@ public:
 
 };
 
+/*已废弃*/
 class WriteIoRequest: public BaseRequest
 {
 private:
@@ -637,6 +638,30 @@ public:
 	WriteIoRequest()
 	{
 		output	  = 0;
+		fsmstate = fsm_state_start;
+	}
+};
+
+/*测试使用,正向运动到即将正溢位置
+使用前修改驱动器一圈分辨率，避免电机过速*/
+class MakeOverFlowRequest: public BaseRequest
+{
+private:
+	static FsmRetType fsm_state_done(MakeOverFlowRequest *req);
+	static FsmRetType fsm_wait_pos_reached(MakeOverFlowRequest *req);
+	static FsmRetType fsm_state_start(MakeOverFlowRequest *req);
+	static const int STEP_INC = 0x4000;
+	static const int DST_POS  = (0x7FFFFFFF - 10);
+
+	bool  positionReached(int q , int bias) const;
+public:
+
+	FsmRetType (* fsmstate)(MakeOverFlowRequest *);	
+	
+	virtual ~MakeOverFlowRequest() {}
+	virtual FsmRetType exec();
+	MakeOverFlowRequest()
+	{
 		fsmstate = fsm_state_start;
 	}
 };

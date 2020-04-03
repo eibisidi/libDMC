@@ -2814,3 +2814,139 @@ FsmRetType WriteIoRequest::exec()
 {
 	return fsmstate(this);
 }
+
+FsmRetType MakeOverFlowRequest::fsm_state_done(MakeOverFlowRequest *req)
+{
+	//shall not be called
+	return MOVESTATE_NONE;
+}
+
+FsmRetType MakeOverFlowRequest::fsm_wait_pos_reached(MakeOverFlowRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	printf("curpos = 0x%x\n", req->respData->Data1);
+
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
+	{//尚未发送完毕
+		return retval;
+	}
+
+	if(CSP != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData )
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+		
+	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+
+	if ( !req->positionReached(req->respData->Data1, posBias) 
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+		
+	if (req->rechecks <= 0) 					//等待位置到达超时
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{	
+			LOGSINGLE_ERROR("MakeOverFlowRequest::fsm_wait_pos_reached timeout. axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__,req->slave_idx, (int)req->respData->Data1, DST_POS);
+			retval = MOVESTATE_TIMEOUT;
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			LOGSINGLE_INFORMATION("MakeOverFlowRequest::fsm_wait_pos_reached reattempts.attempts=%d. axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->attempts, req->slave_idx, (int)req->respData->Data1, DST_POS);
+			req->cmdData->CMD	= CSP;
+			req->cmdData->Data1 = DST_POS;
+			req->rechecks = RETRIES;
+		}
+		return retval;
+	}
+
+	LOGSINGLE_INFORMATION("axis(%?d) makeoverflow pos reached.", __FILE__, __LINE__,req->slave_idx);
+
+	//目标位置已到达,更新新的绝对位置
+	req->dmc->setDriverCmdPos(req->slave_idx, DST_POS);
+	
+	req->fsmstate		= fsm_state_done;
+	retval				= MOVESTATE_STOP;
+	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+
+	return retval;
+}
+
+FsmRetType MakeOverFlowRequest::fsm_state_start(MakeOverFlowRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	int curpos = req->dmc->getCurpos(req->slave_idx);
+
+	Item *head = NULL;
+	Item *tail = NULL;
+	Item *newItem = NULL;
+	size_t rows	= 0;
+	while(curpos + STEP_INC > 0)
+	{
+		curpos += STEP_INC;
+
+		newItem = new Item;
+		newItem->index 			= req->slave_idx;
+		newItem->cmdData.CMD	= CSP;
+		newItem->cmdData.Data1	= curpos;
+		newItem->cmdData.Data2	= 0;
+		++rows;
+
+		if (NULL == head)
+		{
+			tail = head = newItem;
+		}
+		else
+		{
+			tail->next 		= newItem;
+			newItem->prev 	= tail;
+			newItem->next 	= head;
+			head->prev		= newItem;
+		}
+		tail = newItem;
+	}
+
+	newItem = new Item;
+	newItem->index			= req->slave_idx;
+	newItem->cmdData.CMD	= CSP;
+	newItem->cmdData.Data1	= DST_POS;
+	newItem->cmdData.Data2	= 0;
+	++rows;
+	
+	tail->next		= newItem;
+	newItem->prev	= tail;
+	newItem->next	= head;
+	head->prev		= newItem;
+	tail = newItem;
+
+	req->dmc->pushItems(&head, rows, 1, false, false);
+
+	req->fsmstate		= MakeOverFlowRequest::fsm_wait_pos_reached;
+	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
+	req->respData		= req->dmc->getRespData(req->slave_idx);
+	req->cmdData->CMD	= GET_STATUS;
+
+	return retval;
+}
+
+bool  MakeOverFlowRequest::positionReached(int q , int bias) const
+{
+	if (bias)
+		return (::abs(q - DST_POS) < bias);
+	else
+		return q == DST_POS;
+}
+
+FsmRetType MakeOverFlowRequest::exec()
+{
+	return fsmstate(this);
+}
+

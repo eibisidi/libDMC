@@ -50,6 +50,8 @@ public:
 	unsigned long decel_stop(short axis, double tDec, bool bServOff = false);
 	unsigned long immediate_stop(short axis);
 
+	unsigned long make_overflow(short axis);
+
 	//电机状态相关
 	long getCurpos(short slaveidx);			//获得电机当前位置,驱动器实时更新
 	bool isDriverOpCsp(short slaveidx);	//判断电机当前是否处于CSP操作模式

@@ -1706,6 +1706,63 @@ unsigned long DmcManager::immediate_stop(short axis)
 	return decel_stop(axis, 0.1, true);
 }
 
+unsigned long DmcManager::make_overflow(short axis)
+{
+	unsigned long retValue = ERR_NOERR;
+	MakeOverFlowRequest *newReq = NULL;
+
+	do{
+		if (false == isDriverSlave(axis))
+		{
+			retValue = ERR_NO_AXIS;
+			break;
+		}
+
+		if (MOVESTATE_BUSY == getSlaveState(axis))
+		{
+			retValue = ERR_AXIS_BUSY;
+			break;
+		}
+	
+		newReq = new MakeOverFlowRequest;
+		if (NULL == newReq)
+		{
+			retValue = ERR_MEM;
+			break;
+		}
+		newReq->slave_idx = axis;
+		
+		m_mutex.lock();
+		setSlaveState(axis, MOVESTATE_BUSY);
+		addRequest(axis, newReq);
+		m_mutex.unlock();	
+	}while(0);
+
+	unsigned long ms;
+	if (ERR_NOERR == retValue)
+	{
+		while(true)
+		{
+			ms = d1000_check_done(axis);				
+			if (MOVESTATE_BUSY != ms)
+				break;
+		}
+	}
+
+	if (MOVESTATE_STOP == ms)
+	{
+		retValue = ERR_NOERR;
+		LOGSINGLE_INFORMATION("make_overflow axis(%?d) succeed, cmdpos = %?d.", __FILE__, __LINE__, axis, getDriverCmdPos(axis));
+	}
+	else
+	{
+		retValue = ERR_INIT_AXIS;
+		LOGSINGLE_ERROR("make_overflow axis(%?d) failed.",  __FILE__, __LINE__, axis);
+	}
+
+	return retValue;
+}
+
 unsigned long DmcManager::out_bit(short slave_idx, short bitNo, short bitData)
 {
 	unsigned long retValue = ERR_NOERR;
