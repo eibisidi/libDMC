@@ -677,29 +677,20 @@ void DmcManager::updateState()
 		
 		CMD =((m_respData[slaveidx].CMD & 0xFF));
 		
-		if (GET_STATUS == CMD)
-			CMD = m_lastCmdData[slaveidx].CMD;
-
 		switch(CMD)
 		{
+			case GET_STATUS:
 			case ALM_CLR:
-				(iter->second).setStatus(m_respData[slaveidx].Parm);
-				break;
 			case CSP:
 			case GO_HOME:
 			case ABORT_HOME:
+			case SV_ON:
+			case SV_OFF:
 				(iter->second).setStatus(m_respData[slaveidx].Parm);
 				(iter->second).setCurPos(m_respData[slaveidx].Data1);
 				(iter->second).setAlarmCode(m_respData[slaveidx].Data2 >> 16);	//高字为告警码
 				if ((iter->second).getAlarmCode())
 					(iter->second).setSlaveState(MOVESTATE_ERR);
-				break;
-			case SV_ON:
-				(iter->second).setStatus(m_respData[slaveidx].Parm);
-				(iter->second).setCurPos(m_respData[slaveidx].Data1);
-				break;
-			case SV_OFF:
-				(iter->second).setStatus(m_respData[slaveidx].Parm);
 				break;
 			case DRIVE_MODE:
 				break;
@@ -1618,7 +1609,8 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 			break;
 		}
 
-		if (MOVESTATE_BUSY != getSlaveState(axis))
+		if (!bServOff
+			&& MOVESTATE_BUSY != getSlaveState(axis))
 		{//当前未在运动
 			retValue = ERR_AXIS_NOT_MOVING;
 			break;
@@ -1688,8 +1680,17 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 				}
 				else
 				{//当前未在运动
-					retValue = ERR_AXIS_NOT_MOVING;
-					break;
+					if (bServOff)
+					{
+						newReq = new DStopRequest(axis, tDec, bServOff);
+						setSlaveState(axis, MOVESTATE_BUSY);
+						addRequest(axis, newReq);
+					}
+					else
+					{
+						retValue = ERR_AXIS_NOT_MOVING;
+						break;
+					}
 				}
 			}
 		}	
