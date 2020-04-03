@@ -11,7 +11,7 @@
 #include "Poco/AutoPtr.h"
 #include "Poco/AsyncChannel.h"
 
-#define  DEBUG_MEMLEAK 1
+//#define  DEBUG_MEMLEAK 1
 
 #ifdef DEBUG_MEMLEAK
 //内存泄漏诊断
