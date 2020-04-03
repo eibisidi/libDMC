@@ -57,8 +57,13 @@ class AdjustInfo
 public:
 	int 		dVel;		//速率变化 +加速  -减速
 	size_t		remainCount;
-
+	
 	AdjustInfo()
+	{
+		reset();
+	}
+
+	void reset()
 	{
 		dVel 			= 0;
 		remainCount 	= 0;
