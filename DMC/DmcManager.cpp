@@ -352,7 +352,7 @@ unsigned long DmcManager::init()
 			}
 		}
 	}
-	
+
 	m_init = true;
 
 	return ERR_NOERR;
@@ -1536,9 +1536,15 @@ DONE:
 	return retValue;
 }
 
-unsigned long DmcManager::adjust(short TotalAxis, long deltav, short cycles)
-{//todo
-	return 0;
+unsigned long DmcManager::adjust(short axis, short deltav, size_t cycles)
+{
+	if ( false == isDriverSlave(axis))
+	{
+		return ERR_NO_AXIS;
+	}
+
+	m_rdWrManager.setAdjust(axis, deltav, cycles);
+	return ERR_NOERR;
 }
 
 unsigned long DmcManager::end_running(short totalAxis,short *axisArray,double tDec)

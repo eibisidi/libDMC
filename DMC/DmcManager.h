@@ -43,7 +43,7 @@ public:
 
 	//同步匀加速持续运动
 	unsigned long start_running(short TotalAxis,short *AxisArray,long *VelArray, double Tacc);
-	unsigned long adjust(short TotalAxis, long deltav, short cycles);
+	unsigned long adjust(short axis, short deltav, size_t cycles);
 	unsigned long end_running(short TotalAxis,short *AxisArray,double tDec);
 
 	//停止
