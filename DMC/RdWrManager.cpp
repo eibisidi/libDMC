@@ -119,7 +119,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 		if (queue.keeprun)
 		{//持续运动
 			if (localCur)
-			{
+			{//持续运动加速阶段
 				lastSent[slaveidx] = cmdData[slaveidx] = localCmd;
 				if (localNext == localHead)
 					queue.cur = NULL;
@@ -129,15 +129,15 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 			else
 			{//已经在匀速运动阶段
 				if (tostop[slaveidx])
-				{
+				{//减速
 					DeclStopInfo *dcInfo = tostop[slaveidx];
 					int estimate = (int)(dcInfo->decltime * CYCLES_PER_SEC) + 1;
 					
 					int v  		 = queue.tail->cmdData.Data1 - (queue.tail->prev)->cmdData.Data1;	//匀速速度
 					int q0 		 = lastSent[slaveidx].Data1 + v;
-					int 	vel0 = (v > 0) ? (v) : (-v);		//初始运动速率
-					double	dec  = 1.0 * vel0 / estimate;					//减速度
-					int 	dir  = (v > 0) ? 1 : -1;						//运动方向
+					int 	vel0 = (v > 0) ? (v) : (-v);											//初始运动速率
+					double	dec  = 1.0 * vel0 / estimate;											//减速度
+					int 	dir  = (v > 0) ? 1 : -1;												//运动方向
 					double	vel  = vel0;
 					int 	q	 = q0;
 
@@ -149,8 +149,8 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 					lastSent[slaveidx] = cmdData[slaveidx] =  item.cmdData;
 
 					Item	*toOverWrite = queue.head;
-					Item	*newTail = queue.tail;
-					int 	deltaCount = 0;
+					Item	*newTail 	= queue.tail;
+					int 	deltaCount 	= 0;
 					while (vel > 0)
 					{
 						vel = vel - dec;
@@ -204,7 +204,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 					tostop[slaveidx] = NULL;
 				}
 				else
-				{
+				{//持续运动，匀速阶段
 					int q1 = queue.tail->cmdData.Data1;
 					int q0 = (queue.tail->prev)->cmdData.Data1;
 					int v  = q1 - q0;
@@ -258,33 +258,37 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 
 					lastSent[slaveidx] = cmdData[slaveidx] =  item.cmdData;
 
-					Item 	*toOverWrite = queue.cur;
-					Item	*newTail = queue.tail;
-					int 	deltaCount = 0;
+					Item	*toOverWrite = queue.head;
+					Item	*newTail 	= queue.tail;
+					int 	deltaCount 	= 0;
 					while (vel > 0)
 					{
 						vel = vel - dec;
 						q	= int(q + dir * vel);
 
-						toOverWrite->cmdData.CMD 	= CSP;
+						toOverWrite->cmdData.CMD	= CSP;
 						toOverWrite->cmdData.Data1	= q;
-						newTail						= toOverWrite;
+						newTail	= toOverWrite;
+
 						toOverWrite = toOverWrite->next;
-						if (toOverWrite->next == queue.head
+						if (toOverWrite == queue.head
 							&& vel > 0)
 						{
 							Item * newItem = new Item;
-							toOverWrite->next 	= newItem;
-							newItem->prev		= toOverWrite;
+
+							queue.tail->next	= newItem;
+							newItem->prev		= queue.tail;
 							newItem->next		= queue.head;
-							
-							toOverWrite  	= newItem;
+							queue.tail			= newItem;			//更新tail
+							queue.head->prev	= newItem;
+
+							toOverWrite 		= newItem;
 							++deltaCount;
 						}
 					}
 
 					//释放内存
-					if (!deltaCount  
+					if (!deltaCount 
 						&& toOverWrite != queue.head)
 					{
 						queue.tail->next	= NULL;
@@ -298,12 +302,16 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 						}
 					}
 
+					queue.cur			= queue.head;		//从头开始发送
 					queue.tail			= newTail;
 					queue.tail->next	= queue.head;
-					queue.count		   += deltaCount;
+					queue.head->prev	= queue.tail;
+					queue.count 	   += deltaCount;
+					queue.keeprun		= false;			//切换为非连续运动
 					
 					tostop[slaveidx]->valid = true;
 					tostop[slaveidx]->endpos = queue.tail->cmdData.Data1;
+					tostop[slaveidx] = NULL;
 				}
 				else
 				{
@@ -429,6 +437,10 @@ void RdWrManager::pushItems(Item **itemLists, size_t rows, size_t cols, bool kee
 		}
 
 		tosend[slaveidx].keeprun= keep;
+		if (keep)
+		{
+			adjusts[slaveidx].reset();
+		}
 
 		seqLock[slaveidx].unlock();
 	}
@@ -495,6 +507,10 @@ void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols, bool
 		tosend[slaveidx].cur 	= toAppend;
 		tosend[slaveidx].count	= rows;
 		tosend[slaveidx].keeprun= keep;
+		if (keep)
+		{
+			adjusts[slaveidx].reset();
+		}
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////
