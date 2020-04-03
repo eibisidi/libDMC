@@ -49,8 +49,10 @@ void CDlg4::OnBnClickedButton1()
 	int axis = m_slaveAddrCombo.GetCurSel() + 1;
 	DWORD ret;
 
-	unsigned int bits;
+	unsigned int bits = 0;
 
+#if 0
+	todo 
 	ret = d1000_in_bit(axis, &bits);
 	if (ERR_NOERR != ret)
 	{
@@ -58,6 +60,7 @@ void CDlg4::OnBnClickedButton1()
 		MessageBox(str, _T(" ß∞‹"));
 		return;
 	}
+#endif
 
 	str.Format(_T("0x%04x"), bits);
 	m_inputEdit.SetWindowText(str);
@@ -76,12 +79,15 @@ void CDlg4::OnBnClickedButton8()
 
 	unsigned int bits = strtoul(hexString.c_str(), NULL, 16);
 
+#if 0
+	//todo
 	ret = d1000_out_bit(axis, bits);
 	if (ERR_NOERR != ret)
 	{
 		str.Format(_T("…Ë÷√ ‰≥ˆ∑µªÿ ß∞‹£¨%d"), ret);
 		MessageBox(str, _T(" ß∞‹"));
 	}
+#endif
 }
 
 
