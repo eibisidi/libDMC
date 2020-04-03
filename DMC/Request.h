@@ -119,10 +119,10 @@ public:
 	
 	DStopRequest(int axis, double Tdec, bool svoff)
 	{
-		slave_idx = axis;
-		stopInfo.decltime = Tdec;
-		serveOff = false;
-		fsmstate = fsm_state_start;
+		slave_idx 			= axis;
+		stopInfo.decltime 	= Tdec;
+		serveOff 			= svoff;
+		fsmstate 			= fsm_state_start;
 	}
 };
 
