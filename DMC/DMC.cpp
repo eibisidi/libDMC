@@ -128,8 +128,8 @@ DWORD WINAPI d1000_adjust(short axis, short deltav, size_t cycles)
 	return DmcManager::instance().adjust(axis, deltav, cycles);	
 }
 
-DWORD WINAPI d1000_end_running(short TotalAxis,short *AxisArray,double Tacc)
+DWORD WINAPI d1000_end_running(short TotalAxis,short *AxisArray,double tDec)
 {
-	return DmcManager::instance().end_running(TotalAxis, AxisArray, Tacc);	
+	return DmcManager::instance().end_running(TotalAxis, AxisArray, tDec);	
 }
 
