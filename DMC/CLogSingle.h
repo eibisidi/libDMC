@@ -11,6 +11,16 @@
 #include "Poco/AutoPtr.h"
 #include "Poco/AsyncChannel.h"
 
+#define  DEBUG_MEMLEAK 1
+
+#ifdef DEBUG_MEMLEAK
+//内存泄漏诊断
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
+#define new new( _CLIENT_BLOCK, __FILE__, __LINE__)
+#endif
+
 #define LOGSINGLE_FATAL(fmt, file, line, ...) \
 {																				\
 		Poco::Logger* 	pLogger = CLogSingle::getLogger();						\

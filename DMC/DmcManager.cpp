@@ -166,6 +166,10 @@ void	DmcManager::clear()
 
 unsigned long DmcManager::init()
 {
+#ifdef DEBUG_MEMLEAK
+	_CrtSetDbgFlag ( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );	//To Dectect Memory Leaks.
+#endif
+
 	//初始化日志
 	CLogSingle::initLogger();
 
@@ -382,6 +386,11 @@ void DmcManager::close()
 	CLogSingle::closeLogger();
 
 	clear();
+
+#ifdef DEBUG_MEMLEAK
+	_CrtDumpMemoryLeaks();
+#endif
+
 }
 
 void DmcManager::logCspPoints(Item **itemLists, int rows, size_t cols) const
