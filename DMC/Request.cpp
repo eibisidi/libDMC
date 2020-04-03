@@ -111,7 +111,7 @@ FsmRetType DStopRequest::fsm_state_csp(DStopRequest *req)
 		}
 	}
 
-	//LOGSINGLE_INFORMATION("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
+	LOGSINGLE_INFORMATION("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
 
 	//目标位置已到达,更新新的绝对位置
 	if(req->stopInfo.valid)
@@ -142,7 +142,7 @@ FsmRetType DStopRequest::fsm_state_start(DStopRequest *req)
 	req->cmdData	= req->dmc->getCmdData(req->slave_idx);
 	req->respData	= req->dmc->getRespData(req->slave_idx);
 	req->fsmstate	 	= fsm_state_csp;
-	req->cmdData->CMD 	= CSP;
+	req->cmdData->CMD 	= GET_STATUS;
 	
 	//将减速命令加入到队列中
 	req->dmc->m_rdWrManager.declStop(req->slave_idx, &req->stopInfo);
@@ -210,6 +210,8 @@ FsmRetType MoveRequest::fsm_state_csp(MoveRequest *req)
 		}
 		return retval;
 	}
+
+	LOGSINGLE_INFORMATION("axis(%?d) move pos reached. startpos=%?d, dstpos=%?d.", __FILE__, __LINE__,req->slave_idx, req->startpos, req->dstpos);
 
 	//目标位置已到达,更新新的绝对位置
 	req->dmc->setDriverCmdPos(req->slave_idx,req->dstpos);
@@ -498,7 +500,7 @@ void MoveRequest::pushCspPoints(MoveRequest *req)
 
 	req->cmdData->CMD	= GET_STATUS;
 
-	//req->dmc->logCspPoints(items, cycles, 1);	//todo输出规划结果到日志
+	//req->dmc->logCspPoints(&head, cycles, 1);
 	req->dmc->pushItems(&head, cycles, 1, false);
 }
 
