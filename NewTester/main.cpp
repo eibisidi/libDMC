@@ -261,6 +261,77 @@ int main()
 		return -1;
 	}
 
+	DWORD ret;
+	DWORD ms;
+
+
+	short 	axisArray[] = {1};
+	long	VelArray[]	= {10000};
+
+	char 	cmd;
+
+	std::cout << "input cmd." << std::endl;
+	while(std::cin >> cmd)
+	{
+		if (cmd == 'q')
+			break;
+
+		if (cmd == 'D')
+		{
+			ret = d1000_end_running(sizeof(axisArray)/sizeof(axisArray[0]), axisArray, 0.2);
+			if (0 != ret)
+			{
+				printf("d1000_end_running failed. ret = %d\n", ret);
+				return -1;
+			}
+		}
+		if (cmd == 'S')
+		{
+			ret = d1000_start_running(sizeof(axisArray)/sizeof(axisArray[0]), axisArray,VelArray, 0.1);
+			if (0 != ret)
+			{
+				printf("d1000_start_running failed. ret = %d\n", ret);
+				return -1;
+			}
+		}
+
+		if (cmd == 's')
+		{
+			ret = d1000_start_t_move(1, 100000,0,10000, 0.1);
+			if (0 != ret)
+			{
+				printf("d1000_start_t_move failed. ret = %d\n", ret);
+				return -1;
+			}
+		}
+
+		if (cmd == 'd')
+		{
+			ret = d1000_decel_stop(1,  0.1);
+			if (0 != ret)
+			{
+				printf("d1000_decel_stop failed. ret = %d\n", ret);
+				return -1;
+			}
+		}
+
+		if (cmd == 'A')
+		{		
+			ret = d1000_adjust(1,  10, 10000);
+			if (0 != ret)
+			{
+				printf("d1000_adjust failed. ret = %d\n", ret);
+				return -1;
+			}
+		}
+		
+		std::cout << "input cmd." << std::endl;
+	}
+	d1000_board_close();
+
+
+	return 0;
+
 	if (0 != all_go_home())
 	{
 		printf("all_go_home failed.\n");
