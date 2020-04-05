@@ -414,19 +414,15 @@ void RdWrManager::pushItems(Item **itemLists, size_t rows, size_t cols, bool kee
 		}
 
 		//释放已经发送过的内存
+		if(tosend[slaveidx].head != tosend[slaveidx].cur)
+		{
+			(tosend[slaveidx].cur)->prev->next = NULL;
+			m_garbageCollector.toss(tosend[slaveidx].head);
+		}
+		
+		tosend[slaveidx].head			= (tosend[slaveidx].cur);
 		(tosend[slaveidx].cur)->prev 	= tosend[slaveidx].tail;
 		(tosend[slaveidx].tail)->next 	= tosend[slaveidx].cur;
-
-		Item *todel;
-		while(tosend[slaveidx].head != tosend[slaveidx].cur)
-		{
-			todel = tosend[slaveidx].head;
-			tosend[slaveidx].head 			= todel->next;
-			todel->next = NULL;
-			todel->prev = NULL;
-			delete todel;
-			--tosend[slaveidx].count;
-		}
 
 		tosend[slaveidx].keeprun= keep;
 		if (keep)
@@ -480,17 +476,11 @@ void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols, bool
 	{
 		Item * toAppend = itemLists[c];
 		int	slaveidx 	= toAppend->index;
-
-		Item *todel;
+		
 		if (tosend[slaveidx].tail)
 		{
 			(tosend[slaveidx].tail)->next = NULL;
-			while(tosend[slaveidx].head)
-			{
-				todel = tosend[slaveidx].head;
-				tosend[slaveidx].head 			= todel->next;
-				delete todel;
-			}
+			m_garbageCollector.toss(tosend[slaveidx].head);
 		}
 		
 		//empty and memory deleted
