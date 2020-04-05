@@ -93,6 +93,7 @@
     <ClInclude Include="CLogSingle.h" />
     <ClInclude Include="DMC.h" />
     <ClInclude Include="DmcManager.h" />
+    <ClInclude Include="GarbageCollector.h" />
     <ClInclude Include="NEXTWUSBLib_12B.h" />
     <ClInclude Include="plan.h" />
     <ClInclude Include="RdWrManager.h" />
@@ -105,6 +106,7 @@
     <ClCompile Include="CLogSingle.cpp" />
     <ClCompile Include="DMC.cpp" />
     <ClCompile Include="DmcManager.cpp" />
+    <ClCompile Include="GarbageCollector.cpp" />
     <ClCompile Include="plan.cpp" />
     <ClCompile Include="RdWrManager.cpp" />
     <ClCompile Include="Request.cpp" />

@@ -2,7 +2,6 @@
 #define RDWR_MANAGER
 
 #include <map>
-#include <deque>
 
 #include "NEXTWUSBLib_12B.h"
 #include "Poco/Mutex.h"
@@ -11,27 +10,8 @@
 #include "Poco/Thread.h"
 
 #include "SlaveState.h"
+#include "GarbageCollector.h"
 
-class Item
-{
-public:
-	int			index;
-	transData 	cmdData;
-	Item		*next;
-	Item		*prev;
-	//add extra
-	Item()
-	{
-		index = 0;
-		cmdData.CMD = 0;
-		cmdData.Parm = 0;
-		cmdData.Data1 = 0;
-		cmdData.Data2 = 0;
-		//cmdData.Data3 = 0;
-		next  = this;
-		prev  = this;
-	}
-};
 
 //减速停止信息
 class DeclStopInfo
@@ -150,9 +130,7 @@ private:
 	bool				m_canceled;				//线程停止
 	bool				m_consecutive;			//连续Write模式？
 	int 				m_towrite;
-
-	typedef std::deque<Item> ItemQueue;
-
+	GarbageCollector	m_garbageCollector;
 
 	std::map<int, CmdQueue> 	tosend;								//待发送	命令队列				
 	DeclStopInfo				*tostop[DEF_MA_MAX];				//待减速停止
@@ -163,6 +141,7 @@ private:
 
 	Poco::Mutex					coreMutex;							//Main Core Mutext To Guard each queueMutex
 	SeqLock						seqLock[DEF_MA_MAX];
+
 };
 
 #endif

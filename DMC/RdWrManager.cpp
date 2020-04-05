@@ -1,6 +1,7 @@
 #include "RdWrManager.h"
 #include "CLogSingle.h"
 #include "DmcManager.h"
+#include "GarbageCollector.h"
 
 #define FIFO_REMAIN(respData) 	((respData)[0].Data2 & 0xFFFF)	//FIFO剩余空间
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
@@ -26,6 +27,7 @@ void RdWrManager::addIoSlave(int slaveidx)
 
 void RdWrManager::start()
 {
+	m_garbageCollector.start();
 	m_thread.setPriority(Poco::Thread::PRIO_HIGHEST);
 	m_thread.start(*this);
 }
@@ -37,6 +39,7 @@ void RdWrManager::cancel()				//停止线程
 	m_thread.join();	//等待run函数返回
 	
 	clear();
+	m_garbageCollector.cancel();
 }
 
 void RdWrManager::clear()
@@ -151,6 +154,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 					Item	*toOverWrite = queue.head;
 					Item	*newTail 	= queue.tail;
 					int 	deltaCount 	= 0;
+					int		newCount    = 0;
 					while (vel > 0)
 					{
 						vel = vel - dec;
@@ -159,7 +163,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 						toOverWrite->cmdData.CMD	= CSP;
 						toOverWrite->cmdData.Data1	= q;
 						newTail	= toOverWrite;
-
+						++newCount;
 						toOverWrite = toOverWrite->next;
 						if (toOverWrite == queue.head
 							&& vel > 0)
@@ -182,21 +186,14 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 						&& toOverWrite != queue.head)
 					{
 						queue.tail->next	= NULL;
-						Item * toDel = toOverWrite, *nextDel;
-						while(toDel)
-						{
-							nextDel = toDel->next;
-							delete toDel;
-							toDel = nextDel;
-							deltaCount--;
-						}
+						m_garbageCollector.toss(toOverWrite);
 					}
 
 					queue.cur			= queue.head;		//从头开始发送
 					queue.tail			= newTail;
 					queue.tail->next	= queue.head;
 					queue.head->prev	= queue.tail;
-					queue.count 	   += deltaCount;
+					queue.count 	  	= newCount;
 					queue.keeprun		= false;			//切换为非连续运动
 					
 					tostop[slaveidx]->valid = true;
@@ -261,6 +258,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 					Item	*toOverWrite = queue.head;
 					Item	*newTail 	= queue.tail;
 					int 	deltaCount 	= 0;
+					int		newCount    = 0;
 					while (vel > 0)
 					{
 						vel = vel - dec;
@@ -269,6 +267,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 						toOverWrite->cmdData.CMD	= CSP;
 						toOverWrite->cmdData.Data1	= q;
 						newTail	= toOverWrite;
+						++newCount;
 
 						toOverWrite = toOverWrite->next;
 						if (toOverWrite == queue.head
@@ -292,21 +291,14 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 						&& toOverWrite != queue.head)
 					{
 						queue.tail->next	= NULL;
-						Item * toDel = toOverWrite, *nextDel;
-						while(toDel)
-						{
-							nextDel = toDel->next;
-							delete toDel;
-							toDel = nextDel;
-							deltaCount--;
-						}
+						m_garbageCollector.toss(toOverWrite);
 					}
 
 					queue.cur			= queue.head;		//从头开始发送
 					queue.tail			= newTail;
 					queue.tail->next	= queue.head;
 					queue.head->prev	= queue.tail;
-					queue.count 	   += deltaCount;
+					queue.count 	   	= newCount;
 					queue.keeprun		= false;			//切换为非连续运动
 					
 					tostop[slaveidx]->valid = true;
