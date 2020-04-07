@@ -88,6 +88,7 @@ public:
 	virtual ~DmcManager();
 
 	RdWrManager 		m_rdWrManager;			//发送接收管理线程
+	double				quadpart;
 private:
 	DmcManager();
 	void 	clear();

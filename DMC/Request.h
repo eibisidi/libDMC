@@ -15,7 +15,7 @@
 #define DEF_SERVO_POS_BIAS  (100)			//缺省伺服位置达到检测允许误差范围
 
 
-//#define REQUEST_TIMING 1
+#define REQUEST_TIMING 1
 
 class DmcManager;
 
@@ -90,8 +90,10 @@ public:
 	int 			slave_idx;
 	transData		*cmdData;
 	transData		*respData;
-#ifdef REQUEST_TIMING
-	Poco::Timestamp ctime;			//创建时间
+#ifdef REQUEST_TIMING		
+	LARGE_INTEGER 	ctime;			//请求创建时间
+	LARGE_INTEGER 	stime;			//进入fsm_start的时间
+	LARGE_INTEGER   dtime;			//请求析构时间
 #endif
 	virtual ~BaseRequest(){}
 	virtual FsmRetType exec() = 0;
@@ -140,6 +142,12 @@ private:
 	bool startPlan();
 	bool 	positionReached(int q , int bias = 0) const;
 
+#ifdef REQUEST_TIMING		
+	LARGE_INTEGER	start_push_time;			//将CSP命令写入链表开始时刻
+	LARGE_INTEGER	end_push_time;				//将CSP命令写入链表结束时刻
+	LARGE_INTEGER	queue_empty_time;			//链表消耗空时刻	
+	LARGE_INTEGER	in_pos_time;				//位置到达时刻
+#endif
 
 public:
 
@@ -157,19 +165,7 @@ public:
 	
 	FsmRetType (* fsmstate)(MoveRequest *);	
 	
-	virtual ~MoveRequest() 
-	{
-		if (moveparam)
-		{
-		
-#ifdef REQUEST_TIMING
-			double elapsed =  ctime.elapsed() / 1000000.0;
-			double cost = elapsed - moveparam->T;
-			LOGSINGLE_INFORMATION("~MoveRequest axis=%?d, plantime=%f, lifetime=%f, cost=%f.", __FILE__, __LINE__, slave_idx,moveparam->T, elapsed, cost);
-#endif
-			delete moveparam;
-		}
-	}
+	virtual ~MoveRequest();
 	
 	virtual FsmRetType exec();
 	MoveRequest()
@@ -279,16 +275,19 @@ private:
 
 	bool 	keep;/*加速后持续匀速运动*/
 
+#ifdef REQUEST_TIMING		
+	LARGE_INTEGER	start_push_time;			//将CSP命令写入链表开始时刻
+	LARGE_INTEGER	end_push_time;				//将CSP命令写入链表结束时刻
+	LARGE_INTEGER	queue_empty_time;			//链表消耗空时刻 
+	LARGE_INTEGER	in_pos_time;				//位置到达时刻
+#endif
+
 public:
 	BaseMultiAxisPara 	*axispara;
 
 	FsmRetType (* fsmstate)(MultiAxisRequest *);	
 	
-	virtual ~MultiAxisRequest() 
-	{
-		if (axispara)
-			delete  axispara;
-	}
+	virtual ~MultiAxisRequest();
 	
 	virtual FsmRetType exec();
 

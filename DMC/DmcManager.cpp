@@ -145,6 +145,7 @@ void	DmcManager::clear()
 	m_canceled = false;
 	m_sdoOwner = NULL;
 	newRespData = false;
+	quadpart	= 1.0;
 	memset(m_cmdData, 0, sizeof(m_cmdData));
 	memset(m_lastCmdData, 0, sizeof(m_lastCmdData));
 	memset(m_respData, 0, sizeof(m_respData));
@@ -169,6 +170,10 @@ unsigned long DmcManager::init()
 #ifdef DEBUG_MEMLEAK
 	_CrtSetDbgFlag ( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );	//To Dectect Memory Leaks.
 #endif
+
+	LARGE_INTEGER frequency;									//计时器频率 
+	QueryPerformanceFrequency(&frequency);	 
+	quadpart = (double)frequency.QuadPart; 						//计时器频率	
 
 	//初始化日志
 	CLogSingle::initLogger();

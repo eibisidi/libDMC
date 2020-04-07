@@ -2,7 +2,7 @@
 #include "DmcManager.h"
 
 
-#define RETRIES (10 * 50)
+#define RETRIES (10 * 80)
 #define MAX_ATTEMPTS (5)				
 #define MAKE_DWORD(h,l) ((h << 16) | (l))
 
@@ -17,6 +17,9 @@ BaseRequest::BaseRequest()
 	dmc 		= &DmcManager::instance();
 	slave_idx	= 0;
 	cmdData   = respData = NULL;
+#ifdef REQUEST_TIMING		
+	QueryPerformanceCounter(&ctime); 
+#endif
 }
 
 FsmRetType DStopRequest::fsm_state_done(DStopRequest *req)
@@ -178,6 +181,11 @@ FsmRetType MoveRequest::fsm_state_csp(MoveRequest *req)
 		return retval;
 	}
 
+#ifdef REQUEST_TIMING
+	if (0 == req->queue_empty_time.QuadPart)
+		QueryPerformanceCounter(&(req->queue_empty_time)); 
+#endif
+
 	if(CSP != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData )
 		&& req->rechecks--)
@@ -211,7 +219,10 @@ FsmRetType MoveRequest::fsm_state_csp(MoveRequest *req)
 		return retval;
 	}
 
-	LOGSINGLE_INFORMATION("axis(%?d) move pos reached. startpos=%?d, dstpos=%?d.", __FILE__, __LINE__,req->slave_idx, req->startpos, req->dstpos);
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->in_pos_time)); 
+	LOGSINGLE_INFORMATION("axis(%?d) move pos reached. startpos=%?d, dstpos=%?d, curpos=%?d, attempts=%?d.", __FILE__, __LINE__,req->slave_idx, req->startpos, req->dstpos, req->respData->Data1, req->attempts);
+#endif
 
 	//目标位置已到达,更新新的绝对位置
 	req->dmc->setDriverCmdPos(req->slave_idx,req->dstpos);
@@ -378,6 +389,14 @@ FsmRetType MoveRequest::fsm_state_start(MoveRequest *req)
 {	
 	FsmRetType retval = MOVESTATE_BUSY;
 
+#ifdef REQUEST_TIMING		
+	req->start_push_time.QuadPart	= 0;
+	req->end_push_time.QuadPart		= 0;
+	req->queue_empty_time.QuadPart	= 0;
+	req->in_pos_time.QuadPart		= 0;
+	QueryPerformanceCounter(&(req->stime)); 
+#endif
+
 	req->startpos = req->dmc->getDriverCmdPos(req->slave_idx);//获得起始位置
 	if (req->abs)
 		req->dstpos = req->dist;
@@ -470,6 +489,10 @@ bool  MoveRequest::positionReached(int q , int bias) const
 
 void MoveRequest::pushCspPoints(MoveRequest *req)
 {
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->start_push_time)); 
+#endif
+
 	int cycles = req->moveparam->cycles;
 
 	Item *head = NULL;
@@ -502,11 +525,40 @@ void MoveRequest::pushCspPoints(MoveRequest *req)
 
 	//req->dmc->logCspPoints(&head, cycles, 1);
 	req->dmc->pushItems(&head, cycles, 1, false);
+
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->end_push_time)); 
+#endif
 }
 
 FsmRetType MoveRequest::exec()
 {
 	return fsmstate(this);
+}
+
+MoveRequest::~MoveRequest() 
+{
+	if (moveparam)
+	{
+#ifdef REQUEST_TIMING
+		double lifetime, startingtime, plantime, pushtime,consumetime,followtime,cost,movetime;
+		QueryPerformanceCounter(&dtime); 
+
+		lifetime = (dtime.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		startingtime= (stime.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		plantime = (start_push_time.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		pushtime = (end_push_time.QuadPart - start_push_time.QuadPart) / dmc->quadpart; 
+		consumetime = (queue_empty_time.QuadPart - end_push_time.QuadPart) / dmc->quadpart; 
+		followtime = (in_pos_time.QuadPart - queue_empty_time.QuadPart)/ dmc->quadpart; 
+		movetime = moveparam->T;
+		cost = lifetime - movetime;
+		
+		LOGSINGLE_INFORMATION("~MoveRequest axis=%?d,startingtime=%f, plantime=%f, pushtime=%f, consumetime=%f, followtime=%f, cost=%f,movetime=%f, lifetime=%f.", __FILE__, __LINE__, 
+					slave_idx,  startingtime, plantime, pushtime, consumetime, followtime,
+					cost, movetime, lifetime);
+#endif
+		delete moveparam;
+	}
 }
 
 FsmRetType ClrAlarmRequest::fsm_state_done(ClrAlarmRequest *req)
@@ -1093,6 +1145,11 @@ FsmRetType  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		return retval;
 	}
 
+#ifdef REQUEST_TIMING
+	if (0 == req->queue_empty_time.QuadPart)
+		QueryPerformanceCounter(&(req->queue_empty_time)); 
+#endif
+
 	if(CSP != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData )
 		&& req->rechecks--)
@@ -1129,6 +1186,10 @@ FsmRetType  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 
 	//目标位置已到达,更新新的绝对位置
 	req->dmc->setDriverCmdPos(req->slave_idx, req->axispara->dstpos);
+
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->in_pos_time)); 
+#endif
 
 	req->axispara->reg_pos_reached();									//位置已经到达
 	req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_pos_reached;
@@ -1180,7 +1241,13 @@ FsmRetType  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 	}
 
 	//多轴插入CSP规划点
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->start_push_time)); 
+#endif
 	pushCspPoints(req);
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->end_push_time)); 
+#endif
 
 	if (req->keep)
 	{
@@ -1348,6 +1415,14 @@ FsmRetType  MultiAxisRequest::fsm_state_start(MultiAxisRequest *req)
 {	
 	FsmRetType retval = MOVESTATE_BUSY;
 
+#ifdef REQUEST_TIMING		
+	req->start_push_time.QuadPart 	= 0;
+	req->end_push_time.QuadPart 	= 0;
+	req->queue_empty_time.QuadPart 	= 0;
+	req->in_pos_time.QuadPart 		= 0;
+	QueryPerformanceCounter(&(req->stime)); 
+#endif
+
 	if(0 != req->axispara->getError())
 	{//其它电机已经出现错误
 		req->reqState = REQUEST_STATE_FAIL;
@@ -1452,6 +1527,32 @@ bool  MultiAxisRequest::positionReached(int q , int bias) const
 FsmRetType MultiAxisRequest::exec()
 {
 	return fsmstate(this);
+}
+
+MultiAxisRequest::~MultiAxisRequest() 
+{
+	if (axispara)
+	{
+#ifdef REQUEST_TIMING
+		double lifetime, startingtime, plantime, pushtime,consumetime,followtime,cost,movetime;
+		QueryPerformanceCounter(&dtime); 
+
+		lifetime = (dtime.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		startingtime= (stime.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		plantime = (start_push_time.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		pushtime = (end_push_time.QuadPart - start_push_time.QuadPart) / dmc->quadpart; 
+		consumetime = (queue_empty_time.QuadPart - end_push_time.QuadPart) / dmc->quadpart; 
+		followtime = (in_pos_time.QuadPart - queue_empty_time.QuadPart)/ dmc->quadpart; 
+		movetime  = (axispara->totalCycles() * DC_CYCLE_us) / 1000000.0;
+		cost = lifetime - movetime;
+		
+		LOGSINGLE_INFORMATION("~MultiAxisRequest axis=%?d,startingtime=%f, plantime=%f, pushtime=%f, consumetime=%f, followtime=%f, cost=%f,movetime=%f, lifetime=%f.", __FILE__, __LINE__, 
+					slave_idx, startingtime, plantime, pushtime, consumetime, followtime,
+					cost, movetime, lifetime);
+
+#endif
+		delete  axispara;
+	}
 }
 
 MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, bool abs)
