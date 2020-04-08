@@ -92,7 +92,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 #pragma region STEP 4 - SET_AXIS
 	ClearCmdData(cmdData);
-	byte slaveType[] = { STEP, None, None, None, None, None, None, None,
+	byte slaveType[] = { DRIVE, None, None, None, None, None, None, None,
 		None, None, None, None, None, None, None, None,
 		None, None, None, None, None, None, None, None,
 		None, None, None, None, None, None, None, None,
@@ -119,7 +119,7 @@ int _tmain(int argc, _TCHAR* argv[])
 #pragma region STEP 5 - SET_DC
 	cmdData[0].CMD = SET_DC;
 	cmdData[0].Parm = 0;
-	cmdData[0].Data1 = 8000; // set cycle time to 2000 us
+	cmdData[0].Data1 = 1000; // set cycle time to 2000 us
 	cmdData[0].Data2 = 0xFFFF; // Auto offet adjustment
 
 	if (!isOpen || !ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
@@ -188,122 +188,49 @@ int _tmain(int argc, _TCHAR* argv[])
 	ECMUSBRead((unsigned char*)respData,sizeof(respData));
 	printf("Current Position: Slave 1 = %d, Slave 2 = %d, Slave 3 = %d.\n",respData[1].Data1,respData[2].Data1,respData[3].Data1);
 
-#if 1
-	unsigned int curpos = respData[1].Data1;		//当前位置
-	int towrite = 24;
+	LARGE_INTEGER frequency;									//计时器频率
+	LARGE_INTEGER startime, endtime;
+	double		  timecost;
+	QueryPerformanceFrequency(&frequency);	 
+	double quadpart = (double)frequency.QuadPart; 
 
-	unsigned int last_remain = 160;
-	unsigned int last_fifofull = FIFO_FULL(respData);
-	int	flag1 = 0;
-	bool checkempty = false;
-	
+	int curpos = respData[1].Data1;		//当前位置
+	int towrite 		= 5;
+	int v				= 100;
 	while(true)
 	{
-
 		while(towrite--)
 		{
 			cmdData[1].CMD 	= CSP;
 			cmdData[1].Data1= curpos;
-			curpos += 0x100;					//每个周期固定增加0x100
-
-
-			if (!isOpen || !ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
+			curpos += v;					//每个周期固定运动
+			if (!ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
 				printf("Write Error \n");
 		}
 
+		int feedbackpos;
+
+		QueryPerformanceCounter(&startime); 
 		do{
 			if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
 				printf("Read Error \n");
+			feedbackpos = respData[1].Data1;
+		}while(abs(curpos - feedbackpos) > 100);
+		QueryPerformanceCounter(&endtime); 
+		timecost = (endtime.QuadPart - startime.QuadPart) / quadpart; 
+		printf("feedbackpos = %d, curpos=%d, timecost=%f", feedbackpos, curpos, timecost);
 
-			if (FIFO_FULL(respData) != last_fifofull)
-			{
-				printf("FIFO FULL Error \n");
-				throw;
-			}
-
-			switch(flag1)
-			{
-				case 0:
-					if (FIFO_REMAIN(respData) < last_remain)
-					{
-						flag1 = 1;
-					}
-					break;
-				case 1:
-					if (FIFO_REMAIN(respData) > last_remain)
-					{
-						flag1 = 2;
-					}
-					break;
-				case 2:
-					if (FIFO_REMAIN(respData) > 32)
-					{
-						flag1 = 0;
-						last_remain = FIFO_REMAIN(respData);
-						towrite = 24;
-						goto LABEL;
-					}
-					break;
-				default:
-					throw;
-
-			}
-			
-			last_remain = FIFO_REMAIN(respData);
-
-			if (flag1 && FIFO_REMAIN(respData) == 160)
-			{
-				printf("FIFO EMPTY Error \n");
-				throw;
-			}
-		}while(true);
-
-LABEL:
-		//printf("to write = %d, last_remain=%d, fifo_remain=%d.\n", towrite, last_remain, FIFO_REMAIN(respData));
-		//printf("min = %f, max=%f, average=%f, curpos=0x%x.\n", min, max, (total/160), curpos);
-		printf("curpos=0x%x.\n", curpos);
-		;
-	};
-#endif
-
-#if 0
-	unsigned int curpos = respData[1].Data1;		//当前位置
-	int towrite = 160;
-
-	while(true)
-	{
-
-		while(towrite--)
-		{
-			cmdData[1].CMD	= CSP;
-			cmdData[1].Data1= curpos;
-			curpos += 0x100;						//每个周期固定增加0x100
-
-
-			if (!isOpen || !ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
-				printf("Write Error \n");
-		}
-
-		do{
-			Sleep(2000);	
-			if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
+		Sleep(1000);
+		if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
 				printf("Read Error \n");
-			
-		}while(FIFO_REMAIN(respData) < 160);
 
-		towrite = 160;
-		printf("curpos=0x%x.\n", curpos);
-	};
-#endif
+		printf("curpos = %d\n", curpos);
+		curpos 	= respData[1].Data1;
+		v		= -v;
+	}
 
+	return 0;
 
-
-
-
-
-
-
-	
 	for (int i = 0; i < 1000; i++) // send 1000 times, let motor move 1000 * 100 pulse
 	{		
 		for (int j = 1; j < DEF_MA_MAX-1; j++)
