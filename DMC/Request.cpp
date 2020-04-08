@@ -223,7 +223,7 @@ FsmRetType MoveRequest::fsm_state_csp(MoveRequest *req)
 
 #ifdef REQUEST_TIMING
 	QueryPerformanceCounter(&(req->in_pos_time)); 
-	LOGSINGLE_INFORMATION("axis(%?d) move pos reached. startpos=%?d, dstpos=%?d, curpos=%?d, attempts=%?d.", __FILE__, __LINE__,req->slave_idx, req->startpos, req->dstpos, req->respData->Data1, req->attempts);
+	//LOGSINGLE_INFORMATION("axis(%?d) move pos reached. startpos=%?d, dstpos=%?d, curpos=%?d, attempts=%?d.", __FILE__, __LINE__,req->slave_idx, req->startpos, req->dstpos, req->respData->Data1, req->attempts);
 #endif
 
 	//目标位置已到达,更新新的绝对位置
