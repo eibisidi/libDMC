@@ -19,6 +19,8 @@ BaseRequest::BaseRequest()
 	cmdData   = respData = NULL;
 #ifdef REQUEST_TIMING		
 	QueryPerformanceCounter(&ctime); 
+	stime.QuadPart	= 0;
+	dtime.QuadPart	= 0;
 #endif
 }
 
