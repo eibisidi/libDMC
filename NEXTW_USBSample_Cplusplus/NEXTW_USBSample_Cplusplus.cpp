@@ -92,8 +92,8 @@ int _tmain(int argc, _TCHAR* argv[])
 
 #pragma region STEP 4 - SET_AXIS
 	ClearCmdData(cmdData);
-	byte slaveType[] = { DRIVE, None, None, None, None, None, None, None,
-		None, None, None, None, None, None, None, None,
+	byte slaveType[] = { DRIVE, DRIVE, DRIVE, STEP, STEP, DRIVE, DRIVE, IO,
+		IO, None, None, None, None, None, None, None,
 		None, None, None, None, None, None, None, None,
 		None, None, None, None, None, None, None, None,
 		None, None, None, None, None, None, None, None};
@@ -187,6 +187,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	ClearCmdData(cmdData);
 	ECMUSBRead((unsigned char*)respData,sizeof(respData));
 	printf("Current Position: Slave 1 = %d, Slave 2 = %d, Slave 3 = %d.\n",respData[1].Data1,respData[2].Data1,respData[3].Data1);
+	
 
 	LARGE_INTEGER frequency;									//计时器频率
 	LARGE_INTEGER startime, endtime;
@@ -194,39 +195,74 @@ int _tmain(int argc, _TCHAR* argv[])
 	QueryPerformanceFrequency(&frequency);	 
 	double quadpart = (double)frequency.QuadPart; 
 
-	int curpos = respData[1].Data1;		//当前位置
+#define TEST_AXIS 		2	
+#define BATCH			5
+#define	FIFO_LOWATER	150
+
+	int curpos = respData[TEST_AXIS].Data1;		//当前位置
 	int towrite 		= 5;
-	int v				= 100;
+	int v				= 200;
+
+	ClearCmdData(cmdData);
+
 	while(true)
 	{
 		while(towrite--)
 		{
-			cmdData[1].CMD 	= CSP;
-			cmdData[1].Data1= curpos;
-			curpos += v;					//每个周期固定运动
+			curpos += v;							//每个周期固定运动
+			cmdData[TEST_AXIS].CMD 	= CSP;
+			cmdData[TEST_AXIS].Data1= curpos;
 			if (!ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
 				printf("Write Error \n");
 		}
 
-		int feedbackpos;
 
 		QueryPerformanceCounter(&startime); 
-		do{
-			if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
-				printf("Read Error \n");
-			feedbackpos = respData[1].Data1;
-		}while(abs(curpos - feedbackpos) > 100);
-		QueryPerformanceCounter(&endtime); 
-		timecost = (endtime.QuadPart - startime.QuadPart) / quadpart; 
-		printf("feedbackpos = %d, curpos=%d, timecost=%f", feedbackpos, curpos, timecost);
+		while(true)
+		{
+			towrite = BATCH;
+			cmdData[TEST_AXIS].CMD 	= GET_STATUS;
+			cmdData[TEST_AXIS].Data1= 0;
+			while(towrite--)
+			{
+				if (!ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
+					printf("Write Error \n");
+			}
 
-		Sleep(1000);
+			do{
+				if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
+					printf("Read Error \n");
+
+				if (FIFO_FULL(respData) != 0)
+				{
+					printf("Fifo full\n");
+					throw;
+				}
+
+				int feedbackpos = respData[TEST_AXIS].Data1;
+				if(abs(curpos - feedbackpos) < 100)
+				{//位置检测到达
+					QueryPerformanceCounter(&endtime); 
+					timecost = (endtime.QuadPart - startime.QuadPart) / quadpart; 
+					printf("feedbackpos = %d, curpos=%d, timecost=%f", feedbackpos, curpos, timecost);
+					goto NEXTROUND;
+				}
+
+				if(FIFO_REMAIN(respData) > FIFO_LOWATER)
+					break;			//剩余FIFO数目超过限值，开始下一批写入
+			}while(true);
+		}
+
+NEXTROUND:
+
+		Sleep(3000);		//等待FIFO消耗为空
 		if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
 				printf("Read Error \n");
 
 		printf("curpos = %d\n", curpos);
-		curpos 	= respData[1].Data1;
+		curpos 	= respData[TEST_AXIS].Data1;
 		v		= -v;
+		towrite = 5;
 	}
 
 	return 0;
