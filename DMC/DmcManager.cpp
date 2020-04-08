@@ -893,8 +893,10 @@ bool DmcManager::isDriverOn(short slaveidx)
 	if (m_slaveStates.count(slaveidx))
 		status = m_slaveStates[slaveidx].getStatus();
 
-	return (0x1637 == status
-		|| 0x9637 == status);		//原点已找到
+	return ((status & 0xFF) == 0x37);	//某些情况电机状态字为0x2337，为防止进行SV_ON操作，仅判别最低字节
+
+	//return (0x1637 == status
+	//	|| 0x9637 == status);		//原点已找到
 }
 
 bool DmcManager::isDriverOff(short slaveidx)
