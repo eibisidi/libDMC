@@ -89,7 +89,7 @@ FsmRetType DStopRequest::fsm_state_csp(DStopRequest *req)
 			return retval;
 		}
 
-		int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+		int posBias = req->dmc->getServoPosBias(req->slave_idx);
 
 		if ( !req->positionReached(req->respData->Data1, posBias) 
 			&& req->rechecks--)
@@ -195,7 +195,7 @@ FsmRetType MoveRequest::fsm_state_csp(MoveRequest *req)
 		return retval;
 	}
 		
-	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+	int posBias = req->dmc->getServoPosBias(req->slave_idx);
 
 	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)
@@ -1159,7 +1159,7 @@ FsmRetType  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		return retval;
 	}
 
-	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+	int posBias = req->dmc->getServoPosBias(req->slave_idx);
 
 	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)
@@ -2675,7 +2675,7 @@ FsmRetType MultiDeclRequest::fsm_state_csp(MultiDeclRequest *req)
 		return retval;
 	}
 
-	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+	int posBias = req->dmc->getServoPosBias(req->slave_idx);
 
 	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)
@@ -2942,7 +2942,7 @@ FsmRetType MakeOverFlowRequest::fsm_wait_pos_reached(MakeOverFlowRequest *req)
 		return retval;
 	}
 		
-	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+	int posBias = req->dmc->getServoPosBias(req->slave_idx);
 
 	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)

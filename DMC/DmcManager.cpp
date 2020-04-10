@@ -518,8 +518,15 @@ bool DmcManager::loadXmlConfig()
 					return false;
 				}
 
-
-				SlaveConfig sc(slave_index, slave_type);
+				//驱动器偏差
+				int bias = 0;
+				pAttr = static_cast<Poco::XML::Attr*>(pAttrs->getNamedItem("bias"));
+				if (pAttr)
+				{
+					bias =  Poco::NumberParser::parse(pAttr->nodeValue());
+				}
+				
+				SlaveConfig sc(slave_index, slave_type, bias);
 				//处理所有子节点
 				Poco::AutoPtr<Poco::XML::NodeList > pChilds = pNode->childNodes();
 
@@ -548,14 +555,13 @@ bool DmcManager::loadXmlConfig()
 					sc.slave_sdos.push_back(sdo);
 				}
 
-				if (0 != m_masterConfig.slave_indexes.count(sc.slave_index))
+				if (0 != m_masterConfig.slave_configs.count(sc.slave_index))
 				{
 					LOGSINGLE_ERROR("XML Error, duplicate slave index %d.", __FILE__, __LINE__, sc.slave_index);
 					return false;
 				}
 
-				m_masterConfig.slave_indexes.insert(sc.slave_index);
-				m_masterConfig.slave_configs.push_back(sc);
+				m_masterConfig.slave_configs[sc.slave_index] = sc;
 			}
 			else if ("LogLevel" == pNode->nodeName())
 			{//日志记录等级
@@ -619,17 +625,6 @@ bool DmcManager::loadXmlConfig()
 					m_masterConfig.home_timeout = Poco::NumberParser::parse(pChild->nodeValue());
 				}
 			}
-			else if ("ServoPosBias" == pNode->nodeName())
-			{//伺服位置达到检测允许误差范围
-				Poco::AutoPtr<Poco::XML::NodeList > pChilds = pNode->childNodes();				
-				for (int i = 0; i < pChilds->length(); ++i)
-				{
-					Poco::XML::Node *pChild =  pChilds->item(i);
-					if (Poco::XML::Node::TEXT_NODE != pChild->nodeType())
-						continue;
-					m_masterConfig.servo_pos_bias = Poco::NumberParser::parse(pChild->nodeValue());
-				}
-			}
 			pNode = it.nextNode();
 		}
 	}
@@ -640,9 +635,11 @@ bool DmcManager::loadXmlConfig()
 	}
 
 	//设置从站的类型
-	for(int i = 0; i < m_masterConfig.slave_configs.size(); ++i)
+	for(std::map<int, SlaveConfig>::const_iterator iter = m_masterConfig.slave_configs.begin();
+				iter != m_masterConfig.slave_configs.end();
+				++iter)
 	{
-		m_slaveType[m_masterConfig.slave_configs[i].slave_index - 1] = m_masterConfig.slave_configs[i].slave_type; 
+		m_slaveType[iter->first - 1] = (iter->second).slave_type;
 	}
 	
 	return true;
@@ -664,9 +661,9 @@ void DmcManager::setDriverCmdPos(short slaveidx, long val)
 		 m_slaveStates[slaveidx].setCmdPos(val);
 }
 
-int DmcManager::getServoPosBias() const
+int DmcManager::getServoPosBias(int slaveidx)
 {
-	return m_masterConfig.servo_pos_bias;
+	return m_masterConfig.slave_configs[slaveidx].axis_bias;
 }
 
 unsigned long DmcManager::getSlaveState(short axis)

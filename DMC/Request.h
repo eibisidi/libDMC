@@ -37,9 +37,17 @@ public:
 	int 				slave_index;
 	unsigned char		slave_type;
 	std::vector<SDO>	slave_sdos;
-	SlaveConfig(int index, unsigned char type)
-			:slave_index(index), slave_type(type)
+	unsigned int		axis_bias;				//驱动器允许偏差
+	SlaveConfig(int index, unsigned char type, unsigned int bias)
+			:slave_index(index), slave_type(type), axis_bias(bias)
 	{
+	}
+
+	SlaveConfig()
+	{
+		slave_index = 0;
+		slave_type	= None;
+		axis_bias	= 0;
 	}
 };
 	
@@ -49,9 +57,7 @@ public:
 	int						 loglevel;			//日志记录等级
 	int						 home_method;		//回原点方式
 	int						 home_timeout;		//回原点超时时间
-	int						 servo_pos_bias;	//伺服位置达到检测允许误差范围
-	std::set<int>			 slave_indexes;
-	std::vector<SlaveConfig> slave_configs;
+	std::map<int, SlaveConfig>slave_configs;
 	std::set<int>			 logpoint_axis;		//记录规划点的轴
 
 	MasterConfig()					//默认等级4记录告警
@@ -64,8 +70,6 @@ public:
 		loglevel 		= 4;
 		home_method 	= DEF_HOME_METHOD;
 		home_timeout	= DEF_HOME_TIMEOUT;
-		servo_pos_bias	= DEF_SERVO_POS_BIAS;
-		slave_indexes.clear();
 		slave_configs.clear();
 		logpoint_axis.clear();
 	}

@@ -63,7 +63,7 @@ public:
 
 	long getDriverCmdPos(short slaveidx);									//获得起始位置
 	void setDriverCmdPos(short slaveidx, long val); 						//更新起始位置
-	int	getServoPosBias() const;
+	int	getServoPosBias(int slaveidx);
 	unsigned long getSlaveState(short axis);
 
 	//IO
