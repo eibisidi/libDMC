@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <Windows.h>
+#include <iostream>
 
 #define AXIS_R (1)
 #define AXIS_Y (2)
@@ -260,7 +261,7 @@ int main()
 		printf("d1000_board_init failed.\n");
 		return -1;
 	}
-
+#if 0
 	DWORD ret;
 	DWORD ms;
 
@@ -331,7 +332,7 @@ int main()
 
 
 	return 0;
-
+#endif
 	if (0 != all_go_home())
 	{
 		printf("all_go_home failed.\n");
@@ -342,12 +343,12 @@ int main()
 	
 
 	HANDLE hThread;
-	//hThread = CreateThread(NULL, 0, IoThreadFunc, 0, 0, NULL); // 创建线程
-	//hThread = CreateThread(NULL, 0, LoaderThreadFunc, 0, 0, NULL); // 创建线程
-	//hThread = CreateThread(NULL, 0, RotatorThreadFunc, 0, 0, NULL); // 创建线程
-	//hThread = CreateThread(NULL, 0, MainThreadFunc, 0, 0, NULL); // 创建线程
-	//hThread = CreateThread(NULL, 0, TongueThreadFunc, 0, 0, NULL); // 创建线程
-	LoaderThreadFunc(0);
+	hThread = CreateThread(NULL, 0, IoThreadFunc, 0, 0, NULL); // 创建线程
+	hThread = CreateThread(NULL, 0, LoaderThreadFunc, 0, 0, NULL); // 创建线程
+	hThread = CreateThread(NULL, 0, RotatorThreadFunc, 0, 0, NULL); // 创建线程
+	hThread = CreateThread(NULL, 0, MainThreadFunc, 0, 0, NULL); // 创建线程
+	hThread = CreateThread(NULL, 0, TongueThreadFunc, 0, 0, NULL); // 创建线程
+	//LoaderThreadFunc(0);
 
 #if 0
 	DWORD	ret, ms;
@@ -370,7 +371,7 @@ int main()
 #endif
 
 	
-#if 0
+#if 1
 
 	short 	axisArray[] = {AXIS_X, AXIS_Y};
 	long	distArray[] = {50000, 50000};
