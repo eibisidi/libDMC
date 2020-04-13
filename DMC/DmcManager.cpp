@@ -1631,83 +1631,95 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 		
 		m_mutex.lock();
 
-		MoveRequest *moveReq = dynamic_cast<MoveRequest * >(m_requests[axis]);
-		if (NULL != moveReq)
-		{//单轴运动
-			newReq = new DStopRequest(axis, tDec, bServOff);
-			setSlaveState(axis, MOVESTATE_BUSY);
-			addRequest(axis, newReq);
-		}
-		else
+		if (m_requests.count(axis) > 0)
 		{
-			MultiAxisRequest *maReq = dynamic_cast<MultiAxisRequest * >(m_requests[axis]);
-			if (NULL != maReq)
-			{//多轴运动
-				const std::map<int, BaseMultiAxisPara *> paras = maReq->axispara->ref->paras;	//makes a copy
-				for (std::map<int, BaseMultiAxisPara *>::const_iterator iter = paras.begin();
-							iter != paras.end();
-							++iter)
-				{
-					BaseMultiAxisPara *para = iter->second;
 
-					newReq = new DStopRequest(para->req->slave_idx, tDec, bServOff);
-					
-					setSlaveState(para->req->slave_idx, MOVESTATE_BUSY);
-					addRequest(para->req->slave_idx, newReq);
-					maReq = NULL;				//no longer valid
-				}
+			MoveRequest *moveReq = dynamic_cast<MoveRequest * >(m_requests[axis]);
+			if (NULL != moveReq)
+			{//单轴运动
+				newReq = new DStopRequest(axis, tDec, bServOff);
+				setSlaveState(axis, MOVESTATE_BUSY);
+				addRequest(axis, newReq);
 			}
 			else
 			{
-				MultiHomeRequest *mhReq = dynamic_cast<MultiHomeRequest * >(m_requests[axis]);
-				if (NULL != mhReq
-					&& mhReq->ref->getStarted())		//已经启动GO_HOME
-				{//多轴回原点
-					std::set<int> toAbort = mhReq->ref->getAxises();	//makes a copy
-					for (std::set<int>::iterator iter = toAbort.begin();
-								iter != toAbort.end();
-						)
-					{
-						if(MOVESTATE_BUSY != check_done(*iter)) 
-							toAbort.erase(iter++);		//该轴回零命令已经处理完毕
-						else
-							iter++;
-					}
-
-					if (!toAbort.empty())
-					{//仍然有轴回零未成功
-						MultiAbortHomeRequest::MultiAbortHomeRef *newRef = NULL;
-						MultiAbortHomeRequest *newAhReq = NULL;
-						newRef = new MultiAbortHomeRequest::MultiAbortHomeRef;
-						for (std::set<int>::iterator iter = toAbort.begin();
-								iter != toAbort.end();
+				MultiAxisRequest *maReq = dynamic_cast<MultiAxisRequest * >(m_requests[axis]);
+				if (NULL != maReq)
+				{//多轴运动
+					const std::map<int, BaseMultiAxisPara *> paras = maReq->axispara->ref->paras;	//makes a copy
+					for (std::map<int, BaseMultiAxisPara *>::const_iterator iter = paras.begin();
+								iter != paras.end();
 								++iter)
-						{
-							newAhReq = new MultiAbortHomeRequest(*iter, newRef);
-							setSlaveState(*iter, MOVESTATE_BUSY);
-							addRequest(*iter, newAhReq);
-							mhReq = NULL;
-						}
-						
+					{
+						BaseMultiAxisPara *para = iter->second;
+
+						newReq = new DStopRequest(para->req->slave_idx, tDec, bServOff);
+					
+						setSlaveState(para->req->slave_idx, MOVESTATE_BUSY);
+						addRequest(para->req->slave_idx, newReq);
+						maReq = NULL;				//no longer valid
 					}
 				}
 				else
-				{//当前未在运动
-					if (bServOff)
-					{
-						newReq = new DStopRequest(axis, tDec, bServOff);
-						setSlaveState(axis, MOVESTATE_BUSY);
-						addRequest(axis, newReq);
+				{
+					MultiHomeRequest *mhReq = dynamic_cast<MultiHomeRequest * >(m_requests[axis]);
+					if (NULL != mhReq
+						&& mhReq->ref->getStarted())		//已经启动GO_HOME
+					{//多轴回原点
+						std::set<int> toAbort = mhReq->ref->getAxises();	//makes a copy
+						for (std::set<int>::iterator iter = toAbort.begin();
+									iter != toAbort.end();
+							)
+						{
+							if(MOVESTATE_BUSY != check_done(*iter)) 
+								toAbort.erase(iter++);		//该轴回零命令已经处理完毕
+							else
+								iter++;
+						}
+
+						if (!toAbort.empty())
+						{//仍然有轴回零未成功
+							MultiAbortHomeRequest::MultiAbortHomeRef *newRef = NULL;
+							MultiAbortHomeRequest *newAhReq = NULL;
+							newRef = new MultiAbortHomeRequest::MultiAbortHomeRef;
+							for (std::set<int>::iterator iter = toAbort.begin();
+									iter != toAbort.end();
+									++iter)
+							{
+								newAhReq = new MultiAbortHomeRequest(*iter, newRef);
+								setSlaveState(*iter, MOVESTATE_BUSY);
+								addRequest(*iter, newAhReq);
+								mhReq = NULL;
+							}
+						
+						}
 					}
 					else
-					{
-						retValue = ERR_AXIS_NOT_MOVING;
-						break;
+					{//当前未在运动
+						DStopRequest *dsReq = dynamic_cast<DStopRequest*>(m_requests[axis]);
+						if (NULL != dsReq)
+						{
+							retValue = ERR_AXIS_NOT_MOVING;
+							break;
+						}
 					}
 				}
+			}	
+		}
+		else
+		{
+			if (bServOff)
+			{
+				newReq = new DStopRequest(axis, tDec, bServOff);
+				setSlaveState(axis, MOVESTATE_BUSY);
+				addRequest(axis, newReq);
 			}
-		}	
-
+			else
+			{
+				retValue = ERR_AXIS_NOT_MOVING;
+				break;
+			}
+		}
 		m_mutex.unlock();
 	}while(0);
 
