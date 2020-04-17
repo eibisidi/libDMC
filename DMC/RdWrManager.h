@@ -12,7 +12,6 @@
 #include "SlaveState.h"
 #include "GarbageCollector.h"
 
-
 //¼õËÙÍ£Ö¹ÐÅÏ¢
 class DeclStopInfo
 {

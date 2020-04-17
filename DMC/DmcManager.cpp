@@ -18,7 +18,6 @@
 
 #define  MAXJ_RATIO (5)			//最大加加速度倍率
 
-
 void ClearCmdData(transData* data)
 {
 	for (int i = 0; i < DEF_MA_MAX; i++)
@@ -430,7 +429,6 @@ void DmcManager::logCspPoints(Item **itemLists, int rows, size_t cols) const
 		CLogSingle::logPoint("\n");
 	}
 }
-
 
 void DmcManager::beforeWriteCmd()
 {
@@ -954,8 +952,6 @@ unsigned int DmcManager::getIoInput(short slaveidx)
 
 void DmcManager::run()
 {	
-	int i;
-
 	while(!m_canceled)
 	{		
 		m_mutex.lock();
@@ -963,8 +959,8 @@ void DmcManager::run()
 		{
 			beforeWriteCmd();
 			m_mutex.unlock();
-
-			for(i = 0, m_cols = 0; i < DEF_MA_MAX; ++i)
+			int i = 0;
+			for(m_cols = 0; i < DEF_MA_MAX; ++i)
 			{
 				if (m_cmdData[i].CMD != GET_STATUS)
 				{
@@ -1410,8 +1406,6 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 	MultiAxisRequest *newReq = NULL;
 	ArchlRef		 *newArchlRef = NULL;
 	
-
-	
 	//先进行容错检查
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
@@ -1465,8 +1459,6 @@ unsigned long DmcManager::check_done(short axis)
 
 	if(m_slaveStates.count(axis) )
 		ms = m_slaveStates[axis].getSlaveState();
-
-	//Poco::Thread::sleep(1);
 
 	return ms;
 }
