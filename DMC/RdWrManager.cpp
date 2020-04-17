@@ -646,7 +646,7 @@ void RdWrManager::run()
 			++rdWrState.readCount;
 			if (FIFO_FULL(respData) != rdWrState.lastFifoFull)
 			{
-				LOGSINGLE_FATAL("FIFO full.readCount=%d, fifoRemain=%?d.", __FILE__, __LINE__, rdWrState.readCount,  FIFO_REMAIN(respData));
+				LOGSINGLE_WARNING("FIFO full.readCount=%d, fifoRemain=%?d.", __FILE__, __LINE__, rdWrState.readCount,  FIFO_REMAIN(respData));
 			}
 
 			//更新输入值
@@ -683,7 +683,7 @@ void RdWrManager::run()
 
 SEND:
 		if (m_consecutive)
-			m_towrite = BATCH_WRITE;			//todo，是否修改为根据FIFO Remain增加的数量动态调整下一次写入量，而不是采用固定值？
+			m_towrite = BATCH_WRITE;
 		else
 			m_towrite = 2;
 	};
