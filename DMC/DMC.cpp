@@ -132,4 +132,3 @@ DWORD WINAPI d1000_end_running(short TotalAxis,short *AxisArray,double tDec)
 {
 	return DmcManager::instance().end_running(TotalAxis, AxisArray, tDec);	
 }
-

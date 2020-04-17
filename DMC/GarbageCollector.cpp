@@ -85,5 +85,3 @@ void GarbageCollector::run()
 	}
 
 }
-
-

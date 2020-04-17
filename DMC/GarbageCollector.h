@@ -30,7 +30,6 @@ public:
 	}
 };
 
-
 class GarbageCollector : public Poco::Runnable
 {
 public:
@@ -50,6 +49,5 @@ private:
 	Poco::Condition		m_condition;
 	std::list<Item*> 	m_trashes;
 };
-
 
 #endif

@@ -75,7 +75,6 @@ public:
 	}
 };
 
-
 enum RequestState
 {
 	REQUEST_STATE_NONE = 0,

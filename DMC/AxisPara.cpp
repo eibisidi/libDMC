@@ -369,11 +369,9 @@ int ArchlRef::startPlan()
 
 			if (this->max_dist > 1E-6)
 			{//水平位移最大值非0
-			
 				double t0 = up_param.tofdist(this->hu);
 				double t1 = down_param.tofdist(abs(this->hh - this->zdstpos) - hd);
 
-				
 				//规划直线插补
 				double limt = (up_param.T - t0) + t1;
 				this->line_param.q0   = 0; 	
@@ -629,4 +627,3 @@ double AccMultiAxisPara::getCurSpeed() const
 {//todo
 	return 0;
 }
-

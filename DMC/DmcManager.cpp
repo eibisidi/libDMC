@@ -1819,4 +1819,3 @@ unsigned long DmcManager::in_bit(short slave_idx, unsigned int *bitData)
 
 	return retValue;
 }
-

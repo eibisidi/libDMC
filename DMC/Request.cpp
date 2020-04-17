@@ -1,11 +1,9 @@
 #include "Request.h"
 #include "DmcManager.h"
 
-
 #define RETRIES (10 * 80)
 #define MAX_ATTEMPTS (5)				
 #define MAKE_DWORD(h,l) ((h << 16) | (l))
-
 
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
@@ -3052,4 +3050,3 @@ FsmRetType MakeOverFlowRequest::exec()
 {
 	return fsmstate(this);
 }
-

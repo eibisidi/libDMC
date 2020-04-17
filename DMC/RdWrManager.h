@@ -140,8 +140,6 @@ private:
 
 	Poco::Mutex					coreMutex;							//Main Core Mutext To Guard each queueMutex
 	SeqLock						seqLock[DEF_MA_MAX];
-
 };
-
 #endif
 

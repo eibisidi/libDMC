@@ -434,7 +434,6 @@ void RdWrManager::pushItems(Item **itemLists, size_t rows, size_t cols, bool kee
 	}
 }
 
-
 //同步插入命令队列：适用于多轴运动、多轴回原点，每行命令出现在一次Ecm_write调用中
 void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols, bool keep)
 {
@@ -690,4 +689,3 @@ SEND:
 
 	LOGSINGLE_INFORMATION("RdWrManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));
 }
-
