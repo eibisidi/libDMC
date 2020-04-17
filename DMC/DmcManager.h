@@ -18,7 +18,6 @@ using std::map;
 
 class DmcManager : public Poco::Runnable
 {
-
 public:
 	static DmcManager & instance();
 	
@@ -104,36 +103,33 @@ private:
 	void setSlaveState(short slavidx, unsigned int ss);
 	void addRequest(short slaveidx, BaseRequest *req);
 
-
 	Poco::Thread		m_thread;
-	Poco::Mutex  		m_mutex;				//互斥量，保护m_requests
-	Poco::Condition		m_condition;			//条件变量
+	Poco::Mutex  		m_mutex;						//互斥量，保护m_requests
+	Poco::Condition		m_condition;					//条件变量
 
 	bool				m_init;
-	bool				m_canceled;				//线程停止
+	bool				m_canceled;						//线程停止
 
-	BaseRequest			*m_sdoOwner;			//SDO当前所属请求
+	BaseRequest			*m_sdoOwner;					//SDO当前所属请求
 	
 	transData			m_cmdData[DEF_MA_MAX];
-	transData			m_lastCmdData[DEF_MA_MAX];//todo核实同步命令，该变量是否更新
+	transData			m_lastCmdData[DEF_MA_MAX];
 	transData			m_respData[DEF_MA_MAX];
 	
-	unsigned char		m_slaveType[DEF_MA_MAX - 2]; //从站类型, DRIVER/IO
-
+	unsigned char		m_slaveType[DEF_MA_MAX - 2]; 	//从站类型, DRIVER/IO
 
 	Poco::Mutex  		m_mutexRespData;				//响应数据互斥量
 	Poco::Condition		m_conditionRespData;			//响应数据条件变量
 	bool				newRespData;					//响应数据是否刷新
 	transData			m_realRespData[DEF_MA_MAX];		//实时响应数据
 
-	MasterConfig		m_masterConfig;			//主站配置信息
+	MasterConfig		m_masterConfig;					//主站配置信息
 
 	std::map<int, BaseRequest *> 	m_requests;			
 	std::map<int, DriverSlaveState> m_slaveStates;
 
 	Item *				m_itemLists[DEF_MA_MAX];
 	int					m_cols;
-
 };
 
 #endif

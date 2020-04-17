@@ -140,7 +140,6 @@ DMC1000_API DWORD WINAPI d1000_start_s_move(short axis,long Dist, long StrVel, l
 */
 DMC1000_API DWORD WINAPI d1000_start_sa_move(short axis,long Pos, long StrVel, long MaxVel,double Tacc);
 
-
 /*功 能：启动指定轴进行回原点运动。
 参 数： axis：电机从站索引
 		
@@ -179,7 +178,6 @@ DMC1000_API DWORD WINAPI d1000_check_done(short axis);
 错误：返回相关错误码。
 */
 DMC1000_API DWORD WINAPI d1000_decel_stop(short axis, double tDec);
-
 
 /*
 功 能：急停指定轴脉冲输出，电机关闭使能。
@@ -295,7 +293,6 @@ DMC1000_API DWORD WINAPI d1000_start_t_archl(short TotalAxis,short *AxisArray,lo
 错误：返回相关错误码。
 */
 DMC1000_API DWORD WINAPI d1000_start_ta_archl(short TotalAxis,short *AxisArray,long *PosArray,long MaxVel, double Tacc, long hh, long hu, long hd);
-
 
 //////////////////位置设定和读取函数////////////
 /*

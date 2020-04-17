@@ -151,7 +151,6 @@ private:
 	CLogSingle();
 	virtual ~CLogSingle();
 
-
 	static Poco::Logger* getPointsLogger();
 };
 
