@@ -123,7 +123,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 		{//持续运动
 			if (localCur)
 			{//持续运动加速阶段
-				lastSent[slaveidx] = cmdData[slaveidx] = localCmd;
+				cmdData[slaveidx] = localCmd;
 				if (localNext == localHead)
 					queue.cur = NULL;
 				else
@@ -149,7 +149,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 					item.cmdData.CMD	= CSP;
 					item.cmdData.Data1	= q0;
 					
-					lastSent[slaveidx] = cmdData[slaveidx] =  item.cmdData;
+					cmdData[slaveidx] =  item.cmdData;
 
 					Item	*toOverWrite = queue.head;
 					Item	*newTail 	= queue.tail;
@@ -226,7 +226,6 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 					}
 					cmdData[slaveidx].CMD 	= CSP;
 					cmdData[slaveidx].Data1	= lastSent[slaveidx].Data1 + v;
-					lastSent[slaveidx]		= cmdData[slaveidx];
 				}
 			}
 		}
@@ -253,7 +252,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 					item.cmdData.CMD 	= CSP;
 					item.cmdData.Data1	= q0;
 
-					lastSent[slaveidx] = cmdData[slaveidx] =  item.cmdData;
+					cmdData[slaveidx] =  item.cmdData;
 
 					Item	*toOverWrite = queue.head;
 					Item	*newTail 	= queue.tail;
@@ -323,7 +322,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 			{
 				if (localCur)
 				{
-					lastSent[slaveidx] = cmdData[slaveidx] = localCmd;
+					cmdData[slaveidx] = localCmd;
 					if (localNext == localHead)
 						queue.cur = NULL;
 					else
@@ -333,6 +332,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 		}
 		if (CSP == cmdData[slaveidx].CMD)
 			con = true;
+		lastSent[slaveidx] = cmdData[slaveidx];
 	}
 
 	coreMutex.unlock();//释放队列大锁
