@@ -1,12 +1,13 @@
 #include "RdWrManager.h"
 #include "CLogSingle.h"
 #include "DmcManager.h"
+#include "GarbageCollector.h"
 
 #define FIFO_REMAIN(respData) 	((respData)[0].Data2 & 0xFFFF)	//FIFO剩余空间
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
-#define BATCH_WRITE		(10)
+#define BATCH_WRITE		(2)
 #define FIFO_LOWATER	(150)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
@@ -26,7 +27,8 @@ void RdWrManager::addIoSlave(int slaveidx)
 
 void RdWrManager::start()
 {
-	m_thread.setPriority(Poco::Thread::PRIO_HIGHEST);
+	m_garbageCollector.start();
+	m_thread.setOSPriority(THREAD_PRIORITY_TIME_CRITICAL);
 	m_thread.start(*this);
 }
 
@@ -37,6 +39,7 @@ void RdWrManager::cancel()				//停止线程
 	m_thread.join();	//等待run函数返回
 	
 	clear();
+	m_garbageCollector.cancel();
 }
 
 void RdWrManager::clear()
@@ -45,20 +48,28 @@ void RdWrManager::clear()
 	m_consecutive	= false;
 	m_towrite		= 2;
 
-	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
-					iter!= tosend.end();
-					++iter)
+	memset(tostop, 0, sizeof(tostop));
+	memset(lastSent, 0, sizeof(lastSent));
+	ioState.clear();
+
+	for(std::map<int, CmdQueue>::iterator iter = tosend.begin();
+				iter!= tosend.end();
+				++iter)
 	{
-		if (iter->second)
+		CmdQueue &queue = iter->second;
+
+		if (queue.tail)
 		{
-			delete (iter->second);
-			iter->second = NULL;
+			queue.tail->next = NULL;
+			while(queue.head)
+			{
+				Item * toDel 	= queue.head;
+				queue.head		= queue.head->next;
+				delete toDel;
+			}
 		}
 	}
 	tosend.clear();
-	tostop.clear();
-	memset(lastSent, 0, sizeof(lastSent));
-	ioState.clear();
 }
 
 int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
@@ -83,71 +94,219 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 	memset(cmdData, 0, sizeof(transData)* cmdcount);
 
 	coreMutex.lock();//获取队列大锁
-	
-	for(std::map<int, ItemQueue *>::iterator iter = tosend.begin();
+
+	for(std::map<int, CmdQueue>::iterator iter = tosend.begin();
 				iter!= tosend.end();
 				++iter)
 	{
+		transData localCmd;
+		Item *localCur = NULL, *localNext=NULL, *localHead=NULL;
+		memset(&localCmd, 0, sizeof(transData));
 		slaveidx = iter->first;
-		if (true == queueMutex[slaveidx].tryLock())	
+		CmdQueue &queue = iter->second;
+		unsigned int begin_seq,end_seq;
+		begin_seq = seqLock[slaveidx].seq;
+		
+		if (queue.cur)
 		{
-			///////////////////////////////////////////////////////////////////////////////////////////
-			if (0 == tostop.count(slaveidx))
-			{
-				ItemQueue *que = iter->second;
-				if (que && !que->empty())
-				{
-					lastSent[slaveidx] = cmdData[slaveidx] =  (iter->second)->front().cmdData;
-					(iter->second)->pop_front();
-				}
+			localCur = queue.cur;
+			localNext= localCur->next;
+			localHead= queue.head;
+			localCmd = (queue.cur)->cmdData;
+		}
+		
+		end_seq   = seqLock[slaveidx].seq;
+		if ((begin_seq & 1) ||( end_seq != begin_seq)) 
+			continue;	/*不一致数据*/
+
+		if (queue.keeprun)
+		{//持续运动
+			if (localCur)
+			{//持续运动加速阶段
+				cmdData[slaveidx] = localCmd;
+				if (localNext == localHead)
+					queue.cur = NULL;
+				else
+					queue.cur = localNext;
 			}
 			else
-			{//停止该从站
-				size_t unsents = (iter->second)->size();
-				
-				if (unsents > 0)
-				{
-					int estimate = (int)(tostop[slaveidx]->decltime * CYCLES_PER_SEC) + 1;					//预计停止周期数量
-					int	q0, q1;
-					if (unsents > 2 && estimate < unsents)
-					{//重新计算一条减速曲线
-						q0 = (iter->second)->front().cmdData.Data1;
-						(iter->second)->pop_front();
-						q1 = (iter->second)->front().cmdData.Data1;
+			{//已经在匀速运动阶段
+				if (tostop[slaveidx])
+				{//减速
+					DeclStopInfo *dcInfo = tostop[slaveidx];
+					int estimate = (int)(dcInfo->decltime * CYCLES_PER_SEC) + 1;
+					
+					int v  		 = queue.tail->cmdData.Data1 - (queue.tail->prev)->cmdData.Data1;	//匀速速度
+					int q0 		 = lastSent[slaveidx].Data1 + v;
+					int 	vel0 = (v > 0) ? (v) : (-v);											//初始运动速率
+					double	dec  = 1.0 * vel0 / estimate;											//减速度
+					int 	dir  = (v > 0) ? 1 : -1;												//运动方向
+					double	vel  = vel0;
+					int 	q	 = q0;
 
-						(iter->second)->clear();		//清除当前队列中所有待发送CSP目标位置
-	
-						int     vel0 = (q1 > q0) ? (q1 - q0) : (q0 - q1);		//初始运动速率
-						double  dec  = 1.0 * vel0 / estimate;					//减速度
-						int     dir  = (q1 > q0) ? 1 : -1;						//运动方向
-						double  vel  = vel0;
-						int 	q    = q0;
-						
-						Item    item;
-						item.index 			= slaveidx;
-						item.cmdData.CMD 	= CSP;
-						item.cmdData.Data1	= q0;
+					Item	item;
+					item.index			= slaveidx;
+					item.cmdData.CMD	= CSP;
+					item.cmdData.Data1	= q0;
+					
+					cmdData[slaveidx] =  item.cmdData;
 
-						lastSent[slaveidx] = cmdData[slaveidx] =  item.cmdData;
-						
-						while (vel > 0)
+					Item	*toOverWrite = queue.head;
+					Item	*newTail 	= queue.tail;
+					int 	deltaCount 	= 0;
+					int		newCount    = 0;
+					while (vel > 0)
+					{
+						vel = vel - dec;
+						q	= int(q + dir * vel);
+
+						toOverWrite->cmdData.CMD	= CSP;
+						toOverWrite->cmdData.Data1	= q;
+						newTail	= toOverWrite;
+						++newCount;
+						toOverWrite = toOverWrite->next;
+						if (toOverWrite == queue.head
+							&& vel > 0)
 						{
-							vel = vel - dec;
-							q 	= int(q + dir * vel);
+							Item * newItem = new Item;
 
-							item.cmdData.Data1 = q;
-							(iter->second)->push_back(item);
+							queue.tail->next	= newItem;
+							newItem->prev		= queue.tail;
+							newItem->next		= queue.head;
+							queue.tail			= newItem;			//更新tail
+							queue.head->prev	= newItem;
+
+							toOverWrite 		= newItem;
+							++deltaCount;
 						}
 					}
+
+					//释放内存
+					if (!deltaCount 
+						&& toOverWrite != queue.head)
+					{
+						queue.tail->next	= NULL;
+						m_garbageCollector.toss(toOverWrite);
+					}
+
+					queue.cur			= queue.head;		//从头开始发送
+					queue.tail			= newTail;
+					queue.tail->next	= queue.head;
+					queue.head->prev	= queue.tail;
+					queue.count 	  	= newCount;
+					queue.keeprun		= false;			//切换为非连续运动
 					
 					tostop[slaveidx]->valid = true;
-					if ((iter->second)->size() > 0)
-						tostop[slaveidx]->endpos = (iter->second)->back().cmdData.Data1;
-					else
-						tostop[slaveidx]->endpos = q0;
+					tostop[slaveidx]->endpos = queue.tail->cmdData.Data1;
+					tostop[slaveidx] = NULL;
 				}
 				else
-				{//并未运动
+				{//持续运动，匀速阶段
+					int q1 = queue.tail->cmdData.Data1;
+					int q0 = (queue.tail->prev)->cmdData.Data1;
+					int v  = q1 - q0;
+					if (adjusts[slaveidx].remainCount)
+					{
+						--adjusts[slaveidx].remainCount;
+						int dVel = adjusts[slaveidx].dVel;
+						if (v > 0)
+						{
+							if (dVel >= 0)
+								v += dVel;
+							else
+								v -= dVel;
+						}
+						else
+						{
+							if (dVel >= 0)
+								v -= dVel;
+							else
+								v += dVel;
+						}
+					}
+					cmdData[slaveidx].CMD 	= CSP;
+					cmdData[slaveidx].Data1	= lastSent[slaveidx].Data1 + v;
+				}
+			}
+		}
+		else
+		{//非持续运动
+			if (tostop[slaveidx])
+			{
+				DeclStopInfo *dcInfo = tostop[slaveidx];
+				int estimate = (int)(dcInfo->decltime * CYCLES_PER_SEC) + 1;
+				if (queue.cur != NULL 
+					&& queue.cur->next != queue.head)
+				{
+					int q0 = queue.cur->cmdData.Data1;
+					int q1 = (queue.cur->next)->cmdData.Data1;
+
+					int     vel0 = (q1 > q0) ? (q1 - q0) : (q0 - q1);		//初始运动速率
+					double  dec  = 1.0 * vel0 / estimate;					//减速度
+					int     dir  = (q1 > q0) ? 1 : -1;						//运动方向
+					double  vel  = vel0;
+					int 	q    = q0;
+
+					Item    item;
+					item.index 			= slaveidx;
+					item.cmdData.CMD 	= CSP;
+					item.cmdData.Data1	= q0;
+
+					cmdData[slaveidx] =  item.cmdData;
+
+					Item	*toOverWrite = queue.head;
+					Item	*newTail 	= queue.tail;
+					int 	deltaCount 	= 0;
+					int		newCount    = 0;
+					while (vel > 0)
+					{
+						vel = vel - dec;
+						q	= int(q + dir * vel);
+
+						toOverWrite->cmdData.CMD	= CSP;
+						toOverWrite->cmdData.Data1	= q;
+						newTail	= toOverWrite;
+						++newCount;
+
+						toOverWrite = toOverWrite->next;
+						if (toOverWrite == queue.head
+							&& vel > 0)
+						{
+							Item * newItem = new Item;
+
+							queue.tail->next	= newItem;
+							newItem->prev		= queue.tail;
+							newItem->next		= queue.head;
+							queue.tail			= newItem;			//更新tail
+							queue.head->prev	= newItem;
+
+							toOverWrite 		= newItem;
+							++deltaCount;
+						}
+					}
+
+					//释放内存
+					if (!deltaCount 
+						&& toOverWrite != queue.head)
+					{
+						queue.tail->next	= NULL;
+						m_garbageCollector.toss(toOverWrite);
+					}
+
+					queue.cur			= queue.head;		//从头开始发送
+					queue.tail			= newTail;
+					queue.tail->next	= queue.head;
+					queue.head->prev	= queue.tail;
+					queue.count 	   	= newCount;
+					queue.keeprun		= false;			//切换为非连续运动
+					
+					tostop[slaveidx]->valid = true;
+					tostop[slaveidx]->endpos = queue.tail->cmdData.Data1;
+					tostop[slaveidx] = NULL;
+				}
+				else
+				{
+					//并未运动
 					if (lastSent[slaveidx].CMD == CSP)
 					{
 						tostop[slaveidx]->valid = true;
@@ -157,16 +316,23 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 						tostop[slaveidx]->valid = false;
 					}
 				}
-
-				//移除该停止指令 
-				tostop.erase(slaveidx);
+				tostop[slaveidx] = NULL;
 			}
-			////////////////////////////////////////////////////////////////////////////////////////////
-			queueMutex[slaveidx].unlock();
-
-			if (CSP == cmdData[slaveidx].CMD)
-				con = true;
+			else
+			{
+				if (localCur)
+				{
+					cmdData[slaveidx] = localCmd;
+					if (localNext == localHead)
+						queue.cur = NULL;
+					else
+						queue.cur = localNext;
+				}
+			}
 		}
+		if (CSP == cmdData[slaveidx].CMD)
+			con = true;
+		lastSent[slaveidx] = cmdData[slaveidx];
 	}
 
 	coreMutex.unlock();//释放队列大锁
@@ -199,9 +365,7 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 			cmdData[iter->first].CMD = IO_RD;
 	}
 
-
 #ifdef TIMING
-
 	QueryPerformanceCounter(&timeEnd); 
 	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
 
@@ -216,41 +380,66 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 	++count;
 	printf("popItems elapsed = %f, longest=%f, shortest=%f, average=%f.\n", elapsed, longest, shortest, total/count);
 #endif
-
-
 	return 0;
-
 }
 
-void RdWrManager::pushItems(const std::list<Item> *itemLists, size_t rows, size_t cols)
+void RdWrManager::pushItems(Item **itemLists, size_t rows, size_t cols, bool keep)
 {
 	for(size_t  c = 0; c < cols; ++c)
 	{
-		const std::list<Item> & itemList = itemLists[c];
-		int	slaveidx = itemList.front().index;
-		queueMutex[slaveidx].lock();
+		Item * toAppend = itemLists[c];
+		int	slaveidx 	= toAppend->index;
 
-		if (0 == tosend.count(slaveidx))
-			tosend[slaveidx] = new ItemQueue;
+		seqLock[slaveidx].lock();
 
-		for(std::list<Item>::const_iterator iter = itemList.begin();
-								iter != itemList.end();
-								++iter)
+		if (tosend[slaveidx].head == NULL)
 		{
-			tosend[slaveidx]->push_back(*iter);
+			tosend[slaveidx].head 	= toAppend;
+			tosend[slaveidx].tail 	= toAppend->prev;
+			tosend[slaveidx].cur 	= toAppend;
+			tosend[slaveidx].count	= rows;
+		}
+		else
+		{//append to tosend list, chain it up
+			(tosend[slaveidx].head)->prev 	= toAppend->prev;	
+			(tosend[slaveidx].tail)->next 	= toAppend;
+			(toAppend->prev)->next			= (tosend[slaveidx].head);
+			toAppend->prev					= (tosend[slaveidx].tail);
+
+			(tosend[slaveidx].tail) 	   	= (tosend[slaveidx].head)->prev;
+			tosend[slaveidx].count			+= rows;
+			
+			if (tosend[slaveidx].cur == NULL)					//旧的数据已经发送光
+				tosend[slaveidx].cur = toAppend;
+		}
+
+		//释放已经发送过的内存
+		if(tosend[slaveidx].head != tosend[slaveidx].cur)
+		{
+			(tosend[slaveidx].cur)->prev->next = NULL;
+			m_garbageCollector.toss(tosend[slaveidx].head);
 		}
 		
-		queueMutex[slaveidx].unlock();
+		tosend[slaveidx].head			= (tosend[slaveidx].cur);
+		(tosend[slaveidx].cur)->prev 	= tosend[slaveidx].tail;
+		(tosend[slaveidx].tail)->next 	= tosend[slaveidx].cur;
+
+		tosend[slaveidx].keeprun= keep;
+		if (keep)
+		{
+			adjusts[slaveidx].reset();
+		}
+
+		seqLock[slaveidx].unlock();
 	}
 }
 
-
 //同步插入命令队列：适用于多轴运动、多轴回原点，每行命令出现在一次Ecm_write调用中
-void RdWrManager::pushItemsSync(const std::list<Item> *itemLists, size_t rows, size_t cols)
+void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols, bool keep)
 {
 	if (cols == 1)
 	{//单轴运动，获得小锁
-		pushItems(itemLists, rows, cols);
+		pushItems(itemLists, rows, cols, keep);
 	}
 	else//多轴插补
 	{
@@ -263,23 +452,22 @@ void RdWrManager::pushItemsSync(const std::list<Item> *itemLists, size_t rows, s
 		{
 			for(; c < cols; ++c)
 			{				
-				slaveidx = itemLists[c].front().index;
+				slaveidx = items[c].index;
 				if (tosend.count(slaveidx)>0
-					&& (!tosend[slaveidx]->empty()))
+					&& (tosend[slaveidx].cur))
 					break; //当前队列仍有待发送数据
 			}
-			//Poco::Thread::sleep(1);
 		}
 
 		//所有队列均空
-		c = 0;
-		while(c < cols)
+		coreMutex.lock(); //获得大锁
+		for(c = 0; c < cols; ++c)
 		{
 			coreMutex.lock(); //获得大锁
 	
 			for( ; c < cols; ++c)
 			{
-				slaveidx = itemLists[c].front().index;
+				slaveidx = items[c].index;
 				if (false == queueMutex[slaveidx].tryLock())
 					break; //当前队列正忙
 			}
@@ -287,30 +475,26 @@ void RdWrManager::pushItemsSync(const std::list<Item> *itemLists, size_t rows, s
 			coreMutex.unlock();
 			//Poco::Thread::sleep(1);
 		}
-
+		coreMutex.unlock(); //获得大锁
 		//已经获得所有的队列锁
 		
 	//////////////////////////////////////////////////////////////////////////////////////
-		for(size_t c = 0; c < cols; ++c)
+		for (size_t i = 0; i < rows * cols; ++i)
 		{
-			const std::list<Item> & itemList = itemLists[c];
-			slaveidx = itemList.front().index;
+			slaveidx = items[i].index;
 			if (0 == tosend.count(slaveidx))
 				tosend[slaveidx] = new ItemQueue;
-			for(std::list<Item>::const_iterator iter = itemList.begin();
-						iter != itemList.end();
-						++iter)
-			{
-				tosend[slaveidx]->push_back(*iter);
-			}
+			tosend[slaveidx]->push_back(items[i]);
 		}
+	}
+
 	///////////////////////////////////////////////////////////////////////////////////////
 	
 		//释放所有的队列锁
 		coreMutex.lock(); 
 		for(c = 0; c < cols; ++c)
 		{
-			slaveidx = itemLists[c].front().index;
+			slaveidx = items[c].index;
 			queueMutex[slaveidx].unlock();
 		}
 		coreMutex.unlock();
@@ -321,11 +505,8 @@ size_t RdWrManager::peekQueue(int slaveidx)
 {
 	size_t queuecount = 0;
 
-	//queueMutex[slaveidx].lock();
-
 	if (tosend.count(slaveidx))
-		queuecount = tosend[slaveidx]->size();
-	//queueMutex[slaveidx].unlock();
+		queuecount = (tosend[slaveidx].cur) ? 1: 0;
 
 	return queuecount;
 }
@@ -333,9 +514,73 @@ size_t RdWrManager::peekQueue(int slaveidx)
 //减速停止
 void RdWrManager::declStop(int slaveidx, DeclStopInfo *stopInfo)
 {
-	queueMutex[slaveidx].lock(); 
 	tostop[slaveidx] = stopInfo;
-	queueMutex[slaveidx].unlock();
+}
+
+void RdWrManager::declStopSync(DeclStopInfo **stopInfos, size_t cols)
+{
+	if (cols == 1)
+	{//单轴运动，获得小锁
+		declStop(stopInfos[0]->slaveIdx, stopInfos[0]);
+	}
+	else//多轴插补
+	{
+		//一行为一个周期，一列为一个轴
+		int c = 0;
+		int slaveidx;
+
+		//等待当前所有队列全部消耗完
+		while(c < cols)
+		{
+			for(; c < cols; ++c)
+			{				
+				slaveidx = stopInfos[c]->slaveIdx;
+				if (tosend.count(slaveidx)>0
+					&& (tosend[slaveidx].cur))
+					break; //当前队列仍有待发送数据
+			}
+		}
+
+		//所有队列均空
+		coreMutex.lock(); //获得大锁
+		for(c = 0; c < cols; ++c)
+		{
+			slaveidx = stopInfos[c]->slaveIdx;
+			seqLock[slaveidx].lock();
+		}
+		coreMutex.unlock(); //获得大锁
+		//已经获得所有的队列锁
+		
+	//////////////////////////////////////////////////////////////////////////////////////
+
+		for(size_t	c = 0; c < cols; ++c)
+		{
+			//todo关闭调节功能
+			slaveidx = stopInfos[c]->slaveIdx;
+			tostop[slaveidx] 	= stopInfos[c];
+		}
+
+	///////////////////////////////////////////////////////////////////////////////////////
+	
+		//释放所有的队列锁
+		coreMutex.lock(); 
+		for(c = 0; c < cols; ++c)
+		{
+			slaveidx = stopInfos[c]->slaveIdx;
+			seqLock[slaveidx].unlock();
+		}
+		coreMutex.unlock();
+	}
+}
+
+void RdWrManager::setAdjust(short axis, short deltav, size_t cycles)
+{
+	seqLock[axis].lock();
+
+	adjusts[axis].dVel = deltav;
+	adjusts[axis].remainCount = cycles;
+	
+	seqLock[axis].unlock();
 }
 
 void RdWrManager::setIoOutput(short slaveidx, unsigned int output)
@@ -394,7 +639,7 @@ void RdWrManager::run()
 			++rdWrState.readCount;
 			if (FIFO_FULL(respData) != rdWrState.lastFifoFull)
 			{
-				LOGSINGLE_FATAL("FIFO full.readCount=%d, fifoRemain=%?d.", __FILE__, __LINE__, rdWrState.readCount,  FIFO_REMAIN(respData));
+				LOGSINGLE_WARNING("FIFO full.readCount=%d, fifoRemain=%?d.", __FILE__, __LINE__, rdWrState.readCount,  FIFO_REMAIN(respData));
 			}
 
 			//更新输入值
@@ -431,11 +676,10 @@ void RdWrManager::run()
 
 SEND:
 		if (m_consecutive)
-			m_towrite = BATCH_WRITE;			//todo，是否修改为根据FIFO Remain增加的数量动态调整下一次写入量，而不是采用固定值？
+			m_towrite = BATCH_WRITE;
 		else
 			m_towrite = 2;
 	};
 
 	LOGSINGLE_INFORMATION("RdWrManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));
 }
-

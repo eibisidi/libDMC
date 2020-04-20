@@ -1,11 +1,9 @@
 #include "Request.h"
 #include "DmcManager.h"
 
-
-#define RETRIES (10 * 50)
+#define RETRIES (10 * 80)
 #define MAX_ATTEMPTS (5)				
 #define MAKE_DWORD(h,l) ((h << 16) | (l))
-
 
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
@@ -17,6 +15,11 @@ BaseRequest::BaseRequest()
 	dmc 		= &DmcManager::instance();
 	slave_idx	= 0;
 	cmdData   = respData = NULL;
+#ifdef REQUEST_TIMING		
+	QueryPerformanceCounter(&ctime); 
+	stime.QuadPart	= 0;
+	dtime.QuadPart	= 0;
+#endif
 }
 
 FsmRetType DStopRequest::fsm_state_done(DStopRequest *req)
@@ -84,7 +87,7 @@ FsmRetType DStopRequest::fsm_state_csp(DStopRequest *req)
 			return retval;
 		}
 
-		int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+		int posBias = req->dmc->getServoPosBias(req->slave_idx);
 
 		if ( !req->positionReached(req->respData->Data1, posBias) 
 			&& req->rechecks--)
@@ -111,7 +114,7 @@ FsmRetType DStopRequest::fsm_state_csp(DStopRequest *req)
 		}
 	}
 
-	//LOGSINGLE_INFORMATION("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
+	LOGSINGLE_INFORMATION("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
 
 	//目标位置已到达,更新新的绝对位置
 	if(req->stopInfo.valid)
@@ -142,7 +145,7 @@ FsmRetType DStopRequest::fsm_state_start(DStopRequest *req)
 	req->cmdData	= req->dmc->getCmdData(req->slave_idx);
 	req->respData	= req->dmc->getRespData(req->slave_idx);
 	req->fsmstate	 	= fsm_state_csp;
-	req->cmdData->CMD 	= CSP;
+	req->cmdData->CMD 	= GET_STATUS;
 	
 	//将减速命令加入到队列中
 	req->dmc->m_rdWrManager.declStop(req->slave_idx, &req->stopInfo);
@@ -178,6 +181,11 @@ FsmRetType MoveRequest::fsm_state_csp(MoveRequest *req)
 		return retval;
 	}
 
+#ifdef REQUEST_TIMING
+	if (0 == req->queue_empty_time.QuadPart)
+		QueryPerformanceCounter(&(req->queue_empty_time)); 
+#endif
+
 	if(CSP != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData )
 		&& req->rechecks--)
@@ -185,7 +193,7 @@ FsmRetType MoveRequest::fsm_state_csp(MoveRequest *req)
 		return retval;
 	}
 		
-	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+	int posBias = req->dmc->getServoPosBias(req->slave_idx);
 
 	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)
@@ -210,6 +218,11 @@ FsmRetType MoveRequest::fsm_state_csp(MoveRequest *req)
 		}
 		return retval;
 	}
+
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->in_pos_time)); 
+	//LOGSINGLE_INFORMATION("axis(%?d) move pos reached. startpos=%?d, dstpos=%?d, curpos=%?d, attempts=%?d.", __FILE__, __LINE__,req->slave_idx, req->startpos, req->dstpos, req->respData->Data1, req->attempts);
+#endif
 
 	//目标位置已到达,更新新的绝对位置
 	req->dmc->setDriverCmdPos(req->slave_idx,req->dstpos);
@@ -376,6 +389,14 @@ FsmRetType MoveRequest::fsm_state_start(MoveRequest *req)
 {	
 	FsmRetType retval = MOVESTATE_BUSY;
 
+#ifdef REQUEST_TIMING		
+	req->start_push_time.QuadPart	= 0;
+	req->end_push_time.QuadPart		= 0;
+	req->queue_empty_time.QuadPart	= 0;
+	req->in_pos_time.QuadPart		= 0;
+	QueryPerformanceCounter(&(req->stime)); 
+#endif
+
 	req->startpos = req->dmc->getDriverCmdPos(req->slave_idx);//获得起始位置
 	if (req->abs)
 		req->dstpos = req->dist;
@@ -426,8 +447,8 @@ bool MoveRequest::startPlan()
 	if (MOVETYPE_T == this->movetype)
 	{
 		TParam *newT = new TParam;
-		newT->q0   = this->startpos;		
-		newT->q1   = this->dstpos;
+		newT->q0   = 0;		
+		newT->q1   = this->dstpos - this->startpos;
 		newT->vmax = this->maxvel;
 		newT->amax = this->maxa;
 		if (-1 == ::Plan_T(newT))
@@ -441,8 +462,8 @@ bool MoveRequest::startPlan()
 	else
 	{
 		SParam *newS = new SParam;
-		newS->q0   = this->startpos;		
-		newS->q1   = this->dstpos;
+		newS->q0   = 0;		
+		newS->q1   = this->dstpos - this->startpos;
 		newS->vmax = this->maxvel;
 		newS->amax = this->maxa;
 		newS->jmax = this->maxj;			//最大加加速度
@@ -468,29 +489,76 @@ bool  MoveRequest::positionReached(int q , int bias) const
 
 void MoveRequest::pushCspPoints(MoveRequest *req)
 {
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->start_push_time)); 
+#endif
+
 	int cycles = req->moveparam->cycles;
 
-	std::list<Item> itemList;
+	Item *head = NULL;
+	Item *tail = NULL;
+	Item *newItem = NULL;
 
-	for (int row = 0; row < cycles; ++row)
+	for(int row = 0; row < cycles; ++row)
 	{
-		Item newItem;
-		newItem.index 		= req->slave_idx;
-		newItem.cmdData.CMD 	= CSP;
-		newItem.cmdData.Data1=req->moveparam->position();
-		itemList.push_back(newItem);
+		newItem = new Item;
+		newItem->index 			= req->slave_idx;
+		newItem->cmdData.CMD	= CSP;
+		newItem->cmdData.Data1	= req->startpos + req->moveparam->position();
+		newItem->cmdData.Data2	= 0;
+		
+		if (0 == row)
+		{
+			tail = head = newItem;
+		}
+		else
+		{
+			tail->next 		= newItem;
+			newItem->prev 	= tail;
+			newItem->next 	= head;
+			head->prev		= newItem;
+		}
+		tail = newItem;
 	}
 
-	//将最后一个位置点进行存储
 	req->cmdData->CMD	= GET_STATUS;
 
-	//req->dmc->logCspPoints(items, cycles, 1);	//输出规划结果到日志
-	req->dmc->pushItems(&itemList, cycles, 1, false);	
+	//req->dmc->logCspPoints(&head, cycles, 1);
+	req->dmc->pushItems(&head, cycles, 1, false);
+
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->end_push_time)); 
+#endif
 }
 
 FsmRetType MoveRequest::exec()
 {
 	return fsmstate(this);
+}
+
+MoveRequest::~MoveRequest() 
+{
+	if (moveparam)
+	{
+#ifdef REQUEST_TIMING
+		double lifetime, startingtime, plantime, pushtime,consumetime,followtime,cost,movetime;
+		QueryPerformanceCounter(&dtime); 
+
+		lifetime = (dtime.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		startingtime= (stime.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		plantime = (start_push_time.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		pushtime = (end_push_time.QuadPart - start_push_time.QuadPart) / dmc->quadpart; 
+		consumetime = (queue_empty_time.QuadPart - end_push_time.QuadPart) / dmc->quadpart; 
+		followtime = (in_pos_time.QuadPart - queue_empty_time.QuadPart)/ dmc->quadpart; 
+		movetime = moveparam->T;
+		cost = lifetime - movetime;
+		
+		LOGSINGLE_INFORMATION("~MoveRequest axis=%?d,startingtime=%f, plantime=%f, pushtime=%f, consumetime=%f, followtime=%f, cost=%f,movetime=%f, lifetime=%f.", __FILE__, __LINE__, 
+					slave_idx,  startingtime, plantime, pushtime, consumetime, followtime,
+					cost, movetime, lifetime);
+#endif
+		delete moveparam;
+	}
 }
 
 FsmRetType ClrAlarmRequest::fsm_state_done(ClrAlarmRequest *req)
@@ -994,6 +1062,30 @@ FsmRetType MultiAxisRequest::fsm_state_done(MultiAxisRequest *req)
 	return MOVESTATE_NONE;
 }
 
+FsmRetType MultiAxisRequest::fsm_state_wait_all_sent(MultiAxisRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+	
+	if(0 != req->axispara->getError())
+	{
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
+	{//尚未发送完毕
+		return retval;
+	}
+	
+	req->fsmstate		= MultiAxisRequest::fsm_state_done;
+	retval				= MOVESTATE_RUNNING;
+	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+
+	return retval;
+}
+
 FsmRetType  MultiAxisRequest::fsm_state_wait_all_pos_reached(MultiAxisRequest *req)
 {
 	FsmRetType retval = MOVESTATE_BUSY;
@@ -1053,6 +1145,11 @@ FsmRetType  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		return retval;
 	}
 
+#ifdef REQUEST_TIMING
+	if (0 == req->queue_empty_time.QuadPart)
+		QueryPerformanceCounter(&(req->queue_empty_time)); 
+#endif
+
 	if(CSP != RESP_CMD_CODE(req->respData)
 		&& GET_STATUS != RESP_CMD_CODE(req->respData )
 		&& req->rechecks--)
@@ -1060,7 +1157,7 @@ FsmRetType  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 		return retval;
 	}
 
-	int posBias = (req->dmc->isServo(req->slave_idx)) ? (req->dmc->getServoPosBias()) : 0;
+	int posBias = req->dmc->getServoPosBias(req->slave_idx);
 
 	if ( !req->positionReached(req->respData->Data1, posBias) 
 		&& req->rechecks--)
@@ -1089,6 +1186,10 @@ FsmRetType  MultiAxisRequest::fsm_state_csp(MultiAxisRequest *req)
 
 	//目标位置已到达,更新新的绝对位置
 	req->dmc->setDriverCmdPos(req->slave_idx, req->axispara->dstpos);
+
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->in_pos_time)); 
+#endif
 
 	req->axispara->reg_pos_reached();									//位置已经到达
 	req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_pos_reached;
@@ -1139,13 +1240,26 @@ FsmRetType  MultiAxisRequest::fsm_state_wait_all_svon(MultiAxisRequest *req)
 		return MOVESTATE_ERR;
 	}
 
-	req->fsmstate	 	= MultiAxisRequest::fsm_state_csp;
-	req->cmdData->CMD 	= GET_STATUS;						/*同步命令*/
+	//多轴插入CSP规划点
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->start_push_time)); 
+#endif
+	pushCspPoints(req);
+#ifdef REQUEST_TIMING
+	QueryPerformanceCounter(&(req->end_push_time)); 
+#endif
+
+	if (req->keep)
+	{
+		req->fsmstate		= MultiAxisRequest::fsm_state_wait_all_sent;
+	}
+	else
+	{
+		req->fsmstate	 	= MultiAxisRequest::fsm_state_csp;
+	}	
+	req->cmdData->CMD	= GET_STATUS;							/*同步命令*/
 	req->rechecks		= RETRIES;
 	req->attempts		= 0;
-
-	//多轴插入CSP规划点
-	pushCspPoints(req);
 
 	return retval;
 }
@@ -1301,6 +1415,14 @@ FsmRetType  MultiAxisRequest::fsm_state_start(MultiAxisRequest *req)
 {	
 	FsmRetType retval = MOVESTATE_BUSY;
 
+#ifdef REQUEST_TIMING		
+	req->start_push_time.QuadPart 	= 0;
+	req->end_push_time.QuadPart 	= 0;
+	req->queue_empty_time.QuadPart 	= 0;
+	req->in_pos_time.QuadPart 		= 0;
+	QueryPerformanceCounter(&(req->stime)); 
+#endif
+
 	if(0 != req->axispara->getError())
 	{//其它电机已经出现错误
 		req->reqState = REQUEST_STATE_FAIL;
@@ -1351,8 +1473,7 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 	int cycles = req->axispara->totalCycles();
 	size_t axises = paras.size();
 
-	std::list<Item>* newItemLists = new std::list<Item>[axises];
-
+	Item *items = new Item[cycles * axises];
 	for (int row = 0; row < cycles; ++row)
 	{
 		int col = 0;
@@ -1361,22 +1482,17 @@ void MultiAxisRequest::pushCspPoints(MultiAxisRequest *req)
 				++iter, ++col)
 		{
 			BaseMultiAxisPara *para = iter->second;
-			std::list<Item> & itemList = newItemLists[col];
-			
-			Item newItem;
-			newItem.index    		= para->req->slave_idx;							//从站地址
-			newItem.cmdData.CMD  	= CSP;
-			newItem.cmdData.Data1  = para->nextPosition(para->req->slave_idx);	//CSP目的位置
-
-			itemList.push_back(newItem);
+			items[row * axises + col].index    		= para->req->slave_idx;							//从站地址
+			items[row * axises + col].cmdData.CMD  	= CSP;
+			items[row * axises + col].cmdData.Data1  = para->nextPosition(para->req->slave_idx);	//CSP目的位置
 		}
 	}
 
-//	req->dmc->logCspPoints(items, cycles, axises);	//输出规划结果到日志
+	req->dmc->logCspPoints(items, cycles, axises);	//输出规划结果到日志
 
-	req->dmc->pushItems(newItemLists, cycles, axises, true);
+	req->dmc->pushItems(items, cycles, axises, true);
 
-	delete [] newItemLists;
+	delete [] items;
 }
 
 bool MultiAxisRequest::startPlan()
@@ -1393,6 +1509,32 @@ bool  MultiAxisRequest::positionReached(int q , int bias) const
 FsmRetType MultiAxisRequest::exec()
 {
 	return fsmstate(this);
+}
+
+MultiAxisRequest::~MultiAxisRequest() 
+{
+	if (axispara)
+	{
+#ifdef REQUEST_TIMING
+		double lifetime, startingtime, plantime, pushtime,consumetime,followtime,cost,movetime;
+		QueryPerformanceCounter(&dtime); 
+
+		lifetime = (dtime.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		startingtime= (stime.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		plantime = (start_push_time.QuadPart - ctime.QuadPart) / dmc->quadpart; 
+		pushtime = (end_push_time.QuadPart - start_push_time.QuadPart) / dmc->quadpart; 
+		consumetime = (queue_empty_time.QuadPart - end_push_time.QuadPart) / dmc->quadpart; 
+		followtime = (in_pos_time.QuadPart - queue_empty_time.QuadPart)/ dmc->quadpart; 
+		movetime  = (axispara->totalCycles() * DC_CYCLE_us) / 1000000.0;
+		cost = lifetime - movetime;
+		
+		LOGSINGLE_INFORMATION("~MultiAxisRequest axis=%?d,startingtime=%f, plantime=%f, pushtime=%f, consumetime=%f, followtime=%f, cost=%f,movetime=%f, lifetime=%f.", __FILE__, __LINE__, 
+					slave_idx, startingtime, plantime, pushtime, consumetime, followtime,
+					cost, movetime, lifetime);
+
+#endif
+		delete  axispara;
+	}
 }
 
 MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, bool abs)
@@ -1412,6 +1554,8 @@ MultiAxisRequest::MultiAxisRequest(int axis, LinearRef *newLinearRef, int pos, b
 	double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);	
 	if (dist > newLinearRef->max_dist)
 		newLinearRef->max_dist = dist;				//参考轴运动距离
+
+	this->keep = false;
 }
 
 MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, bool abs, bool z)			//Z轴拱门插补
@@ -1439,6 +1583,20 @@ MultiAxisRequest::MultiAxisRequest(int axis, ArchlRef *newArchlRef, int pos, boo
 		if (dist > newArchlRef->max_dist)
 			newArchlRef->max_dist = dist;				//参考轴运动距离
 	}
+
+	this->keep = false;
+}
+
+MultiAxisRequest::MultiAxisRequest(int axis, AccRef *newAccRef, long maxvel)
+{
+	int startpos;
+	startpos = DmcManager::instance().getDriverCmdPos(axis);
+	
+	this->slave_idx = axis;
+	this->fsmstate 	= fsm_state_start;
+	this->axispara	= new AccMultiAxisPara(newAccRef, this, axis, maxvel, startpos);
+
+	this->keep = true;
 }
 
 FsmRetType HomeMoveRequest::fsm_state_done(HomeMoveRequest *req)
@@ -2226,21 +2384,17 @@ void MultiHomeRequest::pushMultiHome(MultiHomeRequest *req)
 	const std::set<int>& axises = req->ref->getAxises();
 	size_t count = axises.size();
 
-	std::list<Item> *itemLists = new std::list<Item>[count];
+	Item *items = new Item[count];
 
 	int col = 0;
 	for (std::set<int>::const_iterator iter = axises.begin();
 			iter != axises.end();
 			++iter, ++col)
 	{
-		std::list<Item> & itemList = itemLists[col];
-		Item newItem;
-		newItem.index    		= *iter;							//从站地址
-		newItem.cmdData.CMD  	= GO_HOME;
-		newItem.cmdData.Data1 	= 0;
-		newItem.cmdData.Data2 	= 0;
-
-		itemList.push_back(newItem);
+		items[col].index    		= *iter;							//从站地址
+		items[col].cmdData.CMD  	= GO_HOME;
+		items[col].cmdData.Data1 	= 0;
+		items[col].cmdData.Data2 	= 0;
 	}
 
 	req->dmc->pushItems(itemLists, 1, count, true);
@@ -2392,22 +2546,17 @@ void MultiAbortHomeRequest::pushMultiAbortHome(MultiAbortHomeRequest *req)
 	const std::set<int>& axises = req->ref->getAxises();
 	size_t count = axises.size();
 
-	std::list<Item> *itemLists = new std::list<Item>[count];
-
-
+	Item *items = new Item[count];
 
 	int col = 0;
 	for (std::set<int>::const_iterator iter = axises.begin();
 			iter != axises.end();
 			++iter, ++col)
 	{
-		std::list<Item> &itemList = itemLists[col];
-		Item newItem;
-		newItem.index    		= *iter;							//从站地址
-		newItem.cmdData.CMD  	= ABORT_HOME;
-		newItem.cmdData.Data1 	= 0;
-		newItem.cmdData.Data2 	= 0;
-		itemList.push_back(newItem);
+		items[col].index    		= *iter;							//从站地址
+		items[col].cmdData.CMD  	= ABORT_HOME;
+		items[col].cmdData.Data1 	= 0;
+		items[col].cmdData.Data2 	= 0;
 	}
 
 	req->dmc->pushItems(itemLists, 1, count, true);
@@ -2426,6 +2575,197 @@ MultiAbortHomeRequest::MultiAbortHomeRequest(int axis, MultiAbortHomeRef *newRef
 	this->fsmstate	= fsm_state_start;
 	this->ref 		= newRef;
 	this->ref->duplicate(axis);
+}
+
+FsmRetType MultiDeclRequest::fsm_state_done(MultiDeclRequest *req)
+{
+	//shall not be called
+	return MOVESTATE_NONE;
+}
+
+FsmRetType MultiDeclRequest::fsm_state_svoff(MultiDeclRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+	if(SV_OFF != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData)
+			&& req->rechecks--)
+	{
+		return retval;
+	}
+
+	if (req->dmc->isDriverOn(req->slave_idx)
+			&& req->rechecks--)
+	{
+		return retval;
+	}
+	
+	if (req->rechecks <= 0)
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{			
+			LOGSINGLE_ERROR("DStopRequest::fsm_state_svoff timeouts. axis=%d, status=0x%?x.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx));
+			req->reqState = REQUEST_STATE_FAIL;
+			retval = MOVESTATE_TIMEOUT;
+		} 
+		else
+		{
+			LOGSINGLE_INFORMATION("DStopRequest::fsm_state_svoff reattempts. axis=%d, status=0x%?x.", __FILE__, __LINE__, req->slave_idx, req->dmc->getDriverStatus(req->slave_idx));
+			req->dmc->restoreLastCmd(req->cmdData);
+			req->rechecks = RETRIES;
+		}
+		return retval;
+	}
+
+	req->fsmstate		= MultiDeclRequest::fsm_state_done;
+	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+	retval = MOVESTATE_CMD_STOP;
+	return MOVESTATE_CMD_STOP;
+}
+
+FsmRetType MultiDeclRequest::fsm_state_csp(MultiDeclRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	if(!req->stopInfo.valid)
+	{//尚未发送完毕
+		return retval;
+	}
+
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
+	{//尚未发送完毕
+		return retval;
+	}
+
+	//发送已经完成
+
+	if(CSP != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData )
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+
+	int posBias = req->dmc->getServoPosBias(req->slave_idx);
+
+	if ( !req->positionReached(req->respData->Data1, posBias) 
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+
+	if (req->rechecks <= 0)						//等待位置到达超时
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{	
+			LOGSINGLE_ERROR("MultiDeclRequest::fsm_state_csp timeout. nowpos=%d, endpos=%d.", __FILE__, __LINE__, (int)req->respData->Data1, req->stopInfo.endpos);
+			req->reqState = REQUEST_STATE_FAIL;
+			retval = MOVESTATE_TIMEOUT;
+		}
+		else
+		{
+			LOGSINGLE_INFORMATION("MultiDeclRequest::fsm_state_csp reattempts. attempts=%d. nowpos=%d, endpos=%d.", __FILE__, __LINE__, req->attempts, (int)req->respData->Data1, req->stopInfo.endpos);
+			req->rechecks = RETRIES;
+			req->cmdData->CMD 	= CSP;
+			req->cmdData->Data1 = req->stopInfo.endpos;	//重发最终位置
+		}
+		return retval;
+	}
+
+	LOGSINGLE_INFORMATION("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
+
+	//目标位置已到达,更新新的绝对位置
+	if(req->stopInfo.valid)
+		req->dmc->setDriverCmdPos(req->slave_idx, req->stopInfo.endpos);
+	else
+		req->dmc->setDriverCmdPos(req->slave_idx, req->dmc->getCurpos(req->slave_idx));
+	
+	if (req->serveOff)
+	{//需关闭电机使能
+		req->fsmstate		= MultiDeclRequest::fsm_state_svoff;
+		req->cmdData->CMD	= SV_OFF;
+	}
+	else
+	{//不需关闭电机使能
+		req->fsmstate		= fsm_state_done;
+		retval = MOVESTATE_CMD_STOP;
+		req->reqState		= REQUEST_STATE_SUCCESS;
+	}
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+	return retval;
+}
+
+FsmRetType MultiDeclRequest::fsm_state_start(MultiDeclRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+	
+	if(0 != req->ref->getError())
+	{//其它电机已经出现错误
+		req->reqState = REQUEST_STATE_FAIL;
+		return MOVESTATE_ERR;
+	}
+
+	if (req->ref->isFirst(req->slave_idx))
+	{
+		pushMultiDecl(req);
+	}
+
+	req->fsmstate		= MultiDeclRequest::fsm_state_csp;
+	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
+	req->respData		= req->dmc->getRespData(req->slave_idx);
+	req->cmdData->CMD	= GET_STATUS;							/*同步命令*/
+
+	return retval;
+}
+
+bool  MultiDeclRequest::positionReached(int q , int bias) const
+{
+	if (bias)
+		return (::abs(q - this->stopInfo.endpos) < bias);
+	else
+		return q == this->stopInfo.endpos;
+}
+
+void MultiDeclRequest::pushMultiDecl(MultiDeclRequest *req)
+{
+	if (!req->ref->isFirst(req->slave_idx))
+		return;
+
+	const std::map<int, DeclStopInfo *>& stopInfos = req->ref->getStopInfos();
+	size_t count = stopInfos.size();
+
+	DeclStopInfo ** declStopInfos = new DeclStopInfo*[count];
+
+	int col = 0;
+	for (std::map<int, DeclStopInfo *>::const_iterator iter = stopInfos.begin();
+			iter != stopInfos.end();
+			++iter, ++col)
+	{
+		declStopInfos[col] = iter->second;
+	}
+
+	req->dmc->m_rdWrManager.declStopSync(declStopInfos, count);
+
+	delete []declStopInfos;
+}
+
+
+FsmRetType MultiDeclRequest::exec()
+{
+	return fsmstate(this);
+}
+
+MultiDeclRequest::MultiDeclRequest(int axis, MultiDeclRef *newRef, double tdec)
+{
+	this->slave_idx = axis;
+	this->fsmstate	= fsm_state_start;
+	this->ref		= newRef;
+	this->ref->duplicate(axis, &(this->stopInfo));
+	this->serveOff	= false;
+	this->stopInfo.slaveIdx  = axis;
+	this->stopInfo.decltime	 = tdec;
 }
 
 FsmRetType ReadIoRequest::fsm_state_done(ReadIoRequest *req)
@@ -2546,6 +2886,141 @@ FsmRetType WriteIoRequest::fsm_state_start(WriteIoRequest *req)
 }
 
 FsmRetType WriteIoRequest::exec()
+{
+	return fsmstate(this);
+}
+
+FsmRetType MakeOverFlowRequest::fsm_state_done(MakeOverFlowRequest *req)
+{
+	//shall not be called
+	return MOVESTATE_NONE;
+}
+
+FsmRetType MakeOverFlowRequest::fsm_wait_pos_reached(MakeOverFlowRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	printf("curpos = 0x%x\n", req->respData->Data1);
+
+	if(req->dmc->m_rdWrManager.peekQueue(req->slave_idx))
+	{//尚未发送完毕
+		return retval;
+	}
+
+	if(CSP != RESP_CMD_CODE(req->respData)
+		&& GET_STATUS != RESP_CMD_CODE(req->respData )
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+		
+	int posBias = req->dmc->getServoPosBias(req->slave_idx);
+
+	if ( !req->positionReached(req->respData->Data1, posBias) 
+		&& req->rechecks--)
+	{
+		return retval;
+	}
+		
+	if (req->rechecks <= 0) 					//等待位置到达超时
+	{
+		if (++req->attempts > MAX_ATTEMPTS)
+		{	
+			LOGSINGLE_ERROR("MakeOverFlowRequest::fsm_wait_pos_reached timeout. axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__,req->slave_idx, (int)req->respData->Data1, DST_POS);
+			retval = MOVESTATE_TIMEOUT;
+			req->reqState = REQUEST_STATE_FAIL;
+		}
+		else
+		{
+			LOGSINGLE_INFORMATION("MakeOverFlowRequest::fsm_wait_pos_reached reattempts.attempts=%d. axis=%d, nowpos=%d, dstpos=%d.", __FILE__, __LINE__, req->attempts, req->slave_idx, (int)req->respData->Data1, DST_POS);
+			req->cmdData->CMD	= CSP;
+			req->cmdData->Data1 = DST_POS;
+			req->rechecks = RETRIES;
+		}
+		return retval;
+	}
+
+	LOGSINGLE_INFORMATION("axis(%?d) makeoverflow pos reached.", __FILE__, __LINE__,req->slave_idx);
+
+	//目标位置已到达,更新新的绝对位置
+	req->dmc->setDriverCmdPos(req->slave_idx, DST_POS);
+	
+	req->fsmstate		= fsm_state_done;
+	retval				= MOVESTATE_STOP;
+	req->reqState		= REQUEST_STATE_SUCCESS;
+	req->rechecks		= RETRIES;
+	req->attempts		= 0;
+
+	return retval;
+}
+
+FsmRetType MakeOverFlowRequest::fsm_state_start(MakeOverFlowRequest *req)
+{
+	FsmRetType retval = MOVESTATE_BUSY;
+
+	int curpos = req->dmc->getCurpos(req->slave_idx);
+
+	Item *head = NULL;
+	Item *tail = NULL;
+	Item *newItem = NULL;
+	size_t rows	= 0;
+	while(curpos + STEP_INC > 0)
+	{
+		curpos += STEP_INC;
+
+		newItem = new Item;
+		newItem->index 			= req->slave_idx;
+		newItem->cmdData.CMD	= CSP;
+		newItem->cmdData.Data1	= curpos;
+		newItem->cmdData.Data2	= 0;
+		++rows;
+
+		if (NULL == head)
+		{
+			tail = head = newItem;
+		}
+		else
+		{
+			tail->next 		= newItem;
+			newItem->prev 	= tail;
+			newItem->next 	= head;
+			head->prev		= newItem;
+		}
+		tail = newItem;
+	}
+
+	newItem = new Item;
+	newItem->index			= req->slave_idx;
+	newItem->cmdData.CMD	= CSP;
+	newItem->cmdData.Data1	= DST_POS;
+	newItem->cmdData.Data2	= 0;
+	++rows;
+	
+	tail->next		= newItem;
+	newItem->prev	= tail;
+	newItem->next	= head;
+	head->prev		= newItem;
+	tail = newItem;
+
+	req->dmc->pushItems(&head, rows, 1, false, false);
+
+	req->fsmstate		= MakeOverFlowRequest::fsm_wait_pos_reached;
+	req->cmdData		= req->dmc->getCmdData(req->slave_idx);
+	req->respData		= req->dmc->getRespData(req->slave_idx);
+	req->cmdData->CMD	= GET_STATUS;
+
+	return retval;
+}
+
+bool  MakeOverFlowRequest::positionReached(int q , int bias) const
+{
+	if (bias)
+		return (::abs(q - DST_POS) < bias);
+	else
+		return q == DST_POS;
+}
+
+FsmRetType MakeOverFlowRequest::exec()
 {
 	return fsmstate(this);
 }

@@ -2,8 +2,6 @@
 #define RDWR_MANAGER
 
 #include <map>
-#include <deque>
-#include <list>
 
 #include "NEXTWUSBLib_12B.h"
 #include "Poco/Mutex.h"
@@ -12,37 +10,42 @@
 #include "Poco/Thread.h"
 
 #include "SlaveState.h"
-
-class Item
-{
-public:
-	int			index;
-	transData 	cmdData;
-	//add extra
-	Item()
-	{
-		index = 0;
-		cmdData.CMD = 0;
-		cmdData.Parm = 0;
-		cmdData.Data1 = 0;
-		cmdData.Data2 = 0;
-		//cmdData.Data3 = 0;
-	}
-};
+#include "GarbageCollector.h"
 
 //减速停止信息
 class DeclStopInfo
 {
 public:
+	int			slaveIdx;
 	double 		decltime;			//减速时间
 	bool		valid;				//减速目标位置是否有效
 	int			endpos;				//减速目标位置，valid = true时有效
 
 	DeclStopInfo()
 	{
+		slaveIdx = 0;
 		decltime = 0.1;
 		valid 	 = false;
 		endpos	 = 0;
+	}
+};
+
+//减速停止信息
+class AdjustInfo
+{
+public:
+	int 		dVel;		//速率变化 +加速  -减速
+	size_t		remainCount;
+	
+	AdjustInfo()
+	{
+		reset();
+	}
+
+	void reset()
+	{
+		dVel 			= 0;
+		remainCount 	= 0;
 	}
 };
 
@@ -59,6 +62,43 @@ public:
 	}
 };
 
+struct SeqLock{
+	unsigned int seq;
+	SeqLock()
+	{
+		seq = 0;
+	}
+
+	void lock()
+	{
+		//mb()
+		seq++;
+	}
+
+	void unlock()
+	{
+		//mb()
+		seq++;
+	}
+
+};
+	
+struct CmdQueue
+{
+	Item 			*head;
+	Item 			*tail;
+	Item			*cur;
+	size_t			count;		//当前队列中数目
+	bool			keeprun;	//是否持续运动
+	CmdQueue()
+	{
+		head = tail = NULL;
+		cur	 = NULL;
+		count = 0;
+		keeprun = false;
+	}
+};
+
 class RdWrManager : public Poco::Runnable
 {
 public:
@@ -70,10 +110,12 @@ public:
 
 	~RdWrManager();
 
-	void pushItems(const std::list<Item> *itemLists, size_t rows, size_t cols);
-	void pushItemsSync(const std::list<Item> *itemLists, size_t rows, size_t cols);
+	void pushItems(Item **itemLists, size_t rows, size_t cols, bool keep);
+	void pushItemsSync(Item **itemLists, size_t rows, size_t cols, bool keep);
 	size_t peekQueue(int slaveidx);
 	void declStop(int slaveidx, DeclStopInfo *stopInfo);
+	void declStopSync(DeclStopInfo **stopInfos, size_t cols);
+	void setAdjust(short axis, short deltav, size_t cycles);
 
 	void setIoOutput(short slaveidx, unsigned int output);
 	unsigned int getIoOutput(short slaveidx);
@@ -87,19 +129,17 @@ private:
 	bool				m_canceled;				//线程停止
 	bool				m_consecutive;			//连续Write模式？
 	int 				m_towrite;
+	GarbageCollector	m_garbageCollector;
 
-	typedef std::deque<Item> ItemQueue;
-	typedef bool		 	QueueFlag;
-
-	std::map<int, ItemQueue*> 	tosend;								//待发送	命令队列
-	std::map<int, DeclStopInfo*>	tostop;							//待减速停止
-	transData					lastSent[DEF_MA_MAX];				//记录上次发送命令
+	std::map<int, CmdQueue> 	tosend;								//待发送	命令队列				
+	DeclStopInfo				*tostop[DEF_MA_MAX];				//待减速停止
+	transData					lastSent[DEF_MA_MAX];				//记录上次发送CSP命令
+	AdjustInfo					adjusts[DEF_MA_MAX];				//调速
 	RdWrState					rdWrState;
 	std::map<int, IoSlaveState> ioState;							//Io模块输入、输出值
 
-	Poco::Mutex		coreMutex;						//Main Core Mutext To Guard each queueMutex
-	Poco::Mutex		queueMutex[DEF_MA_MAX];
+	Poco::Mutex					coreMutex;							//Main Core Mutext To Guard each queueMutex
+	SeqLock						seqLock[DEF_MA_MAX];
 };
-
 #endif
 

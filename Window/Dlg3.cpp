@@ -87,7 +87,7 @@ void CDlg3::OnBnClickedButton7()
 	int axis = m_slaveAddrCombo.GetCurSel() + 1;
 	DWORD ret;
 	
-	ret = d1000_home_move(axis, m_highVel, m_lowVel, m_acc);
+	ret = d1000_home_move(axis);
 
 	if (ERR_NOERR != ret)
 	{

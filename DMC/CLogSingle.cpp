@@ -29,7 +29,6 @@ Poco::Logger* CLogSingle::getLogger()
 
 		AutoPtr<AsyncChannel> pAC(new AsyncChannel(pFC));
 
-		
 		Poco::Logger& logger = Logger::get(loggerName);
 		logger.setChannel(pAC);
 
@@ -135,7 +134,6 @@ void CLogSingle::closeLogger()
 		ofs.close();
 }
 
-
 CLogSingle::CLogSingle()
 {
 
@@ -144,4 +142,3 @@ CLogSingle::CLogSingle()
 CLogSingle::~CLogSingle()
 {
 }
-

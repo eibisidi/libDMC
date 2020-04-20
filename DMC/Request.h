@@ -15,7 +15,7 @@
 #define DEF_SERVO_POS_BIAS  (100)			//缺省伺服位置达到检测允许误差范围
 
 
-//#define REQUEST_TIMING 1
+#define REQUEST_TIMING 1
 
 class DmcManager;
 
@@ -37,9 +37,17 @@ public:
 	int 				slave_index;
 	unsigned char		slave_type;
 	std::vector<SDO>	slave_sdos;
-	SlaveConfig(int index, unsigned char type)
-			:slave_index(index), slave_type(type)
+	unsigned int		axis_bias;				//驱动器允许偏差
+	SlaveConfig(int index, unsigned char type, unsigned int bias)
+			:slave_index(index), slave_type(type), axis_bias(bias)
 	{
+	}
+
+	SlaveConfig()
+	{
+		slave_index = 0;
+		slave_type	= None;
+		axis_bias	= 0;
 	}
 };
 	
@@ -49,9 +57,7 @@ public:
 	int						 loglevel;			//日志记录等级
 	int						 home_method;		//回原点方式
 	int						 home_timeout;		//回原点超时时间
-	int						 servo_pos_bias;	//伺服位置达到检测允许误差范围
-	std::set<int>			 slave_indexes;
-	std::vector<SlaveConfig> slave_configs;
+	std::map<int, SlaveConfig>slave_configs;
 	std::set<int>			 logpoint_axis;		//记录规划点的轴
 
 	MasterConfig()					//默认等级4记录告警
@@ -64,13 +70,10 @@ public:
 		loglevel 		= 4;
 		home_method 	= DEF_HOME_METHOD;
 		home_timeout	= DEF_HOME_TIMEOUT;
-		servo_pos_bias	= DEF_SERVO_POS_BIAS;
-		slave_indexes.clear();
 		slave_configs.clear();
 		logpoint_axis.clear();
 	}
 };
-
 
 enum RequestState
 {
@@ -90,8 +93,10 @@ public:
 	int 			slave_idx;
 	transData		*cmdData;
 	transData		*respData;
-#ifdef REQUEST_TIMING
-	Poco::Timestamp ctime;			//创建时间
+#ifdef REQUEST_TIMING		
+	LARGE_INTEGER 	ctime;			//请求创建时间
+	LARGE_INTEGER 	stime;			//进入fsm_start的时间
+	LARGE_INTEGER   dtime;			//请求析构时间
 #endif
 	virtual ~BaseRequest(){}
 	virtual FsmRetType exec() = 0;
@@ -119,10 +124,10 @@ public:
 	
 	DStopRequest(int axis, double Tdec, bool svoff)
 	{
-		slave_idx = axis;
-		stopInfo.decltime = Tdec;
-		serveOff = false;
-		fsmstate = fsm_state_start;
+		slave_idx 			= axis;
+		stopInfo.decltime 	= Tdec;
+		serveOff 			= svoff;
+		fsmstate 			= fsm_state_start;
 	}
 };
 
@@ -140,6 +145,12 @@ private:
 	bool startPlan();
 	bool 	positionReached(int q , int bias = 0) const;
 
+#ifdef REQUEST_TIMING		
+	LARGE_INTEGER	start_push_time;			//将CSP命令写入链表开始时刻
+	LARGE_INTEGER	end_push_time;				//将CSP命令写入链表结束时刻
+	LARGE_INTEGER	queue_empty_time;			//链表消耗空时刻	
+	LARGE_INTEGER	in_pos_time;				//位置到达时刻
+#endif
 
 public:
 
@@ -157,19 +168,7 @@ public:
 	
 	FsmRetType (* fsmstate)(MoveRequest *);	
 	
-	virtual ~MoveRequest() 
-	{
-		if (moveparam)
-		{
-		
-#ifdef REQUEST_TIMING
-			double elapsed =  ctime.elapsed() / 1000000.0;
-			double cost = elapsed - moveparam->T;
-			LOGSINGLE_INFORMATION("~MoveRequest axis=%?d, plantime=%f, lifetime=%f, cost=%f.", __FILE__, __LINE__, slave_idx,moveparam->T, elapsed, cost);
-#endif
-			delete moveparam;
-		}
-	}
+	virtual ~MoveRequest();
 	
 	virtual FsmRetType exec();
 	MoveRequest()
@@ -264,6 +263,7 @@ class MultiAxisRequest : public BaseRequest
 {
 private:
 	static FsmRetType fsm_state_done(MultiAxisRequest *req);
+	static FsmRetType fsm_state_wait_all_sent(MultiAxisRequest *req);
 	static FsmRetType  fsm_state_wait_all_pos_reached(MultiAxisRequest *req);
 	static FsmRetType  fsm_state_csp(MultiAxisRequest *req);
 	static FsmRetType  fsm_state_svon(MultiAxisRequest *req);
@@ -276,21 +276,27 @@ private:
 	bool	startPlan();
 	bool	positionReached(int curpos, int bias = 0) const;
 
+	bool 	keep;/*加速后持续匀速运动*/
+
+#ifdef REQUEST_TIMING		
+	LARGE_INTEGER	start_push_time;			//将CSP命令写入链表开始时刻
+	LARGE_INTEGER	end_push_time;				//将CSP命令写入链表结束时刻
+	LARGE_INTEGER	queue_empty_time;			//链表消耗空时刻 
+	LARGE_INTEGER	in_pos_time;				//位置到达时刻
+#endif
+
 public:
 	BaseMultiAxisPara 	*axispara;
 
 	FsmRetType (* fsmstate)(MultiAxisRequest *);	
 	
-	virtual ~MultiAxisRequest() 
-	{
-		if (axispara)
-			delete  axispara;
-	}
+	virtual ~MultiAxisRequest();
 	
 	virtual FsmRetType exec();
 
 	MultiAxisRequest(int axis, LinearRef *newLinearRef, int dist, bool abs);				//直线插补
 	MultiAxisRequest(int axis, ArchlRef *newArchlRef, int dist, bool abs, bool z);			//Z轴拱门插补
+	MultiAxisRequest(int axis, AccRef *newAccRef, long maxvel);								//匀加速后持续运动
 };
 
 class HomeMoveRequest: public BaseRequest
@@ -511,6 +517,92 @@ public:
 	MultiAbortHomeRequest(int axis, MultiAbortHomeRef *newRef );
 };
 
+class MultiDeclRequest : public BaseRequest
+{
+private:
+	static FsmRetType fsm_state_done(MultiDeclRequest *req);
+	static FsmRetType fsm_state_svoff(MultiDeclRequest *req);
+	static FsmRetType fsm_state_csp(MultiDeclRequest *req);	
+	static FsmRetType fsm_state_start(MultiDeclRequest *req);
+	static void pushMultiDecl(MultiDeclRequest *req);
+	bool  	positionReached(int q , int bias) const;
+
+public:
+	class MultiDeclRef
+	{
+	private:
+		int rc;
+		int sync_count;
+		int first_slave;
+		int error;
+		std::map<int, DeclStopInfo *> declInfos;
+	public:
+		MultiDeclRef():rc(0), sync_count(0),first_slave(0),error(0) {}
+		virtual ~MultiDeclRef() {}
+		void duplicate(int axis, DeclStopInfo * stopInfo)
+		{
+			++rc;
+			declInfos[axis] = stopInfo;
+		}
+		void release() 
+		{
+			if (--rc == 0)
+			{
+				delete this;
+			}
+		}
+
+		void reg_sync(int slaveidx)
+		{
+			++sync_count;
+		}
+
+		bool all_sync() const
+		{
+			return sync_count == rc;
+		}
+
+		int getError() const
+		{
+			return error;
+		}
+
+		void setError()
+		{
+			error  = 1;
+		}
+
+		bool isFirst(int i) const
+		{
+			if (!declInfos.empty())
+				return (i == (declInfos.begin()->first));
+			return false;
+		}
+
+		const std::map<int, DeclStopInfo *>& getStopInfos() const
+		{
+			return declInfos;
+		}
+	};
+
+	MultiDeclRef * 	ref;
+	bool			serveOff;				//停止后是否关闭使能
+	DeclStopInfo 	stopInfo;
+
+	FsmRetType (* fsmstate)(MultiDeclRequest *);	
+	
+	virtual ~MultiDeclRequest() 
+	{
+		if (ref)
+			ref->release();
+	}
+	
+	virtual FsmRetType exec();
+
+	MultiDeclRequest(int axis, MultiDeclRef *newRef, double tdec);
+};
+
+/*已废弃*/
 class ReadIoRequest: public BaseRequest
 {
 private:
@@ -530,6 +622,7 @@ public:
 
 };
 
+/*已废弃*/
 class WriteIoRequest: public BaseRequest
 {
 private:
@@ -547,6 +640,30 @@ public:
 	WriteIoRequest()
 	{
 		output	  = 0;
+		fsmstate = fsm_state_start;
+	}
+};
+
+/*测试使用,正向运动到即将正溢位置
+使用前修改驱动器一圈分辨率，避免电机过速*/
+class MakeOverFlowRequest: public BaseRequest
+{
+private:
+	static FsmRetType fsm_state_done(MakeOverFlowRequest *req);
+	static FsmRetType fsm_wait_pos_reached(MakeOverFlowRequest *req);
+	static FsmRetType fsm_state_start(MakeOverFlowRequest *req);
+	static const int STEP_INC = 0x4000;
+	static const int DST_POS  = (0x7FFFFFFF - 10);
+
+	bool  positionReached(int q , int bias) const;
+public:
+
+	FsmRetType (* fsmstate)(MakeOverFlowRequest *);	
+	
+	virtual ~MakeOverFlowRequest() {}
+	virtual FsmRetType exec();
+	MakeOverFlowRequest()
+	{
 		fsmstate = fsm_state_start;
 	}
 };

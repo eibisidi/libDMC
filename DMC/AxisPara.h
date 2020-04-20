@@ -164,4 +164,40 @@ private:
 	bool 	is_zaxis;							//当前轴为Z轴
 };
 
+//匀加速
+class AccRef: public BaseRef
+{
+public:
+	//约束条件
+	double			maxv;						//最大速度，矢量量
+	double 			tAcc;						//加速时间
+	
+	AccRef();
+	virtual ~AccRef();
+
+	virtual int startPlan();
+	virtual int totalCycles() const;
+	virtual bool lastCycle() const;
+
+	int getElpased(int slave_index);
+	
+private:
+	int    cycles;					//T对应的周期数
+	int	   elapsed;					//[0~cycles)
+};
+
+class AccMultiAxisPara : public BaseMultiAxisPara
+{
+public:
+	AccMultiAxisPara(AccRef *newAcclRef, MultiAxisRequest *mar, int axis, long maxvel, int sp);
+	virtual ~AccMultiAxisPara();
+
+	virtual bool startPlan();
+	virtual int nextPosition(int slaveidx); 	//获得下一个规划位置
+	virtual double getCurSpeed() const; 		//返回当前速度，有符号
+private:
+	long 	maxv;
+	int 	lastpos;
+};
+
 #endif

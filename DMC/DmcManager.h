@@ -16,45 +16,8 @@
 
 using std::map;
 
-
-
-//电机状态
-struct DriverState
-{
-	long 			curpos;		//当前位置, 驱动器返回实时更新
-	MoveState		movestate;
-	unsigned short	status;		//状态字
-	OpMode			opmode;		//操作模式
-	long			cmdpos;		//绝对位置,第一次电机使能后赋初值,回零后更新
-	
-	DriverState()
-	{
-		curpos = 0;
-		movestate  = MOVESTATE_NONE;
-		status = 0;
-		opmode = OPMODE_CSP;//OPMODE_NONE;
-		cmdpos = 0;
-	}
-};
-
-
-
-struct IoState
-{
-	unsigned int    input;			//输入值
-	unsigned int    output;			//输出值
-	IoRequestState	iors;
-	IoState()
-	{
-		input 	= 0;
-		output  = 0;
-		iors	= IORS_NONE;
-	}
-};
-
 class DmcManager : public Poco::Runnable
 {
-
 public:
 	static DmcManager & instance();
 	
@@ -63,7 +26,7 @@ public:
 	unsigned long init();
 	void close();
 	//记录CSP规划点位置到日志文件中
-	void logCspPoints(const Item *pItems, int rows, size_t cols) const;
+	void logCspPoints(Item **itemLists, int rows, size_t cols) const;
 
 	//运动
 	unsigned long clr_alarm(short axis);
@@ -77,9 +40,16 @@ public:
 	unsigned long check_done(short axis);
 	long get_command_pos(short axis);
 
+	//同步匀加速持续运动
+	unsigned long start_running(short TotalAxis,short *AxisArray,long *VelArray, double Tacc);
+	unsigned long adjust(short axis, short deltav, size_t cycles);
+	unsigned long end_running(short TotalAxis,short *AxisArray,double tDec);
+
 	//停止
 	unsigned long decel_stop(short axis, double tDec, bool bServOff = false);
 	unsigned long immediate_stop(short axis);
+
+	unsigned long make_overflow(short axis);
 
 	//电机状态相关
 	long getCurpos(short slaveidx);			//获得电机当前位置,驱动器实时更新
@@ -92,7 +62,8 @@ public:
 
 	long getDriverCmdPos(short slaveidx);									//获得起始位置
 	void setDriverCmdPos(short slaveidx, long val); 						//更新起始位置
-	int	getServoPosBias() const;
+	int	getServoPosBias(int slaveidx);
+	unsigned long getSlaveState(short axis);
 
 	//IO
 	unsigned long out_bit(short slave_idx, short bitNo, short bitData);
@@ -108,7 +79,7 @@ public:
 	bool	getSdoCmdResp(BaseRequest *req, transData **ppCmd, transData **ppResp);		//获取SDO命令，成功返回true
 	void 	freeSdoCmdResp(BaseRequest *req);											  //释放SDO命令
 	void restoreLastCmd(transData *cmdData);
-	void pushItems(const std::list<Item> *itemLists, size_t rows, size_t cols, bool sync);
+	void pushItems(Item **itemLists, size_t rows, size_t cols, bool sync, bool keep = false);
 
 	void setRespData(transData *respData);		// 发送接收线程返回数据，以及发送接收线程当前状态
 	void copyRespData();						// 处理返回的数据
@@ -116,6 +87,7 @@ public:
 	virtual ~DmcManager();
 
 	RdWrManager 		m_rdWrManager;			//发送接收管理线程
+	double				quadpart;
 private:
 	DmcManager();
 	void 	clear();
@@ -131,32 +103,33 @@ private:
 	void setSlaveState(short slavidx, unsigned int ss);
 	void addRequest(short slaveidx, BaseRequest *req);
 
-
 	Poco::Thread		m_thread;
-	Poco::Mutex  		m_mutex;				//互斥量，保护m_requests
-	Poco::Condition		m_condition;			//条件变量
+	Poco::Mutex  		m_mutex;						//互斥量，保护m_requests
+	Poco::Condition		m_condition;					//条件变量
 
 	bool				m_init;
-	bool				m_canceled;				//线程停止
+	bool				m_canceled;						//线程停止
 
-	BaseRequest			*m_sdoOwner;			//SDO当前所属请求
+	BaseRequest			*m_sdoOwner;					//SDO当前所属请求
 	
 	transData			m_cmdData[DEF_MA_MAX];
-	transData			m_lastCmdData[DEF_MA_MAX];//todo核实同步命令，该变量是否更新
+	transData			m_lastCmdData[DEF_MA_MAX];
 	transData			m_respData[DEF_MA_MAX];
 	
-	unsigned char		m_slaveType[DEF_MA_MAX - 2]; //从站类型, DRIVER/IO
-
+	unsigned char		m_slaveType[DEF_MA_MAX - 2]; 	//从站类型, DRIVER/IO
 
 	Poco::Mutex  		m_mutexRespData;				//响应数据互斥量
 	Poco::Condition		m_conditionRespData;			//响应数据条件变量
 	bool				newRespData;					//响应数据是否刷新
 	transData			m_realRespData[DEF_MA_MAX];		//实时响应数据
 
-	MasterConfig		m_masterConfig;			//主站配置信息
+	MasterConfig		m_masterConfig;					//主站配置信息
 
 	std::map<int, BaseRequest *> 	m_requests;			
 	std::map<int, DriverSlaveState> m_slaveStates;
+
+	Item *				m_itemLists[DEF_MA_MAX];
+	int					m_cols;
 };
 
 #endif

@@ -6,43 +6,43 @@
 	</LogPoint>
 	<HomeMethod>21</HomeMethod>		<!--回零方式， 缺省值 21-->
 	<HomeTimeout>60</HomeTimeout>	<!--回零超时时间,单位s, 缺省值60-->
-	<ServoPosBias>1000</ServoPosBias>	<!--伺服位置达到检测允许误差范围，单位脉冲, 缺省值100-->
-
-	<Slave desc="台达伺服电机驱动器R" index="1" type="Drive" >
+<!--
+	<Slave desc="汇川电机X轴" index="1" type="Drive">
+		<Sdo desc="电机分辨率" index="0x6091" subindex="0x0001" size="4" value="838" />
+		<Sdo desc="负载分辨率" index="0x6091" subindex="0x0002" size="4" value="1" />
+	</Slave>
+-->
+	<Slave desc="台达伺服电机驱动器R" index="1" type="Drive" bias="100">
 		<Sdo desc="数字输入接脚 DI1 功能规划" index="0x220A" subindex="0x0000" size="2" value="0x0124" />
 		<Sdo desc="电子齿轮比分子(N1)" index="0x6093" subindex="0x0001" size="4" value="16777216" />
 		<Sdo desc="电子齿轮比分母(M)" index="0x6093" subindex="0x0002" size="4" value="3600000" />
-		<Sdo desc="带宽响应层级" index="0x221F" subindex="0x0000" size="2" value="19" />
 		<Sdo desc="控制模式及控制命令输入源设定" index="0x2101" subindex="0x0000" size="2" value="0x000C" />
 		<Sdo desc="原点复归模式" index="0x6098" subindex="0x0000" size="1" value="21" />
 		<Sdo desc="寻找原点开关速度(单位:0.1 rpm)" index="0x6099" subindex="0x0001" size="4" value="100" />
 		<Sdo desc="寻找 Z 脉冲速度(单位:0.1 rpm)" index="0x6099" subindex="0x0002" size="4" value="50" />
 		<Sdo desc="原点复归加/减速时间(ms)" index="0x609A" subindex="0x0000" size="4" value="100" />
 	</Slave>
-	<Slave desc="台达伺服电机驱动器Y" index="2" type="Drive">
+	<Slave desc="台达伺服电机驱动器Y" index="2" type="Drive" bias="200">
 		<Sdo desc="数字输入接脚 DI1 功能规划" index="0x220A" subindex="0x0000" size="2" value="0x0124" />
 		<Sdo desc="电子齿轮比分子(N1)" index="0x6093" subindex="0x0001" size="4" value="16777216" />
 		<Sdo desc="电子齿轮比分母(M)" index="0x6093" subindex="0x0002" size="4" value="20000" />
-		<Sdo desc="带宽响应层级" index="0x221F" subindex="0x0000" size="2" value="26" />
 		<Sdo desc="控制模式及控制命令输入源设定" index="0x2101" subindex="0x0000" size="2" value="0x010C" />
 		<Sdo desc="原点复归模式" index="0x6098" subindex="0x0000" size="1" value="21" />
 		<Sdo desc="寻找原点开关速度(单位:0.1 rpm)" index="0x6099" subindex="0x0001" size="4" value="1000" />
 		<Sdo desc="寻找 Z 脉冲速度(单位:0.1 rpm)" index="0x6099" subindex="0x0002" size="4" value="100" />
 		<Sdo desc="原点复归加/减速时间(ms)" index="0x609A" subindex="0x0000" size="4" value="100" />
 	</Slave>
-	<Slave desc="台达伺服电机驱动器X" index="3" type="Drive">
+	<Slave desc="台达伺服电机驱动器X" index="3" type="Drive" bias="100">
 		<Sdo desc="数字输入接脚 DI1 功能规划" index="0x220A" subindex="0x0000" size="2" value="0x0124" />
 		<Sdo desc="电子齿轮比分子(N1)" index="0x6093" subindex="0x0001" size="4" value="16777216" />
 		<Sdo desc="电子齿轮比分母(M)" index="0x6093" subindex="0x0002" size="4" value="10000" />
-		<Sdo desc="带宽响应层级" index="0x221F" subindex="0x0000" size="2" value="19" />
 		<Sdo desc="控制模式及控制命令输入源设定" index="0x2101" subindex="0x0000" size="2" value="0x000C" />
 		<Sdo desc="原点复归模式" index="0x6098" subindex="0x0000" size="1" value="21" />
 		<Sdo desc="寻找原点开关速度(单位:0.1 rpm)" index="0x6099" subindex="0x0001" size="4" value="1000" />
 		<Sdo desc="寻找 Z 脉冲速度(单位:0.1 rpm)" index="0x6099" subindex="0x0002" size="4" value="100" />
 		<Sdo desc="原点复归加/减速时间(ms)" index="0x609A" subindex="0x0000" size="4" value="100" />
 	</Slave>
-
-	<Slave desc="舌头" index="4" type="Step">
+	<Slave desc="舌头" index="4" type="Step" bias="1000">
 		<Sdo desc="驱动器峰值电流" index="0x2000" subindex="0x0000" size="2" value="1000" />
 		<Sdo desc="电机每转脉冲数" index="0x2001" subindex="0x0000" size="2" value="10000" />
 		<Sdo desc="回零方法" index="0x6098" subindex="0x0000" size="1" value="21" />
@@ -50,7 +50,7 @@
 		<Sdo desc="原点慢速(单位:P /S)" index="0x6099" subindex="0x0002" size="4" value="1000" />
 		<Sdo desc="原点加速度(P /S2)" index="0x609A" subindex="0x0000" size="4" value="10000" />
 	</Slave>
-	<Slave desc="主轴" index="5" type="Step">
+	<Slave desc="主轴" index="5" type="Step" bias="1000">
 		<Sdo desc="驱动器峰值电流" index="0x2000" subindex="0x0000" size="2" value="1000" />
 		<Sdo desc="电机每转脉冲数" index="0x2001" subindex="0x0000" size="2" value="10000" />
 		<Sdo desc="回零方法" index="0x6098" subindex="0x0000" size="1" value="21" />
@@ -58,7 +58,7 @@
 		<Sdo desc="原点慢速(单位:P /S)" index="0x6099" subindex="0x0002" size="4" value="1000" />
 		<Sdo desc="原点加速度(P /S2)" index="0x609A" subindex="0x0000" size="4" value="10000" />
 	</Slave>
-	<Slave desc="雷赛CL3-EC507右搬运" index="6" type="Drive">
+	<Slave desc="雷赛CL3-EC507右搬运" index="6" type="Drive" bias="1000">
 		<Sdo desc="驱动器峰值电流" index="0x2000" subindex="0x0000" size="2" value="30" />
 		<Sdo desc="电机每转脉冲数" index="0x2001" subindex="0x0000" size="2" value="10000" />
 		<Sdo desc="回零方法" index="0x6098" subindex="0x0000" size="1" value="21" />
@@ -66,7 +66,7 @@
 		<Sdo desc="原点慢速(单位:P /S)" index="0x6099" subindex="0x0002" size="4" value="1000" />
 		<Sdo desc="原点加速度(P /S2)" index="0x609A" subindex="0x0000" size="4" value="10000" />		
 	</Slave>
-	<Slave desc="雷赛CL3-EC507左搬运" index="7" type="Drive">
+	<Slave desc="雷赛CL3-EC507左搬运" index="7" type="Drive" bias="1000">
 		<Sdo desc="驱动器峰值电流" index="0x2000" subindex="0x0000" size="2" value="30" />
 		<Sdo desc="电机每转脉冲数" index="0x2001" subindex="0x0000" size="2" value="10000" />
 		<Sdo desc="回零方法" index="0x6098" subindex="0x0000" size="1" value="21" />
@@ -76,5 +76,4 @@
 	</Slave>
 	<Slave desc="IO模块" index="8" type="IO"/>
 	<Slave desc="IO模块" index="9" type="IO"/>
-
 </Master>

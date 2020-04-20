@@ -35,12 +35,13 @@ enum MoveState
 {
 	MOVESTATE_NONE = -1,
 	MOVESTATE_BUSY = 0,			//正在运行
-	MOVESTATE_STOP,				//运动位置到达
+	MOVESTATE_STOP = 1,				//运动位置到达
 	MOVESTATE_TIMEOUT,			//运动超时
 	MOVESTATE_ERR,				//运动错误（规划失败，电机使能失败等）
 	MOVESTATE_CMD_STOP,			//急停、减速停止
 	MOVESTATE_LIMIT_STOP,		//遇限位停止，未使用
 	MOVESTATE_O_STOP,			//遇原点停止
+	MOVESTATE_RUNNING,			//持续运动中
 };
 	
 enum ErrorNum{
@@ -139,7 +140,6 @@ DMC1000_API DWORD WINAPI d1000_start_s_move(short axis,long Dist, long StrVel, l
 */
 DMC1000_API DWORD WINAPI d1000_start_sa_move(short axis,long Pos, long StrVel, long MaxVel,double Tacc);
 
-
 /*功 能：启动指定轴进行回原点运动。
 参 数： axis：电机从站索引
 		
@@ -178,7 +178,6 @@ DMC1000_API DWORD WINAPI d1000_check_done(short axis);
 错误：返回相关错误码。
 */
 DMC1000_API DWORD WINAPI d1000_decel_stop(short axis, double tDec);
-
 
 /*
 功 能：急停指定轴脉冲输出，电机关闭使能。
@@ -295,7 +294,6 @@ DMC1000_API DWORD WINAPI d1000_start_t_archl(short TotalAxis,short *AxisArray,lo
 */
 DMC1000_API DWORD WINAPI d1000_start_ta_archl(short TotalAxis,short *AxisArray,long *PosArray,long MaxVel, double Tacc, long hh, long hu, long hd);
 
-
 //////////////////位置设定和读取函数////////////
 /*
 功 能：读取指令位置计数器计数值。
@@ -304,6 +302,36 @@ DMC1000_API DWORD WINAPI d1000_start_ta_archl(short TotalAxis,short *AxisArray,l
 */
 DMC1000_API long WINAPI d1000_get_command_pos(short axis);
 
+/*
+功 能：启动多轴同步匀加速，后匀速运动
+参 数： TotalAxis： 轴数 >=1
+		*AxisArray， AxisArray：电机从站索引列表；
+		*VelArray VelArray：速度列表(矢量), >0正向运动 <0负向运动， 单位pulse/s
+		Tacc： 匀加速时间 单位： s。
+返回值：正确：返回 ERR_NoError；
+错误：返回相关错误码。
+*/
+DMC1000_API DWORD WINAPI d1000_start_running(short TotalAxis,short *AxisArray,long *VelArray, double Tacc);
+
+/*
+功 能：微调某匀速运动轴速率
+参 数： axis：电机从站索引
+		deltav：速率增量 >0 速率增加 <0 速率降低
+		cycles：速率调节持续周期数
+返回值：正确：返回 ERR_NoError；
+错误：返回相关错误码。
+*/
+DMC1000_API DWORD WINAPI d1000_adjust(short axis, short deltav, size_t cycles);
+
+/*
+功 能：多轴同步匀减速至停止
+参 数： TotalAxis： 轴数 >=1
+		*AxisArray， AxisArray：电机从站索引列表；
+		tDec： 匀减速时间 单位： s。
+返回值：正确：返回 ERR_NoError；
+错误：返回相关错误码。
+*/
+DMC1000_API DWORD WINAPI d1000_end_running(short TotalAxis,short *AxisArray,double tDec);
 
 #ifdef __cplusplus
 }

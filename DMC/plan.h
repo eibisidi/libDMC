@@ -1,7 +1,7 @@
 #ifndef PLAN_H
 #define PLAN_H
 
-#define DC_CYCLE_us 	(2000)							//2000us
+#define DC_CYCLE_us 	(1000)							//2000us
 #define CYCLES_PER_SEC 	(1000000 / DC_CYCLE_us)			//500 cycle/sec
 
 enum MoveType{
