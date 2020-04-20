@@ -318,7 +318,7 @@ unsigned long DmcManager::init()
 	//启动线程
 	m_rdWrManager.start();
 	
-	m_thread.setPriority(Poco::Thread::PRIO_NORMAL);
+	m_thread.setOSPriority(THREAD_PRIORITY_TIME_CRITICAL);
 	m_thread.start(*this);
 
 	//所有驱动器清除告警

@@ -7,7 +7,7 @@
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
-#define BATCH_WRITE		(5)
+#define BATCH_WRITE		(2)
 #define FIFO_LOWATER	(150)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
@@ -28,7 +28,7 @@ void RdWrManager::addIoSlave(int slaveidx)
 void RdWrManager::start()
 {
 	m_garbageCollector.start();
-	m_thread.setPriority(Poco::Thread::PRIO_HIGHEST);
+	m_thread.setOSPriority(THREAD_PRIORITY_TIME_CRITICAL);
 	m_thread.start(*this);
 }
 
