@@ -452,7 +452,7 @@ void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols, bool
 		{
 			for(; c < cols; ++c)
 			{				
-				slaveidx = items[c].index;
+				slaveidx = itemLists[c]->index;
 				if (tosend.count(slaveidx)>0
 					&& (tosend[slaveidx].cur))
 					break; //当前队列仍有待发送数据
@@ -463,28 +463,34 @@ void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols, bool
 		coreMutex.lock(); //获得大锁
 		for(c = 0; c < cols; ++c)
 		{
-			coreMutex.lock(); //获得大锁
-	
-			for( ; c < cols; ++c)
-			{
-				slaveidx = items[c].index;
-				if (false == queueMutex[slaveidx].tryLock())
-					break; //当前队列正忙
-			}
-			
-			coreMutex.unlock();
-			//Poco::Thread::sleep(1);
+			slaveidx = itemLists[c]->index;
+			seqLock[slaveidx].lock();
 		}
 		coreMutex.unlock(); //获得大锁
 		//已经获得所有的队列锁
 		
 	//////////////////////////////////////////////////////////////////////////////////////
-		for (size_t i = 0; i < rows * cols; ++i)
+
+	for(size_t	c = 0; c < cols; ++c)
+	{
+		Item * toAppend = itemLists[c];
+		int	slaveidx 	= toAppend->index;
+		
+		if (tosend[slaveidx].tail)
 		{
-			slaveidx = items[i].index;
-			if (0 == tosend.count(slaveidx))
-				tosend[slaveidx] = new ItemQueue;
-			tosend[slaveidx]->push_back(items[i]);
+			(tosend[slaveidx].tail)->next = NULL;
+			m_garbageCollector.toss(tosend[slaveidx].head);
+		}
+		
+		//empty and memory deleted
+		tosend[slaveidx].head 	= toAppend;
+		tosend[slaveidx].tail 	= toAppend->prev;
+		tosend[slaveidx].cur 	= toAppend;
+		tosend[slaveidx].count	= rows;
+		tosend[slaveidx].keeprun= keep;
+		if (keep)
+		{
+			adjusts[slaveidx].reset();
 		}
 	}
 
@@ -494,8 +500,8 @@ void RdWrManager::pushItemsSync(Item **itemLists, size_t rows, size_t cols, bool
 		coreMutex.lock(); 
 		for(c = 0; c < cols; ++c)
 		{
-			slaveidx = items[c].index;
-			queueMutex[slaveidx].unlock();
+			slaveidx = itemLists[c]->index;
+			seqLock[slaveidx].unlock();
 		}
 		coreMutex.unlock();
 	}
@@ -683,3 +689,4 @@ SEND:
 
 	LOGSINGLE_INFORMATION("RdWrManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));
 }
+

@@ -18,7 +18,6 @@
 
 #define  MAXJ_RATIO (5)			//最大加加速度倍率
 
-
 void ClearCmdData(transData* data)
 {
 	for (int i = 0; i < DEF_MA_MAX; i++)
@@ -145,6 +144,7 @@ void	DmcManager::clear()
 	m_canceled = false;
 	m_sdoOwner = NULL;
 	newRespData = false;
+	quadpart	= 1.0;
 	memset(m_cmdData, 0, sizeof(m_cmdData));
 	memset(m_lastCmdData, 0, sizeof(m_lastCmdData));
 	memset(m_respData, 0, sizeof(m_respData));
@@ -166,6 +166,14 @@ void	DmcManager::clear()
 
 unsigned long DmcManager::init()
 {
+#ifdef DEBUG_MEMLEAK
+	_CrtSetDbgFlag ( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );	//To Dectect Memory Leaks.
+#endif
+
+	LARGE_INTEGER frequency;									//计时器频率 
+	QueryPerformanceFrequency(&frequency);	 
+	quadpart = (double)frequency.QuadPart; 						//计时器频率	
+
 	//初始化日志
 	CLogSingle::initLogger();
 
@@ -310,7 +318,7 @@ unsigned long DmcManager::init()
 	//启动线程
 	m_rdWrManager.start();
 	
-	m_thread.setPriority(Poco::Thread::PRIO_NORMAL);
+	m_thread.setOSPriority(THREAD_PRIORITY_TIME_CRITICAL);
 	m_thread.start(*this);
 
 	//所有驱动器清除告警
@@ -352,7 +360,7 @@ unsigned long DmcManager::init()
 			}
 		}
 	}
-	
+
 	m_init = true;
 
 	return ERR_NOERR;
@@ -382,13 +390,25 @@ void DmcManager::close()
 	CLogSingle::closeLogger();
 
 	clear();
+
+#ifdef DEBUG_MEMLEAK
+	_CrtDumpMemoryLeaks();
+#endif
+
 }
 
-void DmcManager::logCspPoints(const Item *pItems, int rows, size_t cols) const
+void DmcManager::logCspPoints(Item **itemLists, int rows, size_t cols) const
 {
 	if (m_masterConfig.logpoint_axis.empty())
 		return;
 
+	std::vector<const Item*> vecPrintCur;
+	for(int c = 0; c < cols; ++c)
+	{
+		const Item * itemList = itemLists[c];
+		vecPrintCur.push_back(itemList);
+	}
+	
 	for (int r = 0; r < rows; ++r)
 	{
 		//按照轴号顺序输出规划位置
@@ -398,17 +418,17 @@ void DmcManager::logCspPoints(const Item *pItems, int rows, size_t cols) const
 		{
 			for(int c = 0; c < cols; ++c)
 			{
-				if(pItems[r*cols + c].index == *iter)
+				const Item * itemList = itemLists[c];
+				if (itemList->index == *iter)
 				{
-					CLogSingle::logPoint((int)(pItems[r*cols+c].cmdData.Data1));
-					break;
+					CLogSingle::logPoint((int)(vecPrintCur[c]->cmdData.Data1));
+					vecPrintCur[c] = vecPrintCur[c]->next;
 				}
 			}
 		}
 		CLogSingle::logPoint("\n");
 	}
 }
-
 
 void DmcManager::beforeWriteCmd()
 {
@@ -496,8 +516,15 @@ bool DmcManager::loadXmlConfig()
 					return false;
 				}
 
-
-				SlaveConfig sc(slave_index, slave_type);
+				//驱动器偏差
+				int bias = 0;
+				pAttr = static_cast<Poco::XML::Attr*>(pAttrs->getNamedItem("bias"));
+				if (pAttr)
+				{
+					bias =  Poco::NumberParser::parse(pAttr->nodeValue());
+				}
+				
+				SlaveConfig sc(slave_index, slave_type, bias);
 				//处理所有子节点
 				Poco::AutoPtr<Poco::XML::NodeList > pChilds = pNode->childNodes();
 
@@ -526,14 +553,13 @@ bool DmcManager::loadXmlConfig()
 					sc.slave_sdos.push_back(sdo);
 				}
 
-				if (0 != m_masterConfig.slave_indexes.count(sc.slave_index))
+				if (0 != m_masterConfig.slave_configs.count(sc.slave_index))
 				{
 					LOGSINGLE_ERROR("XML Error, duplicate slave index %d.", __FILE__, __LINE__, sc.slave_index);
 					return false;
 				}
 
-				m_masterConfig.slave_indexes.insert(sc.slave_index);
-				m_masterConfig.slave_configs.push_back(sc);
+				m_masterConfig.slave_configs[sc.slave_index] = sc;
 			}
 			else if ("LogLevel" == pNode->nodeName())
 			{//日志记录等级
@@ -597,17 +623,6 @@ bool DmcManager::loadXmlConfig()
 					m_masterConfig.home_timeout = Poco::NumberParser::parse(pChild->nodeValue());
 				}
 			}
-			else if ("ServoPosBias" == pNode->nodeName())
-			{//伺服位置达到检测允许误差范围
-				Poco::AutoPtr<Poco::XML::NodeList > pChilds = pNode->childNodes();				
-				for (int i = 0; i < pChilds->length(); ++i)
-				{
-					Poco::XML::Node *pChild =  pChilds->item(i);
-					if (Poco::XML::Node::TEXT_NODE != pChild->nodeType())
-						continue;
-					m_masterConfig.servo_pos_bias = Poco::NumberParser::parse(pChild->nodeValue());
-				}
-			}
 			pNode = it.nextNode();
 		}
 	}
@@ -618,9 +633,11 @@ bool DmcManager::loadXmlConfig()
 	}
 
 	//设置从站的类型
-	for(int i = 0; i < m_masterConfig.slave_configs.size(); ++i)
+	for(std::map<int, SlaveConfig>::const_iterator iter = m_masterConfig.slave_configs.begin();
+				iter != m_masterConfig.slave_configs.end();
+				++iter)
 	{
-		m_slaveType[m_masterConfig.slave_configs[i].slave_index - 1] = m_masterConfig.slave_configs[i].slave_type; 
+		m_slaveType[iter->first - 1] = (iter->second).slave_type;
 	}
 	
 	return true;
@@ -642,9 +659,19 @@ void DmcManager::setDriverCmdPos(short slaveidx, long val)
 		 m_slaveStates[slaveidx].setCmdPos(val);
 }
 
-int DmcManager::getServoPosBias() const
+int DmcManager::getServoPosBias(int slaveidx)
 {
-	return m_masterConfig.servo_pos_bias;
+	return m_masterConfig.slave_configs[slaveidx].axis_bias;
+}
+
+unsigned long DmcManager::getSlaveState(short axis)
+{
+	unsigned int ms = MOVESTATE_NONE;
+
+	if(m_slaveStates.count(axis) )
+		ms = m_slaveStates[axis].getSlaveState();
+
+	return ms;
 }
 
 void DmcManager::updateState()
@@ -659,29 +686,20 @@ void DmcManager::updateState()
 		
 		CMD =((m_respData[slaveidx].CMD & 0xFF));
 		
-		if (GET_STATUS == CMD)
-			CMD = m_lastCmdData[slaveidx].CMD;
-
 		switch(CMD)
 		{
+			case GET_STATUS:
 			case ALM_CLR:
-				(iter->second).setStatus(m_respData[slaveidx].Parm);
-				break;
 			case CSP:
 			case GO_HOME:
 			case ABORT_HOME:
+			case SV_ON:
+			case SV_OFF:
 				(iter->second).setStatus(m_respData[slaveidx].Parm);
 				(iter->second).setCurPos(m_respData[slaveidx].Data1);
 				(iter->second).setAlarmCode(m_respData[slaveidx].Data2 >> 16);	//高字为告警码
 				if ((iter->second).getAlarmCode())
 					(iter->second).setSlaveState(MOVESTATE_ERR);
-				break;
-			case SV_ON:
-				(iter->second).setStatus(m_respData[slaveidx].Parm);
-				(iter->second).setCurPos(m_respData[slaveidx].Data1);
-				break;
-			case SV_OFF:
-				(iter->second).setStatus(m_respData[slaveidx].Parm);
 				break;
 			case DRIVE_MODE:
 				break;
@@ -870,8 +888,10 @@ bool DmcManager::isDriverOn(short slaveidx)
 	if (m_slaveStates.count(slaveidx))
 		status = m_slaveStates[slaveidx].getStatus();
 
-	return (0x1637 == status
-		|| 0x9637 == status);		//原点已找到
+	return ((status & 0xFF) == 0x37);	//某些情况电机状态字为0x2337，为防止进行SV_ON操作，仅判别最低字节
+
+	//return (0x1637 == status
+	//	|| 0x9637 == status);		//原点已找到
 }
 
 bool DmcManager::isDriverOff(short slaveidx)
@@ -932,8 +952,6 @@ unsigned int DmcManager::getIoInput(short slaveidx)
 
 void DmcManager::run()
 {	
-	int i;
-
 	while(!m_canceled)
 	{		
 		m_mutex.lock();
@@ -941,19 +959,20 @@ void DmcManager::run()
 		{
 			beforeWriteCmd();
 			m_mutex.unlock();
-
-			for(i = 0, m_cols = 0; i < DEF_MA_MAX; ++i)
+			int i = 0;
+			for(m_cols = 0; i < DEF_MA_MAX; ++i)
 			{
 				if (m_cmdData[i].CMD != GET_STATUS)
 				{
-					m_items[m_cols].index = i;
-					m_items[m_cols].cmdData = m_cmdData[i];
+					m_itemLists[m_cols] = new Item;
+					m_itemLists[m_cols]->index = i;
+					m_itemLists[m_cols]->cmdData = m_cmdData[i];
 					++m_cols;
 				}		
 			}
 
 			if (m_cols > 0)
-				pushItems(m_items, 1, m_cols, false);	//加入发送队列
+				pushItems(m_itemLists, 1, m_cols, false);	//加入发送队列
 
 			copyRespData();//接收队列处理，刷新
 		}
@@ -975,16 +994,14 @@ unsigned long DmcManager::clr_alarm(short axis)
 	unsigned long retValue = ERR_NOERR;
 	ClrAlarmRequest *newReq = NULL;
 	
-	m_mutex.lock();
-
 	do{
 		if (false == isDriverSlave(axis))
 		{
 			retValue = ERR_NO_AXIS;
 			break;
 		}
-
-		if (m_requests.count(axis))
+		
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
 			retValue = ERR_AXIS_BUSY;
 			break;
@@ -999,13 +1016,13 @@ unsigned long DmcManager::clr_alarm(short axis)
 
 		newReq->slave_idx = axis;
 
+		m_mutex.lock();
 		setSlaveState(axis, MOVESTATE_BUSY);
-		addRequest(axis, newReq);		
+		addRequest(axis, newReq);
+		m_mutex.unlock();
 	}while(0);
 
-	m_mutex.unlock();
-
-	unsigned long ms;
+	unsigned long ms = MOVESTATE_NONE;
 	if (ERR_NOERR == retValue)
 	{
 		while(true)
@@ -1035,8 +1052,6 @@ unsigned long DmcManager::init_driver(short axis)
 {
 	unsigned long retValue = ERR_NOERR;
 	InitSlaveRequest *newReq = NULL;
-	
-	m_mutex.lock();
 
 	do{
 		if ( false == isDriverSlave(axis))
@@ -1045,7 +1060,7 @@ unsigned long DmcManager::init_driver(short axis)
 			break;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
 			retValue = ERR_AXIS_BUSY;
 			break;
@@ -1069,12 +1084,12 @@ unsigned long DmcManager::init_driver(short axis)
 				break;
 			}
 		}
-		
+
+		m_mutex.lock();
 		setSlaveState(axis, MOVESTATE_BUSY);
 		addRequest(axis, newReq);		
+		m_mutex.unlock();
 	}while(0);
-
-	m_mutex.unlock();
 
 	unsigned long ms;
 	if (ERR_NOERR == retValue)
@@ -1105,8 +1120,6 @@ unsigned long DmcManager::servo_on(short axis)
 	unsigned long retValue = ERR_NOERR;
 	ServoOnRequest *newReq = NULL;
 	
-	m_mutex.lock();
-
 	do{
 		if (false == isDriverSlave(axis))
 		{
@@ -1114,11 +1127,12 @@ unsigned long DmcManager::servo_on(short axis)
 			break;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
 			retValue = ERR_AXIS_BUSY;
 			break;
 		}
+
 
 		newReq = new ServoOnRequest;
 		if (NULL == newReq)
@@ -1128,12 +1142,12 @@ unsigned long DmcManager::servo_on(short axis)
 		}
 
 		newReq->slave_idx = axis;
-
+		
+		m_mutex.lock();
 		setSlaveState(axis, MOVESTATE_BUSY);
-		addRequest(axis, newReq);		
+		addRequest(axis, newReq);	
+		m_mutex.unlock();	
 	}while(0);
-
-	m_mutex.unlock();
 
 	unsigned long ms;
 	if (ERR_NOERR == retValue)
@@ -1169,8 +1183,6 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 
 	unsigned long retValue = ERR_NOERR;
 	MoveRequest *newReq = NULL;
-	
-	m_mutex.lock();
 
 	do{
 		if (false == isDriverSlave(axis))
@@ -1179,7 +1191,7 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 			break;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
 			retValue = ERR_AXIS_BUSY;
 			break;
@@ -1204,9 +1216,6 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 			retValue = ERR_MEM;
 			break;
 		}
-
-		setSlaveState(axis, MOVESTATE_BUSY);
-		
 		newReq->slave_idx = axis;
 		newReq->abs 	  = abs;				//相对 绝对
 		newReq->dist	  = Dist;
@@ -1214,10 +1223,12 @@ unsigned long DmcManager::start_move(short axis,long Dist,double MaxVel,double T
 		newReq->maxvel	  = MaxVel;				//最大速度
 		newReq->maxa	  = MaxVel / Tacc;		//最大加速度
 		newReq->maxj	  = MAXJ_RATIO *(newReq->maxa);
-		addRequest(axis, newReq);		
+		
+		m_mutex.lock();
+		setSlaveState(axis, MOVESTATE_BUSY);
+		addRequest(axis, newReq);
+		m_mutex.unlock();	
 	}while(0);
-
-	m_mutex.unlock();
 
 	return retValue;
 }
@@ -1286,8 +1297,6 @@ unsigned long DmcManager::multi_home_move(short totalAxis, short * axisArray)
 	MultiHomeRequest 				*newReq = NULL;
 	MultiHomeRequest::MultiHomeRef	*newRef = NULL;
 	
-	m_mutex.lock();
-	
 	//先进行容错检查
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
@@ -1298,9 +1307,8 @@ unsigned long DmcManager::multi_home_move(short totalAxis, short * axisArray)
 			goto DONE;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
-			LOGSINGLE_ERROR("Axis %?d is busy.", __FILE__, __LINE__, axis);
 			retValue = ERR_AXIS_BUSY;
 			goto DONE;
 		}
@@ -1312,20 +1320,19 @@ unsigned long DmcManager::multi_home_move(short totalAxis, short * axisArray)
 		retValue = ERR_MEM;
 		goto DONE;
 	}
-
-//新建请求
+	
+	m_mutex.lock();
+	//新建请求
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
 		short axis = axisArray[i];
 		newReq = new MultiHomeRequest(axis, newRef, m_masterConfig.home_timeout);
 		setSlaveState(axis, MOVESTATE_BUSY);
 		m_requests[axis] = newReq;
-	}
-DONE:
-	m_condition.signal();
-
+	}	
+	m_condition.signal();	
 	m_mutex.unlock();
-
+DONE:
 	return retValue;
 }
 
@@ -1340,8 +1347,6 @@ unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *dis
 	MultiAxisRequest *newReq = NULL;
 	LinearRef		 *newLinearRef = NULL;
 	
-	m_mutex.lock();
-	
 	//先进行容错检查
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
@@ -1353,9 +1358,8 @@ unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *dis
 			goto DONE;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
-			LOGSINGLE_ERROR("Axis %?d is busy.", __FILE__, __LINE__, axis);
 			retValue = ERR_AXIS_BUSY;
 			goto DONE;
 		}
@@ -1372,8 +1376,9 @@ unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *dis
 	newLinearRef->maxa	  = maxvel / Tacc;
 	newLinearRef->maxj	  = MAXJ_RATIO * newLinearRef->maxa;
 	newLinearRef->movetype  = movetype;
-
-//新建请求
+	
+	m_mutex.lock();
+	//新建请求
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
 		short axis = axisArray[i];
@@ -1382,13 +1387,10 @@ unsigned long DmcManager::start_line(short totalAxis, short *axisArray,long *dis
 		setSlaveState(axis, MOVESTATE_BUSY);
 		m_requests[axis] = newReq;
 	}
-DONE:
-	m_condition.signal();
-
+	m_condition.signal();	
 	m_mutex.unlock();
-
+DONE:
 	return retValue;
-		
 }
 
 unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *distArray, double maxvel, double Tacc, bool abs,  long hh, long hu, long hd)
@@ -1404,8 +1406,6 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 	MultiAxisRequest *newReq = NULL;
 	ArchlRef		 *newArchlRef = NULL;
 	
-	m_mutex.lock();
-	
 	//先进行容错检查
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
@@ -1417,7 +1417,7 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 			goto DONE;
 		}
 
-		if (m_requests.count(axis))
+		if (MOVESTATE_BUSY == getSlaveState(axis))
 		{
 			retValue = ERR_AXIS_BUSY;
 			goto DONE;
@@ -1437,6 +1437,7 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 	newArchlRef->hh		= hh;
 	newArchlRef->hd		= hd;
 	
+	m_mutex.lock();
 	//新建请求
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
@@ -1445,12 +1446,10 @@ unsigned long DmcManager::start_archl(short totalAxis, short *axisArray,long *di
 		newReq = new MultiAxisRequest(axis, newArchlRef, distArray[i], abs, (i==0)/*是否为Z轴*/);
 		setSlaveState(axis, MOVESTATE_BUSY);
 		m_requests[axis] = newReq;
-	}
-DONE:
+	}	
 	m_condition.signal();
-
 	m_mutex.unlock();
-
+DONE:
 	return retValue;
 }
 
@@ -1460,8 +1459,6 @@ unsigned long DmcManager::check_done(short axis)
 
 	if(m_slaveStates.count(axis) )
 		ms = m_slaveStates[axis].getSlaveState();
-
-	//Poco::Thread::sleep(1);
 
 	return ms;
 }
@@ -1477,13 +1474,139 @@ long DmcManager::get_command_pos(short axis)
 	return retpos;
 }
 
+unsigned long DmcManager::start_running(short totalAxis,short *axisArray,long *VelArray, double Tacc)
+{
+	if (totalAxis <= 0
+			|| axisArray == NULL
+			|| VelArray  == NULL
+			|| Tacc < 1E-6)
+		return ERR_INVALID_ARG;
+	
+	unsigned long	retValue = ERR_NOERR;
+	MultiAxisRequest *newReq = NULL;
+	AccRef		 	*newAccRef = NULL; //匀加速
+	
+	//先进行容错检查
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short axis = axisArray[i];
+		if ( false == isDriverSlave(axis))
+		{
+			retValue = ERR_NO_AXIS;
+			goto DONE;
+		}
+
+		unsigned long ms = getSlaveState(axis);
+		
+		if (MOVESTATE_BUSY == ms
+			|| MOVESTATE_RUNNING == ms)
+		{
+			retValue = ERR_AXIS_BUSY;
+			goto DONE;
+		}
+	}
+
+	newAccRef = new AccRef;
+	if(NULL == newAccRef)
+	{
+		retValue = ERR_MEM;
+		goto DONE;
+	}
+
+	newAccRef->maxv = VelArray[0];
+	newAccRef->tAcc = Tacc;
+	
+	m_mutex.lock();
+	//新建请求
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short 	axis = axisArray[i];
+		long 	vel = VelArray[i];
+		newReq = new MultiAxisRequest(axis, newAccRef, vel);
+		setSlaveState(axis, MOVESTATE_BUSY);
+		m_requests[axis] = newReq;
+	}	
+	m_condition.signal();
+	m_mutex.unlock();
+DONE:
+	return retValue;
+}
+
+unsigned long DmcManager::adjust(short axis, short deltav, size_t cycles)
+{
+	if ( false == isDriverSlave(axis))
+	{
+		return ERR_NO_AXIS;
+	}
+
+	m_rdWrManager.setAdjust(axis, deltav, cycles);
+	return ERR_NOERR;
+}
+
+unsigned long DmcManager::end_running(short totalAxis,short *axisArray,double tDec)
+{
+	if (totalAxis <= 0
+			|| axisArray == NULL
+			|| tDec < 1E-6)
+		return ERR_INVALID_ARG;
+	
+	unsigned long	retValue 					= ERR_NOERR;
+	MultiDeclRequest *newReq 					= NULL;
+	MultiDeclRequest::MultiDeclRef	*newDeclRef = NULL; //匀加速
+	
+	//先进行容错检查
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short axis = axisArray[i];
+		if ( false == isDriverSlave(axis))
+		{
+			retValue = ERR_NO_AXIS;
+			goto DONE;
+		}
+
+		unsigned long ms = getSlaveState(axis);
+		
+		if (MOVESTATE_BUSY == ms)
+		{
+			retValue = ERR_AXIS_BUSY;
+			goto DONE;
+		}
+		
+		if (MOVESTATE_RUNNING != ms)
+		{
+			retValue = ERR_AXIS_NOT_MOVING;
+			goto DONE;
+		}
+	}
+
+	newDeclRef = new MultiDeclRequest::MultiDeclRef;
+	if(NULL == newDeclRef)
+	{
+		retValue = ERR_MEM;
+		goto DONE;
+	}
+
+	m_mutex.lock();
+	//新建请求
+	for(int i = 0 ; i < totalAxis; ++i)
+	{
+		short	axis = axisArray[i];
+		newReq = new MultiDeclRequest(axis, newDeclRef, tDec);
+		setSlaveState(axis, MOVESTATE_BUSY);
+		m_requests[axis] = newReq;
+	}	
+	m_condition.signal();
+	m_mutex.unlock();
+DONE:
+	return retValue;
+}
+
 unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 {
 	assert(tDec > 1E-6);
 	unsigned long retValue = ERR_NOERR;
 	DStopRequest *newReq = NULL;
 
-	m_mutex.lock();
 	do{
 		if ( false == isDriverSlave(axis))
 		{
@@ -1491,87 +1614,170 @@ unsigned long DmcManager::decel_stop(short axis, double tDec, bool bServOff)
 			break;
 		}
 
-		if (0 == m_requests.count(axis))
+		if (!bServOff
+			&& MOVESTATE_BUSY != getSlaveState(axis))
 		{//当前未在运动
 			retValue = ERR_AXIS_NOT_MOVING;
 			break;
 		}
+		
+		m_mutex.lock();
 
-		MoveRequest *moveReq = dynamic_cast<MoveRequest * >(m_requests[axis]);
-		if (NULL != moveReq)
-		{//单轴运动
-			newReq = new DStopRequest(axis, tDec, bServOff);
-			setSlaveState(axis, MOVESTATE_BUSY);
-			addRequest(axis, newReq);
-		}
-		else
+		if (m_requests.count(axis) > 0)
 		{
-			MultiAxisRequest *maReq = dynamic_cast<MultiAxisRequest * >(m_requests[axis]);
-			if (NULL != maReq)
-			{//多轴运动
-				const std::map<int, BaseMultiAxisPara *> paras = maReq->axispara->ref->paras;	//makes a copy
-				for (std::map<int, BaseMultiAxisPara *>::const_iterator iter = paras.begin();
-							iter != paras.end();
-							++iter)
-				{
-					BaseMultiAxisPara *para = iter->second;
 
-					newReq = new DStopRequest(para->req->slave_idx, tDec, bServOff);
-					
-					setSlaveState(para->req->slave_idx, MOVESTATE_BUSY);
-					addRequest(para->req->slave_idx, newReq);
-					maReq = NULL;				//no longer valid
-				}
+			MoveRequest *moveReq = dynamic_cast<MoveRequest * >(m_requests[axis]);
+			if (NULL != moveReq)
+			{//单轴运动
+				newReq = new DStopRequest(axis, tDec, bServOff);
+				setSlaveState(axis, MOVESTATE_BUSY);
+				addRequest(axis, newReq);
 			}
 			else
 			{
-				MultiHomeRequest *mhReq = dynamic_cast<MultiHomeRequest * >(m_requests[axis]);
-				if (NULL != mhReq
-					&& mhReq->ref->getStarted())		//已经启动GO_HOME
-				{//多轴回原点
-					std::set<int> toAbort = mhReq->ref->getAxises();	//makes a copy
-					for (std::set<int>::iterator iter = toAbort.begin();
-								iter != toAbort.end();
-						)
-					{
-						if(MOVESTATE_BUSY != check_done(*iter)) 
-							toAbort.erase(iter++);		//该轴回零命令已经处理完毕
-						else
-							iter++;
-					}
-
-					if (!toAbort.empty())
-					{//仍然有轴回零未成功
-						MultiAbortHomeRequest::MultiAbortHomeRef *newRef = NULL;
-						MultiAbortHomeRequest *newAhReq = NULL;
-						newRef = new MultiAbortHomeRequest::MultiAbortHomeRef;
-						for (std::set<int>::iterator iter = toAbort.begin();
-								iter != toAbort.end();
+				MultiAxisRequest *maReq = dynamic_cast<MultiAxisRequest * >(m_requests[axis]);
+				if (NULL != maReq)
+				{//多轴运动
+					const std::map<int, BaseMultiAxisPara *> paras = maReq->axispara->ref->paras;	//makes a copy
+					for (std::map<int, BaseMultiAxisPara *>::const_iterator iter = paras.begin();
+								iter != paras.end();
 								++iter)
-						{
-							newAhReq = new MultiAbortHomeRequest(*iter, newRef);
-							setSlaveState(*iter, MOVESTATE_BUSY);
-							addRequest(*iter, newAhReq);
-							mhReq = NULL;
-						}
-						
+					{
+						BaseMultiAxisPara *para = iter->second;
+
+						newReq = new DStopRequest(para->req->slave_idx, tDec, bServOff);
+					
+						setSlaveState(para->req->slave_idx, MOVESTATE_BUSY);
+						addRequest(para->req->slave_idx, newReq);
+						maReq = NULL;				//no longer valid
 					}
 				}
 				else
-				{//当前未在运动
-					retValue = ERR_AXIS_NOT_MOVING;
-					break;
+				{
+					MultiHomeRequest *mhReq = dynamic_cast<MultiHomeRequest * >(m_requests[axis]);
+					if (NULL != mhReq
+						&& mhReq->ref->getStarted())		//已经启动GO_HOME
+					{//多轴回原点
+						std::set<int> toAbort = mhReq->ref->getAxises();	//makes a copy
+						for (std::set<int>::iterator iter = toAbort.begin();
+									iter != toAbort.end();
+							)
+						{
+							if(MOVESTATE_BUSY != check_done(*iter)) 
+								toAbort.erase(iter++);		//该轴回零命令已经处理完毕
+							else
+								iter++;
+						}
+
+						if (!toAbort.empty())
+						{//仍然有轴回零未成功
+							MultiAbortHomeRequest::MultiAbortHomeRef *newRef = NULL;
+							MultiAbortHomeRequest *newAhReq = NULL;
+							newRef = new MultiAbortHomeRequest::MultiAbortHomeRef;
+							for (std::set<int>::iterator iter = toAbort.begin();
+									iter != toAbort.end();
+									++iter)
+							{
+								newAhReq = new MultiAbortHomeRequest(*iter, newRef);
+								setSlaveState(*iter, MOVESTATE_BUSY);
+								addRequest(*iter, newAhReq);
+								mhReq = NULL;
+							}
+						
+						}
+					}
+					else
+					{//当前未在运动
+						DStopRequest *dsReq = dynamic_cast<DStopRequest*>(m_requests[axis]);
+						if (NULL != dsReq)
+						{
+							retValue = ERR_AXIS_NOT_MOVING;
+							break;
+						}
+					}
 				}
+			}	
+		}
+		else
+		{
+			if (bServOff)
+			{
+				newReq = new DStopRequest(axis, tDec, bServOff);
+				setSlaveState(axis, MOVESTATE_BUSY);
+				addRequest(axis, newReq);
+			}
+			else
+			{
+				retValue = ERR_AXIS_NOT_MOVING;
+				break;
 			}
 		}
+		m_mutex.unlock();
 	}while(0);
-	m_mutex.unlock();
+
 	return retValue;
 }
 
 unsigned long DmcManager::immediate_stop(short axis)
 {
 	return decel_stop(axis, 0.1, true);
+}
+
+unsigned long DmcManager::make_overflow(short axis)
+{
+	unsigned long retValue = ERR_NOERR;
+	MakeOverFlowRequest *newReq = NULL;
+
+	do{
+		if (false == isDriverSlave(axis))
+		{
+			retValue = ERR_NO_AXIS;
+			break;
+		}
+
+		if (MOVESTATE_BUSY == getSlaveState(axis))
+		{
+			retValue = ERR_AXIS_BUSY;
+			break;
+		}
+	
+		newReq = new MakeOverFlowRequest;
+		if (NULL == newReq)
+		{
+			retValue = ERR_MEM;
+			break;
+		}
+		newReq->slave_idx = axis;
+		
+		m_mutex.lock();
+		setSlaveState(axis, MOVESTATE_BUSY);
+		addRequest(axis, newReq);
+		m_mutex.unlock();	
+	}while(0);
+
+	unsigned long ms;
+	if (ERR_NOERR == retValue)
+	{
+		while(true)
+		{
+			ms = d1000_check_done(axis);				
+			if (MOVESTATE_BUSY != ms)
+				break;
+		}
+	}
+
+	if (MOVESTATE_STOP == ms)
+	{
+		retValue = ERR_NOERR;
+		LOGSINGLE_INFORMATION("make_overflow axis(%?d) succeed, cmdpos = %?d.", __FILE__, __LINE__, axis, getDriverCmdPos(axis));
+	}
+	else
+	{
+		retValue = ERR_INIT_AXIS;
+		LOGSINGLE_ERROR("make_overflow axis(%?d) failed.",  __FILE__, __LINE__, axis);
+	}
+
+	return retValue;
 }
 
 unsigned long DmcManager::out_bit(short slave_idx, short bitNo, short bitData)
