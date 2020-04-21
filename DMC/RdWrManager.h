@@ -63,7 +63,7 @@ public:
 };
 
 struct SeqLock{
-	unsigned int seq;
+	volatile unsigned int seq;
 	SeqLock()
 	{
 		seq = 0;
@@ -71,13 +71,13 @@ struct SeqLock{
 
 	void lock()
 	{
-		//mb()
 		seq++;
+		MemoryBarrier();
 	}
 
 	void unlock()
 	{
-		//mb()
+		MemoryBarrier();
 		seq++;
 	}
 
