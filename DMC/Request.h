@@ -15,7 +15,7 @@
 #define DEF_SERVO_POS_BIAS  (100)			//缺省伺服位置达到检测允许误差范围
 
 
-#define REQUEST_TIMING 1
+//#define REQUEST_TIMING 1
 
 class DmcManager;
 

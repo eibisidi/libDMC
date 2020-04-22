@@ -114,7 +114,7 @@ FsmRetType DStopRequest::fsm_state_csp(DStopRequest *req)
 		}
 	}
 
-	LOGSINGLE_INFORMATION("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
+	//LOGSINGLE_INFORMATION("axis = %d Dec Reached, valid=%b, endpos=%d.", __FILE__, __LINE__, req->slave_idx, req->stopInfo.valid, req->stopInfo.endpos);
 
 	//目标位置已到达,更新新的绝对位置
 	if(req->stopInfo.valid)
