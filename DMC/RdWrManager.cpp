@@ -93,250 +93,250 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 	
 	memset(cmdData, 0, sizeof(transData)* cmdcount);
 
-	coreMutex.lock();//获取队列大锁
-
-	for(std::map<int, CmdQueue>::iterator iter = tosend.begin();
-				iter!= tosend.end();
-				++iter)
+	if (coreMutex.tryLock())//获取队列大锁
 	{
-		transData localCmd;
-		Item *localCur = NULL, *localNext=NULL, *localHead=NULL;
-		memset(&localCmd, 0, sizeof(transData));
-		slaveidx = iter->first;
-		CmdQueue &queue = iter->second;
-		unsigned int begin_seq,end_seq;
-		begin_seq = seqLock[slaveidx].seq;
-		
-		if (queue.cur)
+		for(std::map<int, CmdQueue>::iterator iter = tosend.begin();
+			iter!= tosend.end();
+			++iter)
 		{
-			localCur = queue.cur;
-			localNext= localCur->next;
-			localHead= queue.head;
-			localCmd = (queue.cur)->cmdData;
-		}
-		
-		end_seq   = seqLock[slaveidx].seq;
-		if ((begin_seq & 1) ||( end_seq != begin_seq)) 
-			continue;	/*不一致数据*/
+			transData localCmd;
+			Item *localCur = NULL, *localNext=NULL, *localHead=NULL;
+			memset(&localCmd, 0, sizeof(transData));
+			slaveidx = iter->first;
+			CmdQueue &queue = iter->second;
+			unsigned int begin_seq,end_seq;
+			begin_seq = seqLock[slaveidx].seq;
 
-		if (queue.keeprun)
-		{//持续运动
-			if (localCur)
-			{//持续运动加速阶段
-				cmdData[slaveidx] = localCmd;
-				if (localNext == localHead)
-					queue.cur = NULL;
-				else
-					queue.cur = localNext;
-			}
-			else
-			{//已经在匀速运动阶段
-				if (tostop[slaveidx])
-				{//减速
-					DeclStopInfo *dcInfo = tostop[slaveidx];
-					int estimate = (int)(dcInfo->decltime * CYCLES_PER_SEC) + 1;
-					
-					int v  		 = queue.tail->cmdData.Data1 - (queue.tail->prev)->cmdData.Data1;	//匀速速度
-					int q0 		 = lastSent[slaveidx].Data1 + v;
-					int 	vel0 = (v > 0) ? (v) : (-v);											//初始运动速率
-					double	dec  = 1.0 * vel0 / estimate;											//减速度
-					int 	dir  = (v > 0) ? 1 : -1;												//运动方向
-					double	vel  = vel0;
-					int 	q	 = q0;
-
-					Item	item;
-					item.index			= slaveidx;
-					item.cmdData.CMD	= CSP;
-					item.cmdData.Data1	= q0;
-					
-					cmdData[slaveidx] =  item.cmdData;
-
-					Item	*toOverWrite = queue.head;
-					Item	*newTail 	= queue.tail;
-					int 	deltaCount 	= 0;
-					int		newCount    = 0;
-					while (vel > 0)
-					{
-						vel = vel - dec;
-						q	= int(q + dir * vel);
-
-						toOverWrite->cmdData.CMD	= CSP;
-						toOverWrite->cmdData.Data1	= q;
-						newTail	= toOverWrite;
-						++newCount;
-						toOverWrite = toOverWrite->next;
-						if (toOverWrite == queue.head
-							&& vel > 0)
-						{
-							Item * newItem = new Item;
-
-							queue.tail->next	= newItem;
-							newItem->prev		= queue.tail;
-							newItem->next		= queue.head;
-							queue.tail			= newItem;			//更新tail
-							queue.head->prev	= newItem;
-
-							toOverWrite 		= newItem;
-							++deltaCount;
-						}
-					}
-
-					//释放内存
-					if (!deltaCount 
-						&& toOverWrite != queue.head)
-					{
-						queue.tail->next	= NULL;
-						m_garbageCollector.toss(toOverWrite);
-					}
-
-					queue.cur			= queue.head;		//从头开始发送
-					queue.tail			= newTail;
-					queue.tail->next	= queue.head;
-					queue.head->prev	= queue.tail;
-					queue.count 	  	= newCount;
-					queue.keeprun		= false;			//切换为非连续运动
-					
-					tostop[slaveidx]->valid = true;
-					tostop[slaveidx]->endpos = queue.tail->cmdData.Data1;
-					tostop[slaveidx] = NULL;
-				}
-				else
-				{//持续运动，匀速阶段
-					int q1 = queue.tail->cmdData.Data1;
-					int q0 = (queue.tail->prev)->cmdData.Data1;
-					int v  = q1 - q0;
-					if (adjusts[slaveidx].remainCount)
-					{
-						--adjusts[slaveidx].remainCount;
-						int dVel = adjusts[slaveidx].dVel;
-						if (v > 0)
-						{
-							if (dVel >= 0)
-								v += dVel;
-							else
-								v -= dVel;
-						}
-						else
-						{
-							if (dVel >= 0)
-								v -= dVel;
-							else
-								v += dVel;
-						}
-					}
-					cmdData[slaveidx].CMD 	= CSP;
-					cmdData[slaveidx].Data1	= lastSent[slaveidx].Data1 + v;
-				}
-			}
-		}
-		else
-		{//非持续运动
-			if (tostop[slaveidx])
+			if (queue.cur)
 			{
-				DeclStopInfo *dcInfo = tostop[slaveidx];
-				int estimate = (int)(dcInfo->decltime * CYCLES_PER_SEC) + 1;
-				if (queue.cur != NULL 
-					&& queue.cur->next != queue.head)
-				{
-					int q0 = queue.cur->cmdData.Data1;
-					int q1 = (queue.cur->next)->cmdData.Data1;
-
-					int     vel0 = (q1 > q0) ? (q1 - q0) : (q0 - q1);		//初始运动速率
-					double  dec  = 1.0 * vel0 / estimate;					//减速度
-					int     dir  = (q1 > q0) ? 1 : -1;						//运动方向
-					double  vel  = vel0;
-					int 	q    = q0;
-
-					Item    item;
-					item.index 			= slaveidx;
-					item.cmdData.CMD 	= CSP;
-					item.cmdData.Data1	= q0;
-
-					cmdData[slaveidx] =  item.cmdData;
-
-					Item	*toOverWrite = queue.head;
-					Item	*newTail 	= queue.tail;
-					int 	deltaCount 	= 0;
-					int		newCount    = 0;
-					while (vel > 0)
-					{
-						vel = vel - dec;
-						q	= int(q + dir * vel);
-
-						toOverWrite->cmdData.CMD	= CSP;
-						toOverWrite->cmdData.Data1	= q;
-						newTail	= toOverWrite;
-						++newCount;
-
-						toOverWrite = toOverWrite->next;
-						if (toOverWrite == queue.head
-							&& vel > 0)
-						{
-							Item * newItem = new Item;
-
-							queue.tail->next	= newItem;
-							newItem->prev		= queue.tail;
-							newItem->next		= queue.head;
-							queue.tail			= newItem;			//更新tail
-							queue.head->prev	= newItem;
-
-							toOverWrite 		= newItem;
-							++deltaCount;
-						}
-					}
-
-					//释放内存
-					if (!deltaCount 
-						&& toOverWrite != queue.head)
-					{
-						queue.tail->next	= NULL;
-						m_garbageCollector.toss(toOverWrite);
-					}
-
-					queue.cur			= queue.head;		//从头开始发送
-					queue.tail			= newTail;
-					queue.tail->next	= queue.head;
-					queue.head->prev	= queue.tail;
-					queue.count 	   	= newCount;
-					queue.keeprun		= false;			//切换为非连续运动
-					
-					tostop[slaveidx]->valid = true;
-					tostop[slaveidx]->endpos = queue.tail->cmdData.Data1;
-					tostop[slaveidx] = NULL;
-				}
-				else
-				{
-					//并未运动
-					if (lastSent[slaveidx].CMD == CSP)
-					{
-						tostop[slaveidx]->valid = true;
-						tostop[slaveidx]->endpos = lastSent[slaveidx].Data1;
-					}
-					else{
-						tostop[slaveidx]->valid = false;
-					}
-				}
-				tostop[slaveidx] = NULL;
+				localCur = queue.cur;
+				localNext= localCur->next;
+				localHead= queue.head;
+				localCmd = (queue.cur)->cmdData;
 			}
-			else
-			{
+
+			end_seq   = seqLock[slaveidx].seq;
+			if ((begin_seq & 1) ||( end_seq != begin_seq)) 
+				continue;	/*不一致数据*/
+
+			if (queue.keeprun)
+			{//持续运动
 				if (localCur)
-				{
+				{//持续运动加速阶段
 					cmdData[slaveidx] = localCmd;
 					if (localNext == localHead)
 						queue.cur = NULL;
 					else
 						queue.cur = localNext;
 				}
+				else
+				{//已经在匀速运动阶段
+					if (tostop[slaveidx])
+					{//减速
+						DeclStopInfo *dcInfo = tostop[slaveidx];
+						int estimate = (int)(dcInfo->decltime * CYCLES_PER_SEC) + 1;
+
+						int v  		 = queue.tail->cmdData.Data1 - (queue.tail->prev)->cmdData.Data1;	//匀速速度
+						int q0 		 = lastSent[slaveidx].Data1 + v;
+						int 	vel0 = (v > 0) ? (v) : (-v);											//初始运动速率
+						double	dec  = 1.0 * vel0 / estimate;											//减速度
+						int 	dir  = (v > 0) ? 1 : -1;												//运动方向
+						double	vel  = vel0;
+						int 	q	 = q0;
+
+						Item	item;
+						item.index			= slaveidx;
+						item.cmdData.CMD	= CSP;
+						item.cmdData.Data1	= q0;
+
+						cmdData[slaveidx] =  item.cmdData;
+
+						Item	*toOverWrite = queue.head;
+						Item	*newTail 	= queue.tail;
+						int 	deltaCount 	= 0;
+						int		newCount    = 0;
+						while (vel > 0)
+						{
+							vel = vel - dec;
+							q	= int(q + dir * vel);
+
+							toOverWrite->cmdData.CMD	= CSP;
+							toOverWrite->cmdData.Data1	= q;
+							newTail	= toOverWrite;
+							++newCount;
+							toOverWrite = toOverWrite->next;
+							if (toOverWrite == queue.head
+								&& vel > 0)
+							{
+								Item * newItem = new Item;
+
+								queue.tail->next	= newItem;
+								newItem->prev		= queue.tail;
+								newItem->next		= queue.head;
+								queue.tail			= newItem;			//更新tail
+								queue.head->prev	= newItem;
+
+								toOverWrite 		= newItem;
+								++deltaCount;
+							}
+						}
+
+						//释放内存
+						if (!deltaCount 
+							&& toOverWrite != queue.head)
+						{
+							queue.tail->next	= NULL;
+							m_garbageCollector.toss(toOverWrite);
+						}
+
+						queue.cur			= queue.head;		//从头开始发送
+						queue.tail			= newTail;
+						queue.tail->next	= queue.head;
+						queue.head->prev	= queue.tail;
+						queue.count 	  	= newCount;
+						queue.keeprun		= false;			//切换为非连续运动
+
+						tostop[slaveidx]->valid = true;
+						tostop[slaveidx]->endpos = queue.tail->cmdData.Data1;
+						tostop[slaveidx] = NULL;
+					}
+					else
+					{//持续运动，匀速阶段
+						int q1 = queue.tail->cmdData.Data1;
+						int q0 = (queue.tail->prev)->cmdData.Data1;
+						int v  = q1 - q0;
+						if (adjusts[slaveidx].remainCount)
+						{
+							--adjusts[slaveidx].remainCount;
+							int dVel = adjusts[slaveidx].dVel;
+							if (v > 0)
+							{
+								if (dVel >= 0)
+									v += dVel;
+								else
+									v -= dVel;
+							}
+							else
+							{
+								if (dVel >= 0)
+									v -= dVel;
+								else
+									v += dVel;
+							}
+						}
+						cmdData[slaveidx].CMD 	= CSP;
+						cmdData[slaveidx].Data1	= lastSent[slaveidx].Data1 + v;
+					}
+				}
 			}
+			else
+			{//非持续运动
+				if (tostop[slaveidx])
+				{
+					DeclStopInfo *dcInfo = tostop[slaveidx];
+					int estimate = (int)(dcInfo->decltime * CYCLES_PER_SEC) + 1;
+					if (queue.cur != NULL 
+						&& queue.cur->next != queue.head)
+					{
+						int q0 = queue.cur->cmdData.Data1;
+						int q1 = (queue.cur->next)->cmdData.Data1;
+
+						int     vel0 = (q1 > q0) ? (q1 - q0) : (q0 - q1);		//初始运动速率
+						double  dec  = 1.0 * vel0 / estimate;					//减速度
+						int     dir  = (q1 > q0) ? 1 : -1;						//运动方向
+						double  vel  = vel0;
+						int 	q    = q0;
+
+						Item    item;
+						item.index 			= slaveidx;
+						item.cmdData.CMD 	= CSP;
+						item.cmdData.Data1	= q0;
+
+						cmdData[slaveidx] =  item.cmdData;
+
+						Item	*toOverWrite = queue.head;
+						Item	*newTail 	= queue.tail;
+						int 	deltaCount 	= 0;
+						int		newCount    = 0;
+						while (vel > 0)
+						{
+							vel = vel - dec;
+							q	= int(q + dir * vel);
+
+							toOverWrite->cmdData.CMD	= CSP;
+							toOverWrite->cmdData.Data1	= q;
+							newTail	= toOverWrite;
+							++newCount;
+
+							toOverWrite = toOverWrite->next;
+							if (toOverWrite == queue.head
+								&& vel > 0)
+							{
+								Item * newItem = new Item;
+
+								queue.tail->next	= newItem;
+								newItem->prev		= queue.tail;
+								newItem->next		= queue.head;
+								queue.tail			= newItem;			//更新tail
+								queue.head->prev	= newItem;
+
+								toOverWrite 		= newItem;
+								++deltaCount;
+							}
+						}
+
+						//释放内存
+						if (!deltaCount 
+							&& toOverWrite != queue.head)
+						{
+							queue.tail->next	= NULL;
+							m_garbageCollector.toss(toOverWrite);
+						}
+
+						queue.cur			= queue.head;		//从头开始发送
+						queue.tail			= newTail;
+						queue.tail->next	= queue.head;
+						queue.head->prev	= queue.tail;
+						queue.count 	   	= newCount;
+						queue.keeprun		= false;			//切换为非连续运动
+
+						tostop[slaveidx]->valid = true;
+						tostop[slaveidx]->endpos = queue.tail->cmdData.Data1;
+						tostop[slaveidx] = NULL;
+					}
+					else
+					{
+						//并未运动
+						if (lastSent[slaveidx].CMD == CSP)
+						{
+							tostop[slaveidx]->valid = true;
+							tostop[slaveidx]->endpos = lastSent[slaveidx].Data1;
+						}
+						else{
+							tostop[slaveidx]->valid = false;
+						}
+					}
+					tostop[slaveidx] = NULL;
+				}
+				else
+				{
+					if (localCur)
+					{
+						cmdData[slaveidx] = localCmd;
+						if (localNext == localHead)
+							queue.cur = NULL;
+						else
+							queue.cur = localNext;
+					}
+				}
+			}
+			if (CSP == cmdData[slaveidx].CMD)
+				con = true;
+			lastSent[slaveidx] = cmdData[slaveidx];
 		}
-		if (CSP == cmdData[slaveidx].CMD)
-			con = true;
-		lastSent[slaveidx] = cmdData[slaveidx];
+
+		coreMutex.unlock();//释放队列大锁
 	}
-
-	coreMutex.unlock();//释放队列大锁
-
 	if (false == m_consecutive
 		&& true == con)
 	{
