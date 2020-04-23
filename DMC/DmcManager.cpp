@@ -317,7 +317,7 @@ unsigned long DmcManager::init()
 
 	//Æô¶¯Ïß³Ì
 	m_rdWrManager.start();
-	
+	//m_thread.setPriority(Poco::Thread::PRIO_NORMAL);
 	m_thread.setOSPriority(THREAD_PRIORITY_TIME_CRITICAL);
 	m_thread.start(*this);
 
@@ -832,6 +832,12 @@ void DmcManager::setRespData(transData *respData)
 	QueryPerformanceCounter(&timeStart); 
 #endif
 
+	m_seqlock.lock();
+	memcpy(m_realRespData, respData, sizeof(m_realRespData));
+	m_conditionRespData.signal();
+	m_seqlock.unlock();
+
+#if 0
 	m_mutexRespData.lock();
 
 	memcpy(m_realRespData, respData, sizeof(m_realRespData));
@@ -839,7 +845,7 @@ void DmcManager::setRespData(transData *respData)
 	m_conditionRespData.signal();
 	
 	m_mutexRespData.unlock();
-
+#endif
 #ifdef TIMING
 	QueryPerformanceCounter(&timeEnd); 
 	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
@@ -856,19 +862,18 @@ void DmcManager::setRespData(transData *respData)
 
 void DmcManager::copyRespData()
 {
-	m_mutexRespData.lock();
-
-	if (m_conditionRespData.tryWait(m_mutexRespData, 1))
-	{
-		if (newRespData)
-		{
+	unsigned int begin_seq,end_seq;
+	do {
+		m_mutexRespData.lock();
+		m_conditionRespData.wait(m_mutexRespData);
+		m_mutexRespData.unlock();
+		begin_seq 	= m_seqlock.seq;
+		if (!(begin_seq & 1))
 			memcpy(m_respData, m_realRespData, sizeof(m_realRespData));
-			newRespData = false;
-			updateState();
-		}
-	}
-
-	m_mutexRespData.unlock();
+		end_seq		= m_seqlock.seq;
+	}while ((begin_seq & 1) ||( end_seq != begin_seq));
+	
+	updateState();
 }
 
 bool DmcManager::isDriverOpCsp(short slaveidx)

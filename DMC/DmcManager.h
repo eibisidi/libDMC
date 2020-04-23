@@ -118,6 +118,7 @@ private:
 	
 	unsigned char		m_slaveType[DEF_MA_MAX - 2]; 	//从站类型, DRIVER/IO
 
+	SeqLock				m_seqlock;
 	Poco::Mutex  		m_mutexRespData;				//响应数据互斥量
 	Poco::Condition		m_conditionRespData;			//响应数据条件变量
 	bool				newRespData;					//响应数据是否刷新
