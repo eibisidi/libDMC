@@ -128,6 +128,8 @@ private:
 	Poco::Thread		m_thread;
 	bool				m_canceled;				//线程停止
 	bool				m_consecutive;			//连续Write模式？
+	bool				m_boost;
+	unsigned int		m_boostcount;
 	int 				m_towrite;
 	GarbageCollector	m_garbageCollector;
 

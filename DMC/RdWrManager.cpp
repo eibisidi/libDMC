@@ -7,8 +7,8 @@
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
-#define BATCH_WRITE		(2)
-#define FIFO_LOWATER	(150)			
+#define BATCH_WRITE		(5)
+#define FIFO_LOWATER	(130)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
 RdWrManager::RdWrManager()
@@ -46,6 +46,8 @@ void RdWrManager::clear()
 {
 	m_canceled 		= false;
 	m_consecutive	= false;
+	m_boost			= false;
+	m_boostcount	= 0;
 	m_towrite		= 2;
 
 	memset(tostop, 0, sizeof(tostop));
@@ -663,7 +665,9 @@ void RdWrManager::run()
 			{
 				if (FIFO_REMAIN(respData) == ECM_FIFO_SIZE)
 				{
-					LOGSINGLE_FATAL("readCount=%d, fifoRemain=%?d.", __FILE__, __LINE__, rdWrState.readCount,  FIFO_REMAIN(respData));
+					if (m_boostcount > 1)
+						LOGSINGLE_FATAL("readCount=%d, fifoRemain=%?d, boostcount=%?d.", __FILE__, __LINE__, rdWrState.readCount,  FIFO_REMAIN(respData), m_boostcount);
+					m_boost = false;
 					goto SEND;
 				}
 				if (FIFO_REMAIN(respData) > FIFO_LOWATER)
@@ -675,6 +679,8 @@ void RdWrManager::run()
 			{
 				if (FIFO_REMAIN(respData)>=ECM_FIFO_SIZE)
 				{
+					m_boost = true;
+					m_boostcount = 0;
 					goto SEND;
 				}
 			}
@@ -685,6 +691,7 @@ SEND:
 			m_towrite = BATCH_WRITE;
 		else
 			m_towrite = 2;
+		++m_boostcount;
 	};
 
 	LOGSINGLE_INFORMATION("RdWrManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));
