@@ -245,10 +245,10 @@ unsigned long DmcManager::init()
 	}
 
 	//set dc
-	m_cmdData[0].CMD = SET_DC;
-	m_cmdData[0].Parm = 0;
-	m_cmdData[0].Data1 = DC_CYCLE_us; 	// set cycle time to 2000 us
-	m_cmdData[0].Data2 = 0xFFFF; 		// Auto offet adjustment
+	m_cmdData[0].CMD 	= SET_DC;
+	m_cmdData[0].Parm 	= 0;
+	m_cmdData[0].Data1 	= m_masterConfig.dc; 	// set cycle time
+	m_cmdData[0].Data2 	= 0xFFFF; 				// Auto offet adjustment
 
 	if (!::ECMUSBWrite((unsigned char*)m_cmdData, sizeof(m_cmdData)))
 	{
@@ -315,7 +315,11 @@ unsigned long DmcManager::init()
 
 	initSlaveState();
 
+	DC_CYCLE_us 	= m_masterConfig.dc;
+	CYCLES_PER_SEC 	= (1000000 / DC_CYCLE_us);
+
 	//启动线程
+	m_rdWrManager.setRdParas(m_masterConfig.batchwrite, m_masterConfig.fifolw);
 	m_rdWrManager.start();
 	//m_thread.setPriority(Poco::Thread::PRIO_NORMAL);
 	m_thread.setOSPriority(THREAD_PRIORITY_TIME_CRITICAL);
@@ -600,6 +604,22 @@ bool DmcManager::loadXmlConfig()
 						}
 					}
 				}
+			}
+			else if ("RdWrParas" == pNode->nodeName())
+			{
+				Poco::AutoPtr<Poco::XML::NamedNodeMap> pAttrs = pNode->attributes();
+				
+				Poco::XML::Attr* pDcAttr = static_cast<Poco::XML::Attr*>(pAttrs->getNamedItem("dc"));
+				if (pDcAttr)
+					m_masterConfig.dc =  Poco::NumberParser::parse(pDcAttr->nodeValue());
+
+				Poco::XML::Attr* pBwAttr = static_cast<Poco::XML::Attr*>(pAttrs->getNamedItem("batchwrite"));
+				if (pBwAttr)
+					m_masterConfig.batchwrite =  Poco::NumberParser::parse(pBwAttr->nodeValue());
+
+				Poco::XML::Attr* pLwAttr = static_cast<Poco::XML::Attr*>(pAttrs->getNamedItem("fifolw"));
+				if (pLwAttr)
+					m_masterConfig.fifolw =  Poco::NumberParser::parse(pLwAttr->nodeValue());			
 			}
 			else if ("HomeMethod" == pNode->nodeName())
 			{//回零方式

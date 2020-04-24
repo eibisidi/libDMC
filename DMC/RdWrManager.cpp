@@ -6,9 +6,7 @@
 #define FIFO_REMAIN(respData) 	((respData)[0].Data2 & 0xFFFF)	//FIFO剩余空间
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
-
-#define BATCH_WRITE		(5)
-#define FIFO_LOWATER	(140)			
+	
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
 RdWrManager::RdWrManager()
@@ -49,6 +47,9 @@ void RdWrManager::clear()
 	m_flag			= 0;
 	m_boostcount	= 0;
 	m_towrite		= 2;
+
+	BATCH_WRITE		= DEF_BATCHWRITE;
+	FIFO_LOWATER	= DEF_FIFOLW;
 
 	memset(tostop, 0, sizeof(tostop));
 	memset(lastSent, 0, sizeof(lastSent));
@@ -604,6 +605,12 @@ unsigned int RdWrManager::getIoOutput(short slaveidx)
 unsigned int RdWrManager::getIoInput(short slaveidx)
 {
 	return ioState[slaveidx].getInput();
+}
+
+void RdWrManager::setRdParas(unsigned int batchwrite, unsigned int fifolw)
+{
+	BATCH_WRITE = batchwrite;
+	FIFO_LOWATER= fifolw;
 }
 
 void RdWrManager::run()

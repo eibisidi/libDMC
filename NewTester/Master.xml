@@ -4,6 +4,7 @@
 	<LogPoint enable="Off">						<!--将指定电机驱动器规划结果写入文件， On打开 Off关闭， 缺省值Off-->
 		<Axis index="3"/>
 	</LogPoint>
+	<RdWrParas dc="1000" batchwrite="5" fifolw="150"/>
 	<HomeMethod>21</HomeMethod>		<!--回零方式， 缺省值 21-->
 	<HomeTimeout>60</HomeTimeout>	<!--回零超时时间,单位s, 缺省值60-->
 <!--

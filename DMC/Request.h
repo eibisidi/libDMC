@@ -11,9 +11,8 @@
 #include <set>
 
 #define DEF_HOME_METHOD     (21)			//缺省回原点方式
-#define DEF_HOME_TIMEOUT 	(60)			//缺省回原点超时时间30s
+#define DEF_HOME_TIMEOUT 	(60)			//缺省回原点超时时间
 #define DEF_SERVO_POS_BIAS  (100)			//缺省伺服位置达到检测允许误差范围
-
 
 //#define REQUEST_TIMING 1
 
@@ -59,7 +58,9 @@ public:
 	int						 home_timeout;		//回原点超时时间
 	std::map<int, SlaveConfig>slave_configs;
 	std::set<int>			 logpoint_axis;		//记录规划点的轴
-
+	unsigned int			 dc;				//dc cycle, us
+	unsigned int			 batchwrite;		
+	unsigned int 			 fifolw;
 	MasterConfig()					//默认等级4记录告警
 	{
 		clear();
@@ -70,6 +71,9 @@ public:
 		loglevel 		= 4;
 		home_method 	= DEF_HOME_METHOD;
 		home_timeout	= DEF_HOME_TIMEOUT;
+		dc				= DEF_DC;
+		batchwrite		= DEF_BATCHWRITE;
+		fifolw			= DEF_FIFOLW;
 		slave_configs.clear();
 		logpoint_axis.clear();
 	}

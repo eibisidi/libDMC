@@ -2,6 +2,9 @@
 #include <math.h>
 #include <assert.h>
 
+int DC_CYCLE_us 	= DEF_DC;
+int CYCLES_PER_SEC 	= (1000000 / DEF_DC);			//500 cycles/sec
+
 double sigma = 0.1;
 
 unsigned int MParam::dist(int ts) const

@@ -12,6 +12,9 @@
 #include "SlaveState.h"
 #include "GarbageCollector.h"
 
+#define DEF_BATCHWRITE		(5)				//缺省连续批量写入次数
+#define DEF_FIFOLW			(140)			//缺省FIFO LowWater
+
 //减速停止信息
 class DeclStopInfo
 {
@@ -120,7 +123,7 @@ public:
 	void setIoOutput(short slaveidx, unsigned int output);
 	unsigned int getIoOutput(short slaveidx);
 	unsigned int getIoInput(short slaveidx);
-	
+	void	setRdParas(unsigned int batchwrite, unsigned int fifolw);
 private:
 	void clear();
 	int popItems(transData *cmdData, size_t count);
@@ -132,6 +135,9 @@ private:
 	unsigned int		m_boostcount;
 	int 				m_towrite;
 	GarbageCollector	m_garbageCollector;
+
+	unsigned int		BATCH_WRITE;
+	unsigned int		FIFO_LOWATER;
 
 	std::map<int, CmdQueue> 	tosend;								//待发送	命令队列				
 	DeclStopInfo				*tostop[DEF_MA_MAX];				//待减速停止
