@@ -187,7 +187,86 @@ int _tmain(int argc, _TCHAR* argv[])
 	ClearCmdData(cmdData);
 	ECMUSBRead((unsigned char*)respData,sizeof(respData));
 	printf("Current Position: Slave 1 = %d, Slave 2 = %d, Slave 3 = %d.\n",respData[1].Data1,respData[2].Data1,respData[3].Data1);
-	
+
+	ClearCmdData(cmdData);
+	cmdData[1].CMD	= CSP;
+	cmdData[1].Data1= respData[1].Data1;
+	cmdData[2].CMD	= CSP;
+	cmdData[2].Data1= respData[2].Data1;
+	cmdData[3].CMD	= CSP;
+	cmdData[3].Data1= respData[3].Data1;
+
+	int round = 0;
+	while(true)
+	{
+		int towrite 		= 160;
+		int	flag			= 0;
+#define TOREAD (512)
+		int fifos[TOREAD];
+		memset(fifos, 0, sizeof(fifos));
+
+		while(towrite--)
+		{
+			if (!ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData)))
+			{
+				printf("Write Error \n");
+				throw;
+			}
+		}
+
+		int i = 0;	
+		int errori = -1;
+		while(i < TOREAD)
+		{
+			if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
+			{
+				printf("Read Error \n");
+				throw;
+			}
+
+			fifos[i] = FIFO_REMAIN(respData);
+
+			if (FIFO_FULL(respData) != 0)
+			{
+				printf("Fifo full\n");
+				throw;
+			}
+
+		
+			switch(flag)
+			{
+				case 0:
+					if(FIFO_REMAIN(respData) < 160)
+						flag = 1;
+					break;
+				case 1:
+					if (FIFO_REMAIN(respData) == 160)
+						flag = 2;
+					break;
+				case 2:
+					if (FIFO_REMAIN(respData) < 160)
+					{
+						errori= i;
+						flag  = 3;
+					}
+					break;
+				default:
+					printf("Unexpected\n");
+			}
+			++i;
+
+		}
+
+		if (errori != -1)
+			throw;
+
+		Sleep(512);	//Make sure FIFO is empty again
+		printf("round=%d\n", round++);
+	}
+
+
+
+#if 0
 
 	LARGE_INTEGER frequency;									//¼ÆÊ±Æ÷ÆµÂÊ
 	LARGE_INTEGER startime, endtime;
@@ -266,6 +345,7 @@ NEXTROUND:
 	}
 
 	return 0;
+#endif
 
 	for (int i = 0; i < 1000; i++) // send 1000 times, let motor move 1000 * 100 pulse
 	{		
