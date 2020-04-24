@@ -834,7 +834,7 @@ void DmcManager::setRespData(transData *respData)
 
 	m_seqlock.lock();
 	memcpy(m_realRespData, respData, sizeof(m_realRespData));
-	m_conditionRespData.signal();
+	//m_conditionRespData.signal();
 	m_seqlock.unlock();
 
 #if 0
@@ -864,12 +864,11 @@ void DmcManager::copyRespData()
 {
 	unsigned int begin_seq,end_seq;
 	do {
-		m_mutexRespData.lock();
-		m_conditionRespData.wait(m_mutexRespData);
-		m_mutexRespData.unlock();
+		Poco::Thread::yield();
 		begin_seq 	= m_seqlock.seq;
-		if (!(begin_seq & 1))
-			memcpy(m_respData, m_realRespData, sizeof(m_realRespData));
+		if (begin_seq & 1)
+			continue;
+		memcpy(m_respData, m_realRespData, sizeof(m_realRespData));
 		end_seq		= m_seqlock.seq;
 	}while ((begin_seq & 1) ||( end_seq != begin_seq));
 	

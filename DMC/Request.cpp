@@ -1,7 +1,7 @@
 #include "Request.h"
 #include "DmcManager.h"
 
-#define RETRIES (10 * 80)
+#define RETRIES (10 * 200000)
 #define MAX_ATTEMPTS (5)				
 #define MAKE_DWORD(h,l) ((h << 16) | (l))
 
