@@ -8,7 +8,7 @@
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 
 #define BATCH_WRITE		(5)
-#define FIFO_LOWATER	(130)			
+#define FIFO_LOWATER	(140)			
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
 
 RdWrManager::RdWrManager()
@@ -46,7 +46,7 @@ void RdWrManager::clear()
 {
 	m_canceled 		= false;
 	m_consecutive	= false;
-	m_boost			= false;
+	m_flag			= 0;
 	m_boostcount	= 0;
 	m_towrite		= 2;
 
@@ -661,15 +661,30 @@ void RdWrManager::run()
 
 			DmcManager::instance().setRespData(respData);
 
-			if (m_consecutive)
+			//check wether fifo is empty
+			switch(m_flag)
 			{
+			case 0:
+				if (m_consecutive)
+					m_flag = 1;
+				break;
+			case 1:
+				if (FIFO_REMAIN(respData) < ECM_FIFO_SIZE)
+					m_flag = 2;
+				break;
+			case 2:
 				if (FIFO_REMAIN(respData) == ECM_FIFO_SIZE)
 				{
-					if (m_boostcount > 1)
-						LOGSINGLE_FATAL("readCount=%d, fifoRemain=%?d, boostcount=%?d.", __FILE__, __LINE__, rdWrState.readCount,  FIFO_REMAIN(respData), m_boostcount);
-					m_boost = false;
-					goto SEND;
+					ioState[8].setOutput(1<<8);
+					LOGSINGLE_FATAL("readCount=%d, fifoRemain=%?d, boostcount=%?d.", __FILE__, __LINE__, rdWrState.readCount,  FIFO_REMAIN(respData), m_boostcount);
 				}
+				break;
+			default:
+				;
+			}
+
+			if (m_consecutive)
+			{
 				if (FIFO_REMAIN(respData) > FIFO_LOWATER)
 				{
 					goto SEND;
@@ -678,9 +693,9 @@ void RdWrManager::run()
 			else
 			{
 				if (FIFO_REMAIN(respData)>=ECM_FIFO_SIZE)
-				{
-					m_boost = true;
+				{//避免FIFO中填充了大量的命令，导致运动启动慢
 					m_boostcount = 0;
+					m_flag		 = 0;
 					goto SEND;
 				}
 			}
