@@ -192,6 +192,7 @@ unsigned long DmcManager::init()
 		return ERR_LOAD_XML;
 	}
 
+	LOGSINGLE_INFORMATION("dc=%?d, batchwrite=%?d, fifolw=%?d.", __FILE__, __LINE__, m_masterConfig.dc, m_masterConfig.batchwrite, m_masterConfig.fifolw);
 	//设置日志记录等级
 	CLogSingle::setLogLevel(m_masterConfig.loglevel, !m_masterConfig.logpoint_axis.empty());
 
