@@ -191,6 +191,7 @@ unsigned long DmcManager::init()
 		LOGSINGLE_ERROR("loadXmlConfig failed.%s", __FILE__, __LINE__, std::string(""));
 		return ERR_LOAD_XML;
 	}
+	LOGSINGLE_INFORMATION("dc=%?d, batchwrite=%?d, fifolw=%?d.", __FILE__, __LINE__, m_masterConfig.dc, m_masterConfig.batchwrite, m_masterConfig.fifolw);
 
 	//设置日志记录等级
 	CLogSingle::setLogLevel(m_masterConfig.loglevel, !m_masterConfig.logpoint_axis.empty());
@@ -854,7 +855,7 @@ void DmcManager::setRespData(transData *respData)
 
 	m_seqlock.lock();
 	memcpy(m_realRespData, respData, sizeof(m_realRespData));
-	//m_conditionRespData.signal();
+	m_conditionRespData.signal();
 	m_seqlock.unlock();
 
 #if 0
@@ -884,7 +885,9 @@ void DmcManager::copyRespData()
 {
 	unsigned int begin_seq,end_seq;
 	do {
-		Poco::Thread::yield();
+		m_mutexRespData.lock();
+		m_conditionRespData.wait(m_mutexRespData);
+		m_mutexRespData.unlock();
 		begin_seq 	= m_seqlock.seq;
 		if (begin_seq & 1)
 			continue;
