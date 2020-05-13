@@ -3,11 +3,82 @@
 #include "DmcManager.h"
 #include "GarbageCollector.h"
 
+#include <sstream>
+
 #define FIFO_REMAIN(respData) 	((respData)[0].Data2 & 0xFFFF)	//FIFO剩余空间
 #define FIFO_FULL(respData)		((respData)[0].Data2 >> 16)		//FIFO满的次数
 #define RESP_CMD_CODE(respData) ((respData)->CMD & 0xFF)
 	
 #define ECM_FIFO_SIZE	(0xA0)				//ECM内部FIFO数目
+
+#ifdef RDWR_TIMING
+#define SET_ROUNDTS(x) 		QueryPerformanceCounter(&tmproundts.##x);
+#define START_READTS()		QueryPerformanceCounter(&tmpreadts.t0);
+#define END_READTS()		\
+							QueryPerformanceCounter(&tmpreadts.t1); \
+							tmproundts.reads.push_back(tmpreadts);
+#define START_WRITETS()		QueryPerformanceCounter(&tmpwritets.t0);
+#define END_WRITETS()		\
+							QueryPerformanceCounter(&tmpwritets.t1); \
+							tmproundts.writes.push_back(tmpwritets);
+#define SAVE_ROUNDTS()						\
+							if(record.size() >= MAX_RECORD_ROUNDS) 	\
+								record.pop_front();					\
+							record.push_back(tmproundts);			\
+							tmproundts.reads.clear();				\
+							tmproundts.writes.clear();
+#define DUMP_RECORD()		dumpRecord();
+
+void	RdWrManager::dumpRecord() const
+{
+	std::stringstream 	logmsg;
+	int					round = 0;
+
+	logmsg.setf(std::ios_base::fixed, std::ios_base::floatfield);
+	double roundtime, writeparttime, readpartime;
+	for(std::list<RoundTs>::const_iterator iter = record.begin();
+				iter != record.end();
+				++iter, ++round)
+	{
+		roundtime 		= (iter->t2.QuadPart - iter->t0.QuadPart)/ frequency; 
+		writeparttime	= (iter->t1.QuadPart - iter->t0.QuadPart)/ frequency; 
+		readpartime		= (iter->t2.QuadPart - iter->t1.QuadPart)/ frequency;
+		logmsg << "\nround[" << round << "]: roundtime=" << roundtime << ", writeparttime=" << writeparttime << ", readpartime=" << readpartime << "\n";
+
+		int 	wi = 0;
+		double  writetime;
+		for(std::list<Ts>::const_iterator write_iter = iter->writes.begin();
+				write_iter != iter->writes.end();
+				++write_iter, ++wi)
+		{
+			writetime = (write_iter->t1.QuadPart - write_iter->t0.QuadPart)/ frequency; 
+			logmsg << "\t[" << wi << "] = " << writetime;
+		}
+		logmsg << "\n";
+		int 	ri = 0;
+		double  readtime;
+		for(std::list<Ts>::const_iterator read_iter = iter->reads.begin();
+				read_iter != iter->reads.end();
+				++read_iter, ++ri)
+		{
+			readtime = (read_iter->t1.QuadPart - read_iter->t0.QuadPart)/ frequency; 
+			logmsg << "\t[" << ri << "] = " << readtime;
+		}
+	}
+
+	LOGSINGLE_FATAL("%s", __FILE__, __LINE__, logmsg.str());
+}
+
+#else
+#define SET_ROUNDTS(x) 	do{} while(0);
+#define SET_ROUNDTS(x) 	do{} while(0);
+#define START_READTS() 	do{} while(0);
+#define END_READTS() 	do{} while(0);
+#define START_WRITETS() do{} while(0);
+#define END_WRITETS()	do{} while(0);
+#define SAVE_ROUNDTS() 	do{} while(0);
+#define DUMP_RECORD() 	do{} while(0);
+#endif
 
 RdWrManager::RdWrManager()
 {
@@ -77,20 +148,6 @@ void RdWrManager::clear()
 
 int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 {	
-#ifdef TIMING
-	static double longest = 0;
-	static double shortest = 1000000;
-	static double total = 0;
-	static int	  count = 0;
-	LARGE_INTEGER frequency;									//计时器频率 
-	QueryPerformanceFrequency(&frequency);	 
-	double quadpart = (double)frequency.QuadPart / 1000000;    	//计时器频率   
-
-	LARGE_INTEGER timeStart, timeEnd;
-	double elapsed;
-	QueryPerformanceCounter(&timeStart); 
-#endif
-	
 	int 	slaveidx;
 	bool	con			= false;
 	
@@ -367,22 +424,6 @@ int RdWrManager::popItems(transData *cmdData , size_t cmdcount)
 		else
 			cmdData[iter->first].CMD = IO_RD;
 	}
-
-#ifdef TIMING
-	QueryPerformanceCounter(&timeEnd); 
-	elapsed = (timeEnd.QuadPart - timeStart.QuadPart) / quadpart; 
-
-	if (elapsed > 1000)
-		(void)elapsed;
-	
-	total += elapsed;
-	if(elapsed > longest)
-		longest = elapsed;
-	if (elapsed < shortest)
-		shortest = elapsed;
-	++count;
-	printf("popItems elapsed = %f, longest=%f, shortest=%f, average=%f.\n", elapsed, longest, shortest, total/count);
-#endif
 	return 0;
 }
 
@@ -617,7 +658,12 @@ void RdWrManager::run()
 {
 	transData	cmdData[DEF_MA_MAX];
 	transData	respData[DEF_MA_MAX];
-		
+
+	//初始化计时器频率
+	LARGE_INTEGER lif;
+	QueryPerformanceFrequency(&lif);	 
+	frequency	= (double)lif.QuadPart;
+
 	//初始化FIFO状态
 	if (!ECMUSBRead((unsigned char*)respData, sizeof(respData)))
 	{
@@ -632,24 +678,30 @@ void RdWrManager::run()
 	
 	while(!m_canceled)
 	{	
+		SET_ROUNDTS(t0)
 		while(m_towrite--)
 		{
 			popItems(cmdData, DEF_MA_MAX);
 
+			START_WRITETS();
 			do{
 				bRet =  ECMUSBWrite((unsigned char*)cmdData,sizeof(cmdData));
 				if (!bRet)
 					LOGSINGLE_FATAL("Write Error.", __FILE__, __LINE__, std::string(""));
 			}while(!bRet);
+			END_WRITETS();
 		}
+		SET_ROUNDTS(t1)
 
 		rdWrState.readCount 	= 0;
 		do{
+			START_READTS()
 			do {
 				bRet = ECMUSBRead((unsigned char*)respData, sizeof(respData));
 				if (!bRet)
 					LOGSINGLE_FATAL("Read Error.", __FILE__, __LINE__, std::string(""));
 			}while(!bRet);
+			END_READTS()
 
 			++rdWrState.readCount;
 			if (FIFO_FULL(respData) != rdWrState.lastFifoFull)
@@ -680,10 +732,11 @@ void RdWrManager::run()
 					m_flag = 2;
 				break;
 			case 2:
-				if (FIFO_REMAIN(respData) == ECM_FIFO_SIZE)
+				if (FIFO_REMAIN(respData) == ECM_FIFO_SIZE
+					&& m_consecutive)
 				{
-					ioState[8].setOutput(1<<8);
 					LOGSINGLE_FATAL("readCount=%d, fifoRemain=%?d, boostcount=%?d.", __FILE__, __LINE__, rdWrState.readCount,  FIFO_REMAIN(respData), m_boostcount);
+					DUMP_RECORD()
 				}
 				break;
 			default:
@@ -714,6 +767,9 @@ SEND:
 		else
 			m_towrite = 2;
 		++m_boostcount;
+		
+		SET_ROUNDTS(t2)
+		SAVE_ROUNDTS();
 	};
 
 	LOGSINGLE_INFORMATION("RdWrManager Thread canceled.%s", __FILE__, __LINE__, std::string(""));

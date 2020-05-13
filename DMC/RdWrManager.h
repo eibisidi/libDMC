@@ -2,6 +2,7 @@
 #define RDWR_MANAGER
 
 #include <map>
+#include <list>
 
 #include "NEXTWUSBLib_12B.h"
 #include "Poco/Mutex.h"
@@ -14,6 +15,8 @@
 
 #define DEF_BATCHWRITE		(5)				//缺省连续批量写入次数
 #define DEF_FIFOLW			(140)			//缺省FIFO LowWater
+
+#define RDWR_TIMING 1
 
 //减速停止信息
 class DeclStopInfo
@@ -148,6 +151,52 @@ private:
 
 	Poco::Mutex					coreMutex;							//Main Core Mutext To Guard each queueMutex
 	SeqLock						seqLock[DEF_MA_MAX];
+
+	double 						frequency;							//计时器频率 
+
+#ifdef RDWR_TIMING
+	struct Ts
+	{	
+		LARGE_INTEGER	t0;
+		LARGE_INTEGER	t1;
+		
+		Ts()
+		{
+			t0.QuadPart = 0;
+			t1.QuadPart = 0;
+		}
+	};
+	
+	struct RoundTs
+	{
+		LARGE_INTEGER 	t0;
+		LARGE_INTEGER 	t1;
+		LARGE_INTEGER   t2;
+		LARGE_INTEGER 	t3;
+		LARGE_INTEGER   t4;
+		LARGE_INTEGER 	t5;
+		LARGE_INTEGER   t6;
+		std::list<Ts>   reads;
+		std::list<Ts>	writes;
+		RoundTs()
+		{
+			t0.QuadPart = 0;
+			t1.QuadPart = 0;
+			t2.QuadPart = 0;
+			t3.QuadPart = 0;
+			t4.QuadPart = 0;
+			t5.QuadPart = 0;
+			t6.QuadPart = 0;
+		}
+	};
+
+#define MAX_RECORD_ROUNDS (20)
+	Ts					tmpreadts;
+	Ts					tmpwritets;
+    RoundTs			  	tmproundts;
+	std::list<RoundTs> 	record;
+	void	dumpRecord() const;
+#endif
 };
 #endif
 
