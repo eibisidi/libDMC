@@ -4,6 +4,8 @@
 #include "plan.h"
 #include <set>
 
+#define ARCH_POINTS_CNT (6)
+
 class BaseMultiAxisPara;
 
 class BaseRef
@@ -138,7 +140,7 @@ public:
 	double getLineMaxDist() const;									//获得直线插补参考轴运动距离
 	double getZCurrentSpeed() const;								//获取Z轴速度
 	int	   getZPosition(int slave_index);							//获取Z轴规划位置
-private:
+public:
 	TaParam		   	line_param;					//直线插补规划结果(非对称梯形)
 
 	TParam			up_param;					//Z轴上升阶段规划结果

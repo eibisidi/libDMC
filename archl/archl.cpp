@@ -18,7 +18,7 @@
 */
 int archl(short totalAxis, const long *beginPos, const long *endPos, long zmaxvel,
 				long maxvel, double ztacc, double Tacc, double Tdec,
-				long hh, long hu, long hd, long ** ppResult, int * pCycles)
+				long hh, long hu, long hd, long **ppResult, double *pTime, int *pCycles)
 {
 	if (totalAxis <= 0
 			|| Tacc < 1E-6
@@ -26,7 +26,9 @@ int archl(short totalAxis, const long *beginPos, const long *endPos, long zmaxve
 			|| hu < 0
 			|| hd < 0
 			|| NULL == ppResult 
-			|| NULL == pCycles)
+			|| NULL == pTime
+			|| NULL == pCycles
+			|| *pCycles < ARCH_POINTS_CNT)
 			return -1;
 	
 	unsigned long	retValue = 0;
@@ -73,17 +75,39 @@ int archl(short totalAxis, const long *beginPos, const long *endPos, long zmaxve
 		goto DONE;
 	}
 
-	int totalCycles = newArchlRef->totalCycles();
-	*ppResult = new long[totalCycles * totalAxis];
-	*pCycles  = totalCycles;
+	int moments[ARCH_POINTS_CNT] = {0};
+	int moment_cnt = 0;
+	if (newArchlRef->max_dist > 1E-6)
+	{//水平位移最大值非0
+		moments[0] = 0;
+		moments[1] = newArchlRef->ts0;
+		moments[2] = newArchlRef->up_param.cycles;
+		moments[3] = newArchlRef->ts1;
+		moments[4] = newArchlRef->ts0 + newArchlRef->line_param.cycles;
+		moments[5] = newArchlRef->totalCycles();
+
+		moment_cnt = 6;
+	}
+	else
+	{//水平位移最大值==0
+		moments[0] = 0;
+		moments[1] = newArchlRef->up_param.cycles;
+		moments[2] = newArchlRef->totalCycles();
+		moment_cnt = 3;
+	}
+
+	*ppResult = new long[moment_cnt * totalAxis];
+	*pCycles  = moment_cnt;
 	if (NULL == *ppResult)
-	{	
+	{
 		retValue = -1;
 		goto DONE;
 	}
-	
-	for(int c = 0; c < totalCycles; ++c)
+
+	for (int c = 0; c < moment_cnt; ++c)
 	{
+		newArchlRef->elapsed = moments[c];
+		pTime[c] = moments[c] * 1.0 / CYCLES_PER_SEC;		//更新时间以秒为单位
 		for(int i = 0; i < totalAxis; ++i)
 		{
 			long nextpos = 0;
@@ -118,14 +142,15 @@ int main()
 {
 	long startpos[] = {5520/*Z轴起始*/, 			1393, 		2391,3880};				//起始点坐标
 	long endpos[]   = {2380/*Z轴终止*/, 	1868, 	22056, 4678};			//终止点坐标
-	int cycles = 0;
+	int cycles = ARCH_POINTS_CNT;
+	double time[ARCH_POINTS_CNT];
 	long *pResult = NULL;
 
 	int totalAxis = sizeof(startpos)/sizeof(startpos[0]);
 	
 	if (0 == archl(totalAxis, startpos, endpos, 150000, 150000/*最大速率*/, 0.1/*Z轴加速时间*/,
 						0.08/*加速时间*/, 0.32/*减速时间*/,
-						1500, 1200, 400, &pResult, &cycles))
+						1500, 1200, 400, &pResult, time, &cycles))
 	{
 		std::ofstream ofs;
 		ofs.open("DMCPOINTS.log",std::fstream::out | std::fstream::trunc);
@@ -135,7 +160,7 @@ int main()
 			{
 				ofs << pResult[c * totalAxis + i] << "    ";
 			}
-			ofs << "\n";
+			ofs << time[c] << "\n";
 		}
 	}
 
