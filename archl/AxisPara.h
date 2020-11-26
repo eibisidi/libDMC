@@ -127,6 +127,7 @@ public:
 	double	 		max_dist;					//相关轴最大运动距离
 	int				zstartpos;					//Z轴起始绝对位置
 	int				zdstpos;					//Z轴终止绝对位置
+	int				mirrored;						//后半部分关于hh进行镜像
 	
 	ArchlRef();
 	virtual ~ArchlRef();
@@ -140,6 +141,8 @@ public:
 	double getLineMaxDist() const;									//获得直线插补参考轴运动距离
 	double getZCurrentSpeed() const;								//获取Z轴速度
 	int	   getZPosition(int slave_index);							//获取Z轴规划位置
+
+	int    getMirroredZ(int z);
 public:
 	TaParam		   	line_param;					//直线插补规划结果(非对称梯形)
 

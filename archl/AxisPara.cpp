@@ -302,6 +302,7 @@ ArchlRef::ArchlRef()
 	maxd	= 0;
 	zmaxa	= 0;
 	max_dist = 0;
+	mirrored	= 0;
 
 	//t0 = 0;
 	//t1 = 0;
@@ -319,27 +320,58 @@ int ArchlRef::startPlan()
 	if (0 == planned)
 	{
 		do{
-			//针对Z轴进行参数校验证
-			if (this->hh > this->zstartpos)
+			if (	(this -> hh >= this->zstartpos && this->hh >= this->zdstpos)
+				|| (this -> hh <= this->zstartpos && this->hh <= this->zdstpos))
 			{
-				if (this->zstartpos + this->hu > this->hh
-					|| this->zdstpos + this->hd > this->hh)	//正向运动超限高
+				//真正的Z轴拱门运动，针对Z轴进行参数校验证
+				if (this->hh > this->zstartpos)
 				{
-					//CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
-					//	this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
-					planned = -1;
-					break;
+					if (this->zstartpos + this->hu > this->hh
+						|| this->zdstpos + this->hd > this->hh)	//正向运动超限高
+					{
+						//CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
+						//	this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
+						planned = -1;
+						break;
+					}
+				}
+				else
+				{
+					if (this->zstartpos - this->hu < this->hh
+						|| this->zdstpos - this->hd < this->hh) //负向运动超限高
+					{
+						//CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
+						//	this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
+						planned = -1;
+						break;
+					}
 				}
 			}
 			else
-			{
-				if (this->zstartpos - this->hu < this->hh
-					|| this->zdstpos - this->hd < this->hh) //负向运动超限高
+			{//z轴持续朝一个方向运动
+				this->mirrored = 1;
+				//验证镜像后的Z轴是否是拱门运动
+				if (this->hh > this->zstartpos)
 				{
-					//CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
-					//	this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
-					planned = -1;
-					break;
+					if (this->zstartpos + this->hu > this->hh
+						|| getMirroredZ(this->zdstpos) + this->hd > this->hh)	//正向运动超限高
+					{
+						//CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
+						//	this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
+						planned = -1;
+						break;
+					}
+				}
+				else
+				{
+					if (this->zstartpos - this->hu < this->hh
+						|| getMirroredZ(this->zdstpos) - this->hd < this->hh) //负向运动超限高
+					{
+						//CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
+						//	this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
+						planned = -1;
+						break;
+					}
 				}
 			}
 		
@@ -358,7 +390,7 @@ int ArchlRef::startPlan()
 
 			//规划Z轴下降
 			down_param.q0 = this->hh;
-			down_param.q1 = this->zdstpos;
+			down_param.q1 = getMirroredZ(this->zdstpos);
 			down_param.amax = this->zmaxa;
 			down_param.vmax = this->zmaxvel;
 			if (-1 == ::Plan_T(&this->down_param))
@@ -373,8 +405,7 @@ int ArchlRef::startPlan()
 			{//水平位移最大值非0
 			
 				double t0 = up_param.tofdist(this->hu);
-				double t1 = down_param.tofdist(abs(this->hh - this->zdstpos) - hd);
-				
+				double t1 = down_param.tofdist(abs(this->hh - getMirroredZ(this->zdstpos)) - hd);
 				
 				//规划直线插补
 				double limt = (up_param.T - t0) + t1;
@@ -488,13 +519,23 @@ int   ArchlRef::getZPosition(int slave_index)
 	else if (this->elapsed >= this->up_param.cycles && this->elapsed < this->ts1)
 		pos = this->hh;
 	else	//下降阶段
-		pos = this->down_param.position(this->elapsed - this->ts1);
+		pos = getMirroredZ(this->down_param.position(this->elapsed - this->ts1));
 	
 	//最后一个轴，增加当前时刻
 	if (slave_index == this->last_slaveidx)
 		++this->elapsed;
 
 	return pos;
+}
+
+int   ArchlRef:: getMirroredZ(int z)
+{
+	if (this->mirrored)
+	{
+		return (this->hh - z + this->hh);
+	}
+
+	return z;
 }
 
 ArchlMultiAxisPara::ArchlMultiAxisPara(ArchlRef *newArchlRef, MultiAxisRequest *mar, int sp, int dp, bool z)
