@@ -127,7 +127,8 @@ public:
 	double	 		max_dist;					//相关轴最大运动距离
 	int				zstartpos;					//Z轴起始绝对位置
 	int				zdstpos;					//Z轴终止绝对位置
-	int				mirrored;						//后半部分关于hh进行镜像
+	int				mirrored;					//后半部分关于hh进行镜像
+	int				raxis;						//R轴索引
 	
 	ArchlRef();
 	virtual ~ArchlRef();

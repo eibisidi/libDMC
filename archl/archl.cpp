@@ -1,24 +1,28 @@
 #include "AxisPara.h"
 #include <fstream>
 /*
-功 能：多轴相对坐标的Z轴拱门运动。
+功 能：多轴绝对坐标的Z轴拱门运动。
 输入参 数： TotalAxis： 插补轴数 >=1
 		*startpos   起始点位置, startpos[0]为起始Z轴点位
 		*endpos		终止点位置, endpos[0]为终止Z轴点位
-		MaxVel： 最大行速度，单位： pps；
-		Tacc： 加速时间，单位：s。
-		Tdec:  减速时间，单位：s
-		hh:最高绝对高度
-		hu:相对上升高度，相对于起始点 >= 0
-		hd:相对下降高度，相对于终止点 >= 0
-输出参数：ppResult 规划结果，行数为周期数，列数为轴数
-		pCycles:   周期数
+		raxis		R轴索引， 如果 (r==-1)代表不存在R轴
+		zmaxvel 	Z轴最大行速度，单位： pps
+		maxvel		水平方向轴最大运行速度，单位： pps
+		ztacc		Z轴加减速时间，单位:s
+		Tacc： 		水平方向轴加速时间，单位：s。
+		Tdec:  		水平方向轴减速时间，单位：s
+		hh:			最高绝对高度
+		hu:			相对上升高度，相对于起始点 >= 0
+		hd:			相对下降高度，相对于终止点 >= 0
+输出参数：	 ppResult 	规划结果，行数为关键点个数，列数为轴数
+		  pCycles:  关键点个数
 返回值：正确：返回 ERR_NoError；
 错误：返回相关错误码。
 */
-int archl(short totalAxis, const long *beginPos, const long *endPos, long zmaxvel,
-				long maxvel, double ztacc, double Tacc, double Tdec,
-				long hh, long hu, long hd, long **ppResult, double *pTime, int *pCycles)
+int archl(short totalAxis, const long *beginPos, const long *endPos, int raxis, long zmaxvel,long maxvel, 
+				double ztacc, double Tacc, double Tdec,
+				long hh, long hu, long hd, 
+				long **ppResult, double *pTime, int *pCycles)
 {
 	if (totalAxis <= 0
 			|| Tacc < 1E-6
@@ -28,7 +32,8 @@ int archl(short totalAxis, const long *beginPos, const long *endPos, long zmaxve
 			|| NULL == ppResult 
 			|| NULL == pTime
 			|| NULL == pCycles
-			|| *pCycles < ARCH_POINTS_CNT)
+			|| raxis >= totalAxis
+			|| raxis == 0)
 			return -1;
 	
 	unsigned long	retValue = 0;
@@ -49,6 +54,7 @@ int archl(short totalAxis, const long *beginPos, const long *endPos, long zmaxve
 	newArchlRef->hu 	= hu;
 	newArchlRef->hh 	= hh;
 	newArchlRef->hd 	= hd;
+	newArchlRef->raxis	= raxis;
 	
 	for(int i = 0 ; i < totalAxis; ++i)
 	{
@@ -62,7 +68,17 @@ int archl(short totalAxis, const long *beginPos, const long *endPos, long zmaxve
 		else
 		{//直线插补轴
 			double dist = (dstpos > startpos) ? (dstpos - startpos) : (startpos - dstpos);
-			if (dist > newArchlRef->max_dist)
+			bool   do_update = false;
+			if (i == raxis
+				&& 2 == totalAxis)
+			{//该轴为R轴，除了R轴+Z轴没有其它的轴
+				do_update = true;
+			}
+			else if ( i != raxis
+				&& dist > newArchlRef->max_dist)
+				do_update = true;
+			
+			if (do_update)
 				newArchlRef->max_dist = dist;				//参考轴运动距离
 		}
 
@@ -79,20 +95,20 @@ int archl(short totalAxis, const long *beginPos, const long *endPos, long zmaxve
 	int moment_cnt = 0;
 	if (newArchlRef->max_dist > 1E-6)
 	{//水平位移最大值非0
-		moments[0] = 0;
-		moments[1] = newArchlRef->ts0;
-		moments[2] = newArchlRef->up_param.cycles;
-		moments[3] = newArchlRef->ts1;
-		moments[4] = newArchlRef->ts0 + newArchlRef->line_param.cycles;
-		moments[5] = newArchlRef->totalCycles();
+		moments[0] = 0;														//起始点
+		moments[1] = newArchlRef->ts0;										//水平方向启动
+		moments[2] = newArchlRef->up_param.cycles;							//Z轴到达hh
+		moments[3] = newArchlRef->ts1;										//Z轴开始下降
+		moments[4] = newArchlRef->ts0 + newArchlRef->line_param.cycles;		//水平方向停止
+		moments[5] = newArchlRef->totalCycles();							//终止点
 
 		moment_cnt = 6;
 	}
 	else
 	{//水平位移最大值==0
-		moments[0] = 0;
-		moments[1] = newArchlRef->up_param.cycles;
-		moments[2] = newArchlRef->totalCycles();
+		moments[0] = 0;									//起始点
+		moments[1] = newArchlRef->up_param.cycles;		//Z轴到达hh
+		moments[2] = newArchlRef->totalCycles();		//终止点
 		moment_cnt = 3;
 	}
 
@@ -142,13 +158,14 @@ int main()
 {
 	long startpos[] = {5520/*Z轴起始*/, 			1393, 		2391,3880};				//起始点坐标
 	long endpos[]   = {2380/*Z轴终止*/, 	1868, 	22056, 4678};			//终止点坐标
+	//long endpos[]   = {620/*Z轴终止*/, 	1868, 	22056, 4678};			//终止点坐标
 	int cycles = ARCH_POINTS_CNT;
 	double time[ARCH_POINTS_CNT];
 	long *pResult = NULL;
 
 	int totalAxis = sizeof(startpos)/sizeof(startpos[0]);
 	
-	if (0 == archl(totalAxis, startpos, endpos, 150000, 150000/*最大速率*/, 0.1/*Z轴加速时间*/,
+	if (0 == archl(totalAxis, startpos, endpos, 2, 150000, 150000/*最大速率*/, 0.1/*Z轴加速时间*/,
 						0.08/*加速时间*/, 0.32/*减速时间*/,
 						1500, 1200, 400, &pResult, time, &cycles))
 	{
