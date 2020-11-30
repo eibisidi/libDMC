@@ -490,7 +490,10 @@ int Plan_T( TParam *tp)
 
 	}
 
-	tp->cycles = (int)(tp->T * CYCLES_PER_SEC + 1);
+	if (tp->T > 1E-6)
+		tp->cycles = (int)(tp->T * CYCLES_PER_SEC + 1);
+	else
+		tp->cycles = 0;
 
 	return 0;
 }

@@ -1,4 +1,4 @@
-#include "AxisPara.h"
+ï»¿#include "AxisPara.h"
 
 #include <stdlib.h>
 #include <cassert>
@@ -144,7 +144,7 @@ int LinearRef::totalCycles() const
 }
 
 bool LinearRef::lastCycle() const
-{//ÊÇ·ñÎª×îºóÒ»¸öÖÜÆÚ
+{//ï¿½Ç·ï¿½Îªï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 	 return (moveparam->elapsed >= moveparam->cycles - 1);
 //	return (moveparam->cycles > moveparam->elapsed);
 }
@@ -159,7 +159,7 @@ double	LinearRef::getDistanceRatio(int slave_index)
 	return this->cur_ratio;
 }
 
-double LinearRef::getCurrentVel() const 					//»ñµÃµ±Ç°ÔË¶¯ËÙÂÊ 
+double LinearRef::getCurrentVel() const 					//ï¿½ï¿½Ãµï¿½Ç°ï¿½Ë¶ï¿½ï¿½ï¿½ï¿½ï¿½ 
 {
 	double vel = this->moveparam->speed();
 	return vel;
@@ -261,7 +261,7 @@ LinearPara::~LinearPara()
 
 bool LinearPara::startPlan()
 {
-	bool success = (1 == this->ref->startPlan());	//0ÉÐÎ´¹æ»®£¬ -1¹æ»®Ê§°Ü 1¹æ»®³É¹¦
+	bool success = (1 == this->ref->startPlan());	//0ï¿½ï¿½Î´ï¿½æ»®ï¿½ï¿½ -1ï¿½æ»®Ê§ï¿½ï¿½ 1ï¿½æ»®ï¿½É¹ï¿½
 	return success;
 }
 
@@ -273,7 +273,7 @@ int LinearPara::nextPosition(int slaveidx)
 	double distRatio = linearRef->getDistanceRatio(slaveidx); // > 0
 	
 	if (linearRef->lastCycle())
-	//±ÜÃâ¸¡µãÊý¼ÆËãÎó²î
+	//ï¿½ï¿½ï¿½â¸¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		nextpos = this->dstpos;
 	else
 		nextpos = (int)(this->startpos +  distRatio * (this->dstpos - this->startpos) );
@@ -288,7 +288,7 @@ double LinearPara::getCurSpeed() const
 	double 		maxdist		= linearRef->getMaxDist();
 	if (maxdist > 1E-6)
 	{
-		double		velref 		= linearRef->getCurrentVel();			//»ù×¼²Î¿¼ËÙ¶È
+		double		velref 		= linearRef->getCurrentVel();			//ï¿½ï¿½×¼ï¿½Î¿ï¿½ï¿½Ù¶ï¿½
 	 	v= (this->dstpos - this->startpos) * velref / maxdist;
 	}
 	return v;
@@ -320,62 +320,30 @@ int ArchlRef::startPlan()
 	if (0 == planned)
 	{
 		do{
-			if (	(this -> hh >= this->zstartpos && this->hh >= this->zdstpos)
-				|| (this -> hh <= this->zstartpos && this->hh <= this->zdstpos))
+			if (	(this -> hh > this->zstartpos && this->hh > this->zdstpos)
+				|| (this -> hh < this->zstartpos && this->hh < this->zdstpos))
 			{
-				//ÕæÕýµÄZÖá¹°ÃÅÔË¶¯£¬Õë¶ÔZÖá½øÐÐ²ÎÊýÐ£ÑéÖ¤
-				if (this->hh > this->zstartpos)
+				//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Zï¿½á¹°ï¿½ï¿½ï¿½Ë¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Zï¿½ï¿½ï¿½ï¿½Ð²ï¿½ï¿½ï¿½Ð£ï¿½ï¿½Ö¤
+				if (abs(this->hh - this->zstartpos) < hu
+					 || abs(this->hh - this->zdstpos) < hd)
 				{
-					if (this->zstartpos + this->hu > this->hh
-						|| this->zdstpos + this->hd > this->hh)	//ÕýÏòÔË¶¯³¬ÏÞ¸ß
-					{
-						//CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
-						//	this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
-						planned = -1;
-						break;
-					}
-				}
-				else
-				{
-					if (this->zstartpos - this->hu < this->hh
-						|| this->zdstpos - this->hd < this->hh) //¸ºÏòÔË¶¯³¬ÏÞ¸ß
-					{
-						//CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
-						//	this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
-						planned = -1;
-						break;
-					}
+					planned = -1;
+					break;
 				}
 			}
 			else
-			{//zÖá³ÖÐø³¯Ò»¸ö·½ÏòÔË¶¯
+			{//zï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë¶ï¿½
 				this->mirrored = 1;
-				//ÑéÖ¤¾µÏñºóµÄZÖáÊÇ·ñÊÇ¹°ÃÅÔË¶¯
-				if (this->hh > this->zstartpos)
+				//ï¿½ï¿½Ö¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Zï¿½ï¿½ï¿½Ç·ï¿½ï¿½Ç¹ï¿½ï¿½ï¿½ï¿½Ë¶ï¿½
+				if (abs(this->hh - getMirroredZ(this->zdstpos)) < hu
+					 || abs(this->hh - getMirroredZ(this->zdstpos)) < hd)
 				{
-					if (this->zstartpos + this->hu > this->hh
-						|| getMirroredZ(this->zdstpos) + this->hd > this->hh)	//ÕýÏòÔË¶¯³¬ÏÞ¸ß
-					{
-						//CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
-						//	this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
-						planned = -1;
-						break;
-					}
-				}
-				else
-				{
-					if (this->zstartpos - this->hu < this->hh
-						|| getMirroredZ(this->zdstpos) - this->hd < this->hh) //¸ºÏòÔË¶¯³¬ÏÞ¸ß
-					{
-						//CLogSingle::logError("ArchlRef::startPlan failed, zstartpos=%d, zdstpos=%d, hu=%d, hh=%d, hd=%d.", __FILE__, __LINE__,
-						//	this->zstartpos, this->zdstpos, this->hu, this->hh, this->hd);
-						planned = -1;
-						break;
-					}
-				}
+					planned = -1;
+					break;
+			 	}
 			}
 		
-			//¹æ»®ZÖáÉÏÉý
+			//ï¿½æ»®Zï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 			up_param.q0 = this->zstartpos;
 			up_param.q1 = this->hh;
 			up_param.amax = this->zmaxa;
@@ -388,7 +356,7 @@ int ArchlRef::startPlan()
 				break;
 			}
 
-			//¹æ»®ZÖáÏÂ½µ
+			//ï¿½æ»®Zï¿½ï¿½ï¿½Â½ï¿½
 			down_param.q0 = this->hh;
 			down_param.q1 = getMirroredZ(this->zdstpos);
 			down_param.amax = this->zmaxa;
@@ -402,12 +370,12 @@ int ArchlRef::startPlan()
 			}
 
 			if (this->max_dist > 1E-6)
-			{//Ë®Æ½Î»ÒÆ×î´óÖµ·Ç0
+			{//Ë®Æ½Î»ï¿½ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½0
 			
 				double t0 = up_param.tofdist(this->hu);
 				double t1 = down_param.tofdist(abs(this->hh - getMirroredZ(this->zdstpos)) - hd);
 				
-				//¹æ»®Ö±Ïß²å²¹
+				//ï¿½æ»®Ö±ï¿½ß²å²¹
 				double limt = (up_param.T - t0) + t1;
 				this->line_param.q0   = 0; 	
 				this->line_param.q1   = this->max_dist;
@@ -423,11 +391,18 @@ int ArchlRef::startPlan()
 					break;
 				}
 
-				this->ts0 = (int)(CYCLES_PER_SEC * t0) + 1;							//¼ÓÒ»±£Ö¤ÌáÉý³¬¹ý¸ß¶È
-				this->ts1 = (int)(CYCLES_PER_SEC * (t0 + line_param.T - t1)) + 1;
+				if (t0 > 1E-6)
+					this->ts0 = (int)(CYCLES_PER_SEC * t0 + 1);							//ï¿½ï¿½Ò»ï¿½ï¿½Ö¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß¶ï¿½
+				else
+					this->ts0 = 0;
+
+				if ((t0 + line_param.T - t1) > 1E-6)
+					this->ts1 = (int)(CYCLES_PER_SEC * (t0 + line_param.T - t1) + 1);
+				else
+					this->ts1 = 0;
 			}
 			else
-			{//Ë®Æ½Î»ÒÆ×î´óÖµÎª0
+			{//Ë®Æ½Î»ï¿½ï¿½ï¿½ï¿½ï¿½ÖµÎª0
 				this->ts0 = 0;
 				this->ts1 = up_param.cycles;
 			}
@@ -467,25 +442,25 @@ double	ArchlRef::getLineDistanceRatio(int slave_index)
 	double			cur_ratio;
 
 	if (this->elapsed < this->ts0)
-		cur_ratio = 0.0;												//»¹Î´¿ªÊ¼
+		cur_ratio = 0.0;												//ï¿½ï¿½Î´ï¿½ï¿½Ê¼
 	else if (this->elapsed >= (this->ts0 + this->line_param.cycles ))
 		cur_ratio = 1.0;
 	else
 		cur_ratio = this->line_param.position(this->elapsed-this->ts0) / this->max_dist;
 
-	//×îºóÒ»¸öÖá£¬Ôö¼Óµ±Ç°Ê±¿Ì
+	//ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½á£¬ï¿½ï¿½ï¿½Óµï¿½Ç°Ê±ï¿½ï¿½
 	if (slave_index == this->last_slaveidx)
 		++this->elapsed;
 
 	return cur_ratio;
 }
 
-double ArchlRef::getLineCurrentVel() const							//»ñµÃµ±Ç°ÔË¶¯ËÙÂÊ
+double ArchlRef::getLineCurrentVel() const							//ï¿½ï¿½Ãµï¿½Ç°ï¿½Ë¶ï¿½ï¿½ï¿½ï¿½ï¿½
 {
 	double vel;
-	if (this->elapsed < this->ts0)										//´¹Ö±ÉÏÉý
+	if (this->elapsed < this->ts0)										//ï¿½ï¿½Ö±ï¿½ï¿½ï¿½ï¿½
 		vel = 0;
-	else if (this->elapsed >= (this->ts0 + this->line_param.cycles ))	//´¹Ö±ÏÂ½µ
+	else if (this->elapsed >= (this->ts0 + this->line_param.cycles ))	//ï¿½ï¿½Ö±ï¿½Â½ï¿½
 		vel = 0;
 	else
 		vel = this->line_param.speed(this->elapsed - this->ts0);
@@ -498,14 +473,14 @@ double ArchlRef::getLineMaxDist() const
 	return this->max_dist;
 }
 
-double ArchlRef::getZCurrentSpeed() const								//»ñÈ¡ZÖáËÙ¶È
+double ArchlRef::getZCurrentSpeed() const								//ï¿½ï¿½È¡Zï¿½ï¿½ï¿½Ù¶ï¿½
 {
 	double speed;
-	if (this->elapsed < this->up_param.cycles)			//ÉÏÉý½×¶Î
+	if (this->elapsed < this->up_param.cycles)			//ï¿½ï¿½ï¿½ï¿½ï¿½×¶ï¿½
 		speed = this->up_param.speed(this->elapsed);
 	else if (this->elapsed >= this->up_param.cycles && this->elapsed < this->ts1)
 		speed = 0;
-	else	//ÏÂ½µ½×¶Î
+	else	//ï¿½Â½ï¿½ï¿½×¶ï¿½
 		speed = this->down_param.speed(this->elapsed - this->ts1);
 
 	return speed;
@@ -514,14 +489,14 @@ double ArchlRef::getZCurrentSpeed() const								//»ñÈ¡ZÖáËÙ¶È
 int   ArchlRef::getZPosition(int slave_index)
 {
 	int pos;
-	if (this->elapsed < this->up_param.cycles)			//ÉÏÉý½×¶Î
+	if (this->elapsed < this->up_param.cycles)			//ï¿½ï¿½ï¿½ï¿½ï¿½×¶ï¿½
 		pos = this->up_param.position(this->elapsed);
 	else if (this->elapsed >= this->up_param.cycles && this->elapsed < this->ts1)
 		pos = this->hh;
-	else	//ÏÂ½µ½×¶Î
+	else	//ï¿½Â½ï¿½ï¿½×¶ï¿½
 		pos = getMirroredZ(this->down_param.position(this->elapsed - this->ts1));
 	
-	//×îºóÒ»¸öÖá£¬Ôö¼Óµ±Ç°Ê±¿Ì
+	//ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½á£¬ï¿½ï¿½ï¿½Óµï¿½Ç°Ê±ï¿½ï¿½
 	if (slave_index == this->last_slaveidx)
 		++this->elapsed;
 
@@ -551,25 +526,25 @@ ArchlMultiAxisPara::~ArchlMultiAxisPara()
 
 bool ArchlMultiAxisPara::startPlan()
 {
-	bool success = (1 == this->ref->startPlan());	//0ÉÐÎ´¹æ»®£¬ -1¹æ»®Ê§°Ü 1¹æ»®³É¹¦
+	bool success = (1 == this->ref->startPlan());	//0ï¿½ï¿½Î´ï¿½æ»®ï¿½ï¿½ -1ï¿½æ»®Ê§ï¿½ï¿½ 1ï¿½æ»®ï¿½É¹ï¿½
 	return success;
 }
 
-int ArchlMultiAxisPara::nextPosition(int slaveidx) 	//»ñµÃÏÂÒ»¸ö¹æ»®Î»ÖÃ
+int ArchlMultiAxisPara::nextPosition(int slaveidx) 	//ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½æ»®Î»ï¿½ï¿½
 {
 	int 	nextpos;
 	ArchlRef *archlRef = dynamic_cast<ArchlRef *> (this->ref);
 
-	if (archlRef->lastCycle())//±ÜÃâ¸¡µãÊý¼ÆËãÎó²î
+	if (archlRef->lastCycle())//ï¿½ï¿½ï¿½â¸¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		nextpos = this->dstpos;
 	else
 	{
 		if (this->is_zaxis)
-		{//ZÖá
+		{//Zï¿½ï¿½
 			nextpos = archlRef->getZPosition(slaveidx);
 		}
 		else
-		{//Ö±Ïß²å²¹
+		{//Ö±ï¿½ß²å²¹
 			double distRatio = archlRef->getLineDistanceRatio(slaveidx); // >= 0
 			nextpos = (int)(this->startpos +  distRatio * (this->dstpos - this->startpos) );
 		}
@@ -577,18 +552,18 @@ int ArchlMultiAxisPara::nextPosition(int slaveidx) 	//»ñµÃÏÂÒ»¸ö¹æ»®Î»ÖÃ
 	return nextpos;
 }
 
-double ArchlMultiAxisPara::getCurSpeed() const 		//·µ»Øµ±Ç°ËÙ¶È£¬ÓÐ·ûºÅ
+double ArchlMultiAxisPara::getCurSpeed() const 		//ï¿½ï¿½ï¿½Øµï¿½Ç°ï¿½Ù¶È£ï¿½ï¿½Ð·ï¿½ï¿½ï¿½
 {
 	double v = 0;
 	ArchlRef *archlRef = dynamic_cast<ArchlRef *> (this->ref);
-	if (this->is_zaxis)//ZÖá
+	if (this->is_zaxis)//Zï¿½ï¿½
 		v = archlRef->getZCurrentSpeed();
 	else
 	{	
 		double		maxdist 	= archlRef->getLineMaxDist();
-		if (maxdist > 1E-6)	//ËÙ¶È·ÇÁã
+		if (maxdist > 1E-6)	//ï¿½Ù¶È·ï¿½ï¿½ï¿½
 		{
-			double		velref		= archlRef->getLineCurrentVel();			//»ù×¼²Î¿¼ËÙ¶È
+			double		velref		= archlRef->getLineCurrentVel();			//ï¿½ï¿½×¼ï¿½Î¿ï¿½ï¿½Ù¶ï¿½
 			v = (this->dstpos - this->startpos) * velref / maxdist;
 		}
 	}
