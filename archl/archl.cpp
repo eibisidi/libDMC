@@ -36,6 +36,16 @@ int archl(short totalAxis, const long *beginPos, const long *endPos, int raxis, 
 			|| raxis == 0)
 			return -1;
 	
+	int count =0;
+	for ( ;count < totalAxis;++count)
+	{
+		if (beginPos[count] != endPos[count])
+			break;
+	}
+
+	if (count == totalAxis)
+		return 0;
+			
 	unsigned long	retValue = 0;
 	ArchlRef		 *newArchlRef = NULL;
 
@@ -85,6 +95,11 @@ int archl(short totalAxis, const long *beginPos, const long *endPos, int raxis, 
 		newArchlRef->reg_sv_on(i);
 	}
 
+	if (newArchlRef->zstartpos == hh)
+		newArchlRef->hu = 0;			//此情况下hu无意义
+	if (newArchlRef->zdstpos == hh)
+		newArchlRef->hd = 0;			//此情况下hd无意义
+
 	if (1 != newArchlRef->startPlan())
 	{//规划失败
 		retValue = -1;
@@ -100,7 +115,7 @@ int archl(short totalAxis, const long *beginPos, const long *endPos, int raxis, 
 		moments[2] = newArchlRef->up_param.cycles;							//Z轴到达hh
 		moments[3] = newArchlRef->ts1;										//Z轴开始下降
 		moments[4] = newArchlRef->ts0 + newArchlRef->line_param.cycles;		//水平方向停止
-		moments[5] = newArchlRef->totalCycles();							//终止点
+		moments[5] = newArchlRef->totalCycles() - 1;						//终止点
 
 		moment_cnt = 6;
 	}
@@ -108,9 +123,21 @@ int archl(short totalAxis, const long *beginPos, const long *endPos, int raxis, 
 	{//水平位移最大值==0
 		moments[0] = 0;									//起始点
 		moments[1] = newArchlRef->up_param.cycles;		//Z轴到达hh
-		moments[2] = newArchlRef->totalCycles();		//终止点
+		moments[2] = newArchlRef->totalCycles() - 1;	//终止点
 		moment_cnt = 3;
 	}
+
+	//去掉可能重复的点，否则雷赛控制器报错
+	int save_cur, cur;
+	for (cur = save_cur = 1; cur < moment_cnt; ++cur)
+	{
+		if (moments[cur] > moments[save_cur - 1])
+		{
+			moments[save_cur] = moments[cur];
+			++save_cur;
+		}
+	}
+	moment_cnt = save_cur;
 
 	*ppResult = new long[moment_cnt * totalAxis];
 	*pCycles  = moment_cnt;
